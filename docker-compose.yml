@@ -3,16 +3,17 @@ services:
     image: pgvector/pgvector:pg17
     container_name: pgvector-db
     environment:
-      POSTGRES_USER: sentence
-      POSTGRES_PASSWORD: sentence
-      POSTGRES_DB: sentence_db
+      POSTGRES_USER: scentence
+      POSTGRES_PASSWORD: scentence
+      POSTGRES_DB: scentence_db
     ports:
       - "5433:5432"
     volumes:
       - pgdata:/var/lib/postgresql/data
-      - ./init-db.sql:/docker-entrypoint-initdb.d/init-db.sql
+      - ./init-db.sh:/docker-entrypoint-initdb.d/init-db.sh
+      - ./scripts:/scripts
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U sentence -d sentence_db"]
+      test: ["CMD-SHELL", "pg_isready -U scentence -d scentence_db"]
       interval: 5s
       timeout: 5s
       retries: 5
@@ -27,9 +28,10 @@ services:
     volumes:
       - ./backend:/app
     environment:
-      - DATABASE_URL=postgresql://sentence:sentence@db:5432/sentence_db
-      # member_db 연결이 필요한 경우 추가
-      - MEMBER_DATABASE_URL=postgresql://sentence:sentence@db:5432/member_db
+      - DATABASE_URL=postgresql://scentence:scentence@db:5432/scentence_db
+      - PERFUME_DATABASE_URL=postgresql://scentence:scentence@db:5432/perfume_db
+      - RECOM_DATABASE_URL=postgresql://scentence:scentence@db:5432/recom_db
+      - MEMBER_DATABASE_URL=postgresql://scentence:scentence@db:5432/member_db
     depends_on:
       db:
         condition: service_healthy
@@ -53,3 +55,4 @@ services:
 
 volumes:
   pgdata:
+    name: pgdata 
