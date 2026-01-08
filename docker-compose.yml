@@ -11,7 +11,8 @@ services:
     volumes:
       - pgdata:/var/lib/postgresql/data
       - ./init-db.sh:/docker-entrypoint-initdb.d/init-db.sh
-      - ./scripts:/scripts
+      - ./postgres/scripts:/app/scripts
+      - ./postgres/create:/app/create
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U scentence -d scentence_db"]
       interval: 5s
