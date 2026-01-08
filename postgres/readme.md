@@ -12,6 +12,12 @@ Test Connection 확인
 
 # 도커 명령어
 
+# 최초 빌드시 데이터 적재 1회 실행
+```
+docker compose up -d --build
+docker compose --profile init up data-init
+```
+
 ## 도커 컨테이너 재시작(볼륨유지)
 ```
 docker-compose down
