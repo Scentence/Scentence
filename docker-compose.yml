@@ -21,7 +21,7 @@ services:
 
   data-init:    
     image: python:3.11-slim
-    profiles: ["init"]
+    # profiles: ["init"]
     container_name: data-init
     depends_on:
       db:
