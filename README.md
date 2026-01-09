@@ -1,8 +1,14 @@
-<<<<<<< HEAD
 # FastAPI + Next.js + PostgreSQL Docker Compose
 
 ## 🚀 빠른 시작 (로컬 Docker Desktop 사용)
 
+```bash
+##pgvector error는 init-db.sh와 init-data.sh를 CRLF에서 LF로 바꿔서 저장후 실행할 것
+
+docker compose down -v
+docker compose up --build -d
+docker logs -f perfume-etl-worker
+```
 ### 한 번에 구동하기
 
 ```bash
@@ -44,6 +50,4 @@ docker-compose ps
 docker exec -it pgvector-db psql -U sentence -d sentence_db
 ```
 
-=======
 # Scentence
->>>>>>> a07cbd2fed066183fe25103849e403fbd9c15e11
