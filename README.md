@@ -1,3 +1,4 @@
+<<<<<<< HEAD
 # FastAPI + Next.js + PostgreSQL Docker Compose
 
 ## 🚀 빠른 시작 (로컬 Docker Desktop 사용)
@@ -43,3 +44,6 @@ docker-compose ps
 docker exec -it pgvector-db psql -U sentence -d sentence_db
 ```
 
+=======
+# Scentence
+>>>>>>> a07cbd2fed066183fe25103849e403fbd9c15e11
