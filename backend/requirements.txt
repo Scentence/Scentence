@@ -1,0 +1,11 @@
+langchain
+langchain-core
+langchain-openai
+langgraph
+langsmith
+fastapi
+uvicorn
+pydantic
+python-dotenv
+typing-extensions
+psycopg2-binary
