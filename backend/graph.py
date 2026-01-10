@@ -158,64 +158,112 @@ def interviewer(state: State) -> State:
 # ==========================================
 # 3. Researcher (전략 수립) - 의도 중심 전략명 생성
 # ==========================================
+# graph.py
+
+# [1] 상단 import에 DB 연결 함수 확인
+from database import get_db_connection
+
+# [2] 메타 데이터(유효 필터 값) 가져오는 헬퍼 함수 추가
+def fetch_meta_filters():
+    """
+    DB에서 현재 존재하는 Season, Occasion, Accord의 유효한 값 목록을 가져옵니다.
+    [수정] 테이블 이름 실제 DB(줄임말)에 맞게 변경
+    """
+    try:
+        conn = get_db_connection()
+        cur = conn.cursor()
+        
+        # 1. Season (계절) -> tb_perfume_season_m (이건 줄임말 아님)
+        cur.execute("SELECT DISTINCT season FROM tb_perfume_season_m WHERE season IS NOT NULL")
+        seasons = [r[0] for r in cur.fetchall()]
+        
+        # 2. Occasion (상황) -> [수정] tb_perfume_oca_m (줄임말 적용!)
+        cur.execute("SELECT DISTINCT occasion FROM tb_perfume_oca_m WHERE occasion IS NOT NULL")
+        occasions = [r[0] for r in cur.fetchall()]
+        
+        # 3. Accord (향조) -> tb_perfume_accord_m
+        cur.execute("SELECT DISTINCT accord FROM tb_perfume_accord_m WHERE accord IS NOT NULL")
+        accords = [r[0] for r in cur.fetchall()]
+        
+        conn.close()
+        
+        return (
+            ", ".join([f"'{s}'" for s in seasons]),
+            ", ".join([f"'{o}'" for o in occasions]),
+            ", ".join([f"'{a}'" for a in accords])
+        )
+    except Exception as e:
+        print(f"⚠️ Meta Filter Load Error: {e}")
+        # DB 에러 시 기본값 리턴 (봇이 죽지 않도록)
+        return (
+            "'Spring', 'Summer', 'Fall', 'Winter'",
+            "'Daily', 'Formal', 'Date', 'Party'",
+            "'Citrus', 'Woody', 'Floral', 'Musk'"
+        )
+
+# [3] researcher 함수 교체
 def researcher(state: State) -> State:
     try:
         query = state["user_query"]
-        print(f"\n🕵️ [Researcher] 명시적 조건 추출 및 다차원 전략 수립: {query}", flush=True)
+        print(f"\n🕵️ [Researcher] DB 메타 데이터 기반 전략 수립: {query}", flush=True)
 
-        meta_summary = {k: v[:20] for k, v in METADATA.items()}
+        # ★ DB에서 유효한 필터 값 실시간 로딩
+        valid_seasons, valid_occasions, valid_accords = fetch_meta_filters()
 
         prompt = f"""
-        당신은 '퍼퓸 디렉터'입니다. 사용자 요청("{query}")을 분석해 3가지 검색 전략을 수립하세요.
+        당신은 보유한 데이터베이스를 완벽하게 활용하는 '퍼퓸 디렉터'입니다.
+        사용자 요청("{query}")을 분석해 **가장 매력적인 3가지 스타일링 전략**을 수립하세요.
         
-        === [★불변의 제 1원칙: 고유명사 영어 변환★] ===
-        1. 브랜드(예: "샤넬") -> `filters`에 `{{'column': 'brand', 'value': 'Chanel'}}` 필수.
-        2. 성별 -> `filters`에 `Feminine` / `Masculine` 필수.
-        3. 키워드 -> `note_keywords`에 넣을 때는 반드시 **영어(English)**로 변환.
+        === [1. 보유 데이터 매핑 (Data Mapping)] - ★핵심★ ===
+        사용자의 말에서 아래 **[허용된 값 목록]**에 해당하는 정보가 나오면 **반드시 `filters`에 포함**시키세요.
+        
+        1. **Brand**: 브랜드명 (예: 'Chanel', 'Dior') -> `filters`
+        2. **Gender**: 성별 (예: 'Feminine', 'Masculine') -> `filters`
+        
+        3. **Season (계절)**: 
+           - **[허용된 값]**: [{valid_seasons}]
+           - 사용자가 "여름"이라고 하면 위 목록 중 'Summer'를 찾아 `{{'column': 'season', 'value': 'Summer'}}`로 설정.
+           
+        4. **Occasion (상황)**: 
+           - **[허용된 값]**: [{valid_occasions}]
+           - 사용자가 "데일리"라고 하면 위 목록 중 매칭되는 값을 찾아 `filters`에 설정.
+           
+        5. **Accord (향조)**: 
+           - **[허용된 값]**: [{valid_accords}]
+           - 사용자가 "상큼한 시트러스"라고 하면 위 목록 중 'Citrus'를 찾아 `filters`에 설정.
 
-        === [★검색 안정성 규칙 (Search Safety) - 필독★] ===
-        **문제 상황**: 추상적인 요청에 대해 임의의 노트를 `filters`에 넣으면 결과가 0개가 됩니다.
+        === [2. 시나리오별 행동 지침] ===
+        **Type A. [이미지/분위기]** (예: "시크한", "포근한")
+        - 전략: DB 허용 값에 없는 추상적 표현은 `note_keywords`에 넣어 벡터 검색.
         
-        **[절대 금지]**: 
-        - 사용자가 **직접 언급하지 않은 재료(노트)**를 상상해서 `filters`의 `note` 컬럼에 넣지 마세요.
-        - 예: 사용자가 "우아한 향"이라고만 했는데 `filters`에 `['Rose', 'Peony']`를 넣으면 **검색 실패**로 이어집니다.
+        **Type B. [특정 조건]** (예: "여름에 뿌릴 시트러스")
+        - 전략: **DB 필터링 우선!** (위 허용된 값 목록에 존재한다면 `filters` 사용)
         
-        **[올바른 방법]**:
-        - **이미지/분위기 요청 시** (예: "우아한", "시크한"):
-          - `filters`에는 **브랜드**와 **성별**만 넣으세요.
-          - 분위기를 나타내는 단어(예: "Elegant", "Floral", "Clean")는 **`note_keywords`**에 넣고 `use_vector_search: true`를 켜세요. (벡터 검색이 알아서 찾아줍니다.)
-          
-        - **구체적 재료 언급 시** (예: "장미 향", "비누 향"):
-          - 이때만 `note_keywords`나 `filters`에 "Rose", "Soap" 등을 명시적으로 넣으세요.
+        **Type D. [선물/입문]** (예: "여친 선물")
+        - 전략: `note_keywords`에 "Soap", "Clean", "Light Floral" 등 호불호 없는 키워드 자동 추가.
 
-        === [★다양성 전략 & 네이밍 규칙 (쉬운 한국어)★] ===
-        **1. 네이밍 스타일 가이드**
-        - **[금지]**: '플로럴', '우디', '머스크' 등 전문 용어 금지. '정석', '끝판왕' 등 과한 수식어 금지.
-        - **[권장]**: **"꽃향기"**, **"나무 향"**, **"살냄새"**, **"과일 향"** 등 쉬운 우리말 사용.
-        
-        **2. 전략 수립 예시**
-        - Plan 1: "**차분한 꽃향기에 더해진 비누 향**" (직관)
-        - Plan 2: "**화려함 뒤에 숨겨진 차분한 반전**" (반전)
-        - Plan 3: "**과일 향을 더해 산뜻하게 마무리**" (보완)
+        === [3. 전략 수립 프레임워크 (3-Step Styling)] ===
+        **Plan 1. [동조 (Harmony)]**: "이미지 직관적 반영"
+        **Plan 2. [반전 (Gap)]**: "의외의 매력 포인트"
+        **Plan 3. [변화 (Shift)]**: "입체적 밸런스"
 
-        === [작성 규칙] ===
-        1. 3개의 Plan을 작성하세요.
-        2. `strategy_name`은 위 규칙을 지켜 **쉬운 한국어**로 작성하세요.
-        3. **[중요]**: "우아한 조말론" 같은 요청에는 `filters`에 노트를 넣지 말고, `note_keywords`를 활용하세요.
+        === [4. 작성 규칙] ===
+        1. `strategy_name`은 **"꽃향기", "비누 냄새", "살냄새"** 등 쉬운 한국어로 지으세요.
+        2. 모든 필터 값(`value`)은 위 **[허용된 값]** 중에서만 골라야 하며, 반드시 **영어(English)**여야 합니다.
         
         응답(JSON) 예시:
         {{
-            "scenario_type": "Type A (Abstract Image)",
+            "scenario_type": "Type B (Specific)",
             "plans": [
                 {{
                     "priority": 1,
-                    "strategy_name": "차분하고 우아한 꽃향기",
+                    "strategy_name": "여름 햇살 같은 상큼한 시트러스",
                     "filters": [
-                        {{"column": "brand", "value": "Jo Malone London"}},
-                        {{"column": "gender", "value": "Feminine"}}
-                        // 노트 필터 없음! (벡터 검색에 맡김)
+                        {{"column": "season", "value": "Summer"}},  // [허용된 값] 중 선택
+                        {{"column": "accord", "value": "Citrus"}},  // [허용된 값] 중 선택
+                        {{"column": "gender", "value": "Unisex"}}
                     ],
-                    "note_keywords": ["Elegant", "Floral", "Clean"],
+                    "note_keywords": ["Fresh", "Lime"], 
                     "use_vector_search": true
                 }}
             ]
@@ -246,21 +294,15 @@ def researcher(state: State) -> State:
             current_filters = []
             
             for f in plan.get("filters", []):
-                if not isinstance(f, dict):
-                    print(f"   ⚠️ [Warning] 잘못된 필터 형식 무시됨: {f}", flush=True)
-                    continue
-                    
+                if not isinstance(f, dict): continue
                 col = f.get('column')
                 val = f.get('value')
                 if not col or not val: continue
                 
-                # 브랜드/향수명 오타 교정
+                # 브랜드/향수명 오타 보정
                 if col in ['brand', 'perfume_name']:
                     corrected = search_exact_entity(val, col)
-                    if corrected: 
-                        if val != corrected:
-                            print(f"      🔧 [자동 보정] {val} -> {corrected}")
-                        f['value'] = corrected
+                    if corrected: f['value'] = corrected
                 
                 current_filters.append(f)
             
@@ -326,10 +368,11 @@ def writer(state: State) -> State:
         1. **[★1전략 1향수 원칙★]**: 
            - 검색 결과에 여러 향수가 있더라도, **각 전략(Strategy) 당 가장 적합한 향수 딱 1개만** 선정하세요.
            - 결과적으로 총 3개의 향수만 추천되어야 합니다. (중복 추천 금지)
+           - 단 출력시에 전략별로 딱 한개씩 추천한다는 내용을 직접적으로 언급하지 않도록 주의하세요.
         
         2. **목차 스타일 (전략 의도 강조)**: 
            - 형식: **`## 번호. [전략이름] 브랜드 - 향수명`**
-           - **[전략이름]**에는 Researcher가 정한 전략명(예: "겉차속따 반전 매력")을 그대로 넣으세요.
+           - **[전략이름]**에는 Researcher가 정한 전략명(예: "겉차속따 반전 매력")을 그대로 넣되 전략: 등의 딱딱한 표현은 제외시키고 전략으 설명만 사용하세요.
            - 예시: `## 1. [차가운 첫인상 속 따뜻한 반전] Chanel - Coco Noir`
         
         3. **이미지 필수**: `![향수명](이미지링크)`
