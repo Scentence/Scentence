@@ -1,14 +1,14 @@
+# main.py
 import json
-import traceback
-from typing import Any, AsyncGenerator
-
+import time  # [추가] 딜레이를 위해 필요
+from typing import Generator, Any
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import StreamingResponse
-from pydantic import BaseModel # 👈 Pydantic 모델 직접 정의를 위해 추가
 
-# graph.py에서 빌드된 그래프 가져오기
+from schemas import ChatRequest
 from graph import build_graph
+from database import get_recent_messages, save_chat_log
 
 app = FastAPI(title="Perfume Chat Workflow")
 
@@ -22,86 +22,111 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-# 1. 그래프 빌드 (MemorySaver가 graph.py에 포함되어 있어야 함)
 workflow = build_graph()
 
-# 2. 요청 데이터 모델 정의 (thread_id 필수)
-# schemas.py를 안 쓰고 여기서 바로 정의해도 됩니다.
-class ChatRequest(BaseModel):
-    user_query: str
-    thread_id: str
+
+# [헬퍼 함수] 텍스트를 한 글자씩 쪼개서 스트리밍 흉내내기
+def simulate_streaming(text: str, delay: float = 0.05) -> Generator[str, None, None]:
+    for char in text:
+        data = json.dumps({"type": "answer", "content": char}, ensure_ascii=False)
+        yield f"data: {data}\n\n"
+        time.sleep(delay)  # 약간의 딜레이로 타자 효과 연출
+
 
 @app.get("/health")
 def health() -> dict[str, Any]:
     return {"status": "ok"}
 
-# 3. 스트리밍 제너레이터 수정 (비동기 async 적용)
-async def stream_generator(user_query: str, thread_id: str) -> AsyncGenerator[str, None]:
-    """LangGraph 실행 결과를 SSE 포맷으로 실시간 전송"""
-    
-    # LangGraph에 전달할 입력값
-    inputs = {
+
+def stream_generator(user_query: str) -> Generator[str, None, None]:
+
+    # 1. Memory Load & Init
+    history = get_recent_messages(limit=6)
+    payload = {
         "user_query": user_query,
-        # 'messages'나 'history'는 MemorySaver가 알아서 관리하므로 넣지 않아도 됩니다.
+        "messages": history,
+        "route": "supervisor",
+        "interview_context": "",
+        "active_mode": None,
+        "missing_info": None,
+        "clarified_query": None,
+        "search_plans": [],
+        "search_logs": [],
+        "research_result": None,
+        "retry_count": 0,
+        "final_response": None,
+        "input_tokens": 0,
+        "output_tokens": 0,
+        "test_info": {},
+        "writer_stream": None,
     }
-    
-    # 👇 [핵심] 스레드 ID를 설정에 넣어줘야 기억을 찾습니다.
-    config = {"configurable": {"thread_id": thread_id}}
+
+    save_chat_log(role="user", content=user_query)
+
+    full_ai_response = ""
 
     try:
-        # workflow.stream 대신 .astream 사용 (비동기)
-        async for event in workflow.astream(inputs, config=config):
+        for event in workflow.stream(payload):
             for node_name, state_update in event.items():
 
-                # 1. Researcher 로그 전송 (기존 로직 유지)
-                if node_name == "researcher" and "search_logs" in state_update:
-                    logs = state_update["search_logs"]
-                    if logs:
-                        log_content = logs[-1]
-                        log_data = json.dumps(
-                            {
-                                "type": "log",
-                                "content": f"🔎 {log_content[:40]}...",
-                            },
-                            ensure_ascii=False,
-                        )
-                        yield f"data: {log_data}\n\n"
+                # A. Researcher 로그
+                if node_name == "researcher" and "research_result" in state_update:
+                    res_text = state_update.get("research_result") or ""
+                    preview = (
+                        res_text[:30].replace("\n", " ") + "..."
+                        if res_text
+                        else "결과 없음"
+                    )
+                    log_data = json.dumps(
+                        {
+                            "type": "log",
+                            "content": f"🔎 조사 완료: {preview}",
+                        },
+                        ensure_ascii=False,
+                    )
+                    yield f"data: {log_data}\n\n"
 
-                # 2. Writer 또는 Interviewer의 최종 텍스트 전송
-                if node_name in ["writer", "interviewer", "supervisor"]:
-                    # final_response가 있으면 정답으로 전송
-                    if "final_response" in state_update:
-                        final_res = state_update["final_response"]
+                # B. Writer (진짜 스트리밍)
+                if node_name == "writer" and "writer_stream" in state_update:
+                    stream_obj = state_update["writer_stream"]
+                    if stream_obj:
+                        try:
+                            for chunk in stream_obj:
+                                if chunk.choices[0].delta.content:
+                                    token = chunk.choices[0].delta.content
+                                    full_ai_response += token
+                                    data = json.dumps(
+                                        {"type": "answer", "content": token},
+                                        ensure_ascii=False,
+                                    )
+                                    yield f"data: {data}\n\n"
+                        except Exception as e:
+                            yield f"data: {json.dumps({'type': 'error', 'content': str(e)}, ensure_ascii=False)}\n\n"
 
-                        # ================= [ksu] 토큰 사용량 전송 =================
-                        usage_data = {
-                            "input": state_update.get("input_tokens", 0),
-                            "output": state_update.get("output_tokens", 0)
-                        }
-                        # =======================================================
-                        
-                        # "usage": usage_data 추가
-                        data = json.dumps(
-                            {"type": "answer", "content": final_res, "usage": usage_data}, ensure_ascii=False
-                        )
-                        yield f"data: {data}\n\n"
-                    
-                    # Supervisor가 질문이 부족해서 바로 끝내는 경우 등 처리
-                    elif "final_response" not in state_update and node_name == "interviewer":
-                         pass 
+                # C. [수정] Interviewer & Fallback (가짜 스트리밍)
+                # Interviewer가 질문을 던지거나, Writer가 에러로 인해 텍스트만 반환했을 때
+                elif (
+                    "final_response" in state_update and state_update["final_response"]
+                ):
+                    final_res = state_update["final_response"]
+                    full_ai_response += final_res  # 저장용 누적
+
+                    # [핵심] 한 번에 보내지 않고 쪼개서 보냄 (Simulated Streaming)
+                    # node_name이 'interviewer' 이거나, Writer의 에러 Fallback일 때 작동
+                    for chunk in simulate_streaming(final_res):
+                        yield chunk
+
+        # 4. Save Log
+        if full_ai_response:
+            save_chat_log(role="assistant", content=full_ai_response)
 
     except Exception as e:
-        print(f"\n🚨 [Main Stream Error] 🚨")
-        traceback.print_exc()
-        
         error_msg = json.dumps({"type": "error", "content": str(e)}, ensure_ascii=False)
         yield f"data: {error_msg}\n\n"
 
 
 @app.post("/chat")
 async def chat_stream(request: ChatRequest):
-    # stream_generator에 thread_id 전달
     return StreamingResponse(
-        stream_generator(request.user_query, request.thread_id), 
-        media_type="text/event-stream"
+        stream_generator(request.user_query), media_type="text/event-stream"
     )

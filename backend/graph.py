@@ -23,8 +23,8 @@ from tools import (
 # ==========================================
 # ⚙️ 모델 설정
 # ==========================================
-FAST_MODEL = "gpt-4o"
-HIGH_PERFORMANCE_MODEL = "gpt-5.2"
+FAST_MODEL = "gpt-4o-mini"
+HIGH_PERFORMANCE_MODEL = "gpt-4o"
 
 # ==========================================
 # 1. Supervisor (라우터)
@@ -491,7 +491,7 @@ def check_search_result(state: State):
 
 def writer(state: State) -> State:
     try:
-        print("✍️ [Writer] 답변 작성 시작", flush=True)
+        print("✍️ [Writer] 답변 작성 시작 (Streaming Mode)", flush=True)
         query = state["user_query"]
         result = state.get("research_result", "")
 
@@ -500,10 +500,12 @@ def writer(state: State) -> State:
             result = ""
 
         # =========================================================
-        # [모드 판단 로직]
+        # [모드 판단 및 프롬프트 선택 로직] (기존 유지)
         # =========================================================
 
-        # [Case 1: 검색 시도했으나 실패] - Researcher가 실패 메시지를 남긴 경우
+        system_instruction = ""
+
+        # [Case 1: 검색 시도했으나 실패]
         if "검색 결과가 없습니다" in result or "오류 발생" in result:
             system_instruction = f"""
             **[상황: 검색 실패 (Search Failed)]**
@@ -516,7 +518,7 @@ def writer(state: State) -> State:
             4. 절대 임의로 없는 향수를 지어내지 마세요.
             """
 
-        # [Case 2: 일상 대화 (General Chat)] - 결과가 아예 텅 비어있음 (Supervisor -> Writer 직행)
+        # [Case 2: 일상 대화 (General Chat)]
         elif not result.strip():
             system_instruction = f"""
             **[상황: 일상 대화 및 실시간 정보 문의]**
@@ -528,11 +530,10 @@ def writer(state: State) -> State:
             2. **"강의"하지 마세요.** (예: "비 오는 날엔 우디 계열이 좋고~" 같은 TMI 설명 절대 금지)
             3. 실시간 정보를 모른다는 점을 **위트 있게 짧게** 사과하고, 바로 **사용자에게 되물으세요.**
             
-            **[나쁜 예 - 투머치토커]**: "API가 없어서 확인이 불가능합니다. 하지만 보통 흐린 날에는 차분한 향이 어울리고 맑은 날에는 시트러스가 어울리는데, 혹시 지금 날씨가 어떤지 알려주시면 제가..."
-            **[좋은 예 - 깔끔]**: "앗, 제가 하루 종일 서버 안에 갇혀 있어서 바깥 날씨를 못 봤어요. 😅 오늘 맑은가요? 아니면 비가 오나요? 사용자님의 기분을 알려주시면 알려주시면 딱 맞는 향을 골라드릴게요!"
+            **[좋은 예 - 깔끔]**: "앗, 제가 하루 종일 서버 안에 갇혀 있어서 바깥 날씨를 못 봤어요. 😅 오늘 맑은가요? 사용자님의 기분을 알려주시면 딱 맞는 향을 골라드릴게요!"
             """
 
-        # [Case 3: 검색 성공 (Recommendation)] - 사용자님의 상세 규칙 적용
+        # [Case 3: 검색 성공 (Recommendation)] - 사용자님만의 상세 규칙
         else:
             system_instruction = f"""
             당신은 향수를 잘 모르는 초보자를 위한 세상에서 가장 친절한 향수 컨설턴트입니다.
@@ -597,7 +598,7 @@ def writer(state: State) -> State:
             """
 
         # =========================================================
-        # [최종 프롬프트 조립 및 요청]
+        # [최종 요청 - Streaming 적용]
         # =========================================================
         prompt = f"""
         [사용자 요청]: "{query}"
@@ -607,24 +608,25 @@ def writer(state: State) -> State:
         위 지침을 완벽하게 준수하여 답변을 작성하세요.
         """
 
-        msg = client.chat.completions.create(
-            model=HIGH_PERFORMANCE_MODEL, messages=[{"role": "user", "content": prompt}]
+        # [수정 포인트 1] stream=True 활성화
+        stream = client.chat.completions.create(
+            model=HIGH_PERFORMANCE_MODEL,
+            messages=[{"role": "user", "content": prompt}],
+            stream=True,  # ★핵심: 여기서 기다리지 않고 스트림을 엽니다.
         )
 
-        raw_content = msg.choices[0].message.content
-
-        # [후처리] 강조 공백 제거 (예: ** 귤 ** -> **귤**)
-        fixed_content = re.sub(r"\*\*\s*(.*?)\s*\*\*", r"**\1**", raw_content)
-
+        # [수정 포인트 2] 객체 자체를 리턴 (기다리지 않음)
+        # Main 함수가 이 'stream' 객체를 받아서 사용자에게 뿌려줍니다.
         return {
-            "final_response": fixed_content,
-            "active_mode": None,  # [★OFF] 대화 종료 확인사살
+            "writer_stream": stream,  # ★ State에 스트림 객체 전달
+            "active_mode": None,
         }
 
     except Exception:
         print("\n🚨 [Writer Error]", flush=True)
         traceback.print_exc()
 
+        # 에러 시에는 스트림 대신 그냥 텍스트를 보냄 (Main에서 처리 필요)
         return {
             "final_response": "죄송합니다. 답변 생성 중 시스템 오류가 발생했습니다.",
             "active_mode": None,
@@ -671,6 +673,5 @@ def build_graph():
     graph.add_edge("writer", END)
 
     # 메모리 저장소(Checkpointer) 적용
-    memory = MemorySaver()
 
-    return graph.compile(checkpointer=memory)
+    return graph.compile()
