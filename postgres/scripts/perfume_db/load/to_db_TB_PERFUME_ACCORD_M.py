@@ -11,8 +11,8 @@ DB_CONFIG = {
     "dbname": "perfume_db",
     "user": "scentence",
     "password": "scentence",
-    "host": os.getenv("DB_HOST", "localhost"),
-    "port": os.getenv("DB_PORT", "5433"),
+    "host": os.getenv("POSTGRES_HOST", "localhost"),
+    "port": os.getenv("POSTGRES_PORT", "5433"),
 }
 
 
