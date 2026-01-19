@@ -19,15 +19,29 @@ echo "[ok] DB 연결 성공"
 # 작업 디렉토리 이동
 cd /app/scripts/perfume_db
 
-# 1) CSV 생성: tables/*.py 실행
+# ---------------------------------------------------------
+# 1) CSV 생성 단계
+# ---------------------------------------------------------
+
+# (1-1) M 테이블용 원본 CSV 생성
 for f in tables/*.py; do
-  echo "[csv] $(basename "$f")"
+  echo "[csv-m] $(basename "$f")"
   python3 "$f"
 done
 
-# 2) DB 적재: load/*.py 실행
+# (1-2) R 테이블용 정제 CSV 생성 (추가된 부분)
+# 사용자님의 사진처럼 rtables 폴더 안에 생성 스크립트가 있다고 가정합니다.
+if [ -d "rtables" ]; then
+  for f in rtables/*.py; do
+    echo "[csv-r] $(basename "$f")"
+    python3 "$f"
+  done
+fi
 
-# [중요 변경] 부모 테이블(BASIC)을 먼저 명시적으로 실행
+# ---------------------------------------------------------
+# 2) DB 적재 단계 (Master Tables)
+# ---------------------------------------------------------
+
 echo "[load] to_db_TB_PERFUME_BASIC_M.py (Priority)"
 f="load/to_db_TB_PERFUME_BASIC_M.py"
 sed \
@@ -35,20 +49,29 @@ sed \
     -e "s/\"port\": \"5433\"/\"port\": \"${DB_PORT}\"/" \
     "$f" | python3
 
-# 나머지 테이블 실행 (BASIC은 제외하고 실행)
 for f in load/*.py; do
   filename=$(basename "$f")
-  
-  # 위에서 이미 실행한 BASIC 파일은 건너뜀
   if [ "$filename" == "to_db_TB_PERFUME_BASIC_M.py" ]; then
     continue
   fi
-
-  echo "[load] $filename"
+  echo "[load-m] $filename"
   sed \
     -e "s/\"host\": \"localhost\"/\"host\": \"${DB_HOST}\"/" \
     -e "s/\"port\": \"5433\"/\"port\": \"${DB_PORT}\"/" \
     "$f" | python3
 done
 
-echo "[done] perfume_db 데이터 적재 완료"
+# ---------------------------------------------------------
+# 3) DB 적재 단계 (Refined Tables)
+# ---------------------------------------------------------
+
+echo "[rload] Starting refined data loading (R Tables)"
+for f in rload/*.py; do
+  echo "[rload-r] $(basename "$f")"
+  sed \
+    -e "s/\"host\": \"localhost\"/\"host\": \"${DB_HOST}\"/" \
+    -e "s/\"port\": \"5433\"/\"port\": \"${DB_PORT}\"/" \
+    "$f" | python3
+done
+
+echo "[done] 모든 데이터(M 및 R 테이블) 적재 완료"
