@@ -1,6 +1,8 @@
 # FastAPI + Next.js + PostgreSQL Docker Compose
 
 ## 🚀 빠른 시작 (로컬 Docker Desktop 사용)
+fast_start.bat 파일 실행!!!
+
 
 ```bash
 
