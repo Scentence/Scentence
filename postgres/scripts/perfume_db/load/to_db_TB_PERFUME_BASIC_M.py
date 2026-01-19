@@ -1,6 +1,7 @@
 import pandas as pd
 import psycopg2
 from psycopg2.extras import execute_batch
+import os
 
 CSV_PATH = "outputs/TB_PERFUME_BASIC_M.csv"
 TABLE_NAME = "TB_PERFUME_BASIC_M"
@@ -10,8 +11,8 @@ DB_CONFIG = {
     "dbname": "perfume_db",
     "user": "scentence",
     "password": "scentence",
-    "host": "localhost",
-    "port": "5433"
+    "host": os.getenv("POSTGRES_HOST", "localhost"),
+    "port": os.getenv("POSTGRES_PORT", "5433"),
 }
 
 

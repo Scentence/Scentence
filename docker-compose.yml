@@ -89,7 +89,7 @@ services:
       - backend
 
   etl-worker:
-    image: python:3.9-slim
+    image: python:3.11-slim
     container_name: perfume-etl-worker
     depends_on:
       db:

@@ -35,6 +35,10 @@ psql -U scentence -d perfume_db -f /app/create/perfume_db/tb_perfume_notes_m.sql
 psql -U scentence -d perfume_db -f /app/create/perfume_db/tb_perfume_oca_m.sql
 psql -U scentence -d perfume_db -f /app/create/perfume_db/tb_perfume_review_m.sql
 psql -U scentence -d perfume_db -f /app/create/perfume_db/tb_perfume_season_m.sql
+psql -U scentence -d perfume_db -f /app/create/perfume_db/tb_perfume_season_r.sql
+psql -U scentence -d perfume_db -f /app/create/perfume_db/tb_perfume_accord_r.sql
+psql -U scentence -d perfume_db -f /app/create/perfume_db/tb_perfume_gender_r.sql
+psql -U scentence -d perfume_db -f /app/create/perfume_db/tb_perfume_oca_r.sql
 
 # 5. RECOM_DB 테이블 생성
 echo "RECOM_DB 테이블 생성"

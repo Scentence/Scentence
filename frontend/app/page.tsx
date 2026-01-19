@@ -1,54 +1,20 @@
 "use client";
 
-import { FormEvent, useState, useEffect } from "react";
+import { FormEvent, useState, useEffect, useRef } from "react";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
 
 type Message = {
   role: "user" | "assistant";
   text: string;
-  isStreaming?: boolean;
 };
 
 const API_URL = "http://localhost:8000/chat";
 
-// 타자 치는 효과 Hook
-function useTypewriter(text: string, speed = 10) {
-  const [displayedText, setDisplayedText] = useState("");
+// [수정 1] useTypewriter 삭제됨 (서버 스트리밍 속도 그대로 이용)
 
-  useEffect(() => {
-    if (!text || text.length < displayedText.length) {
-      setDisplayedText("");
-      return;
-    }
-
-    if (displayedText.length >= text.length) {
-      return;
-    }
-
-    const timeout = setTimeout(() => {
-      setDisplayedText((prev) => {
-        const nextCharIndex = prev.length;
-        if (nextCharIndex < text.length) {
-          return prev + text.charAt(nextCharIndex);
-        }
-        return prev;
-      });
-    }, speed);
-
-    return () => clearTimeout(timeout);
-  }, [text, displayedText, speed]);
-
-  return displayedText;
-}
-
-// 메시지 컴포넌트
+// [수정 2] MessageItem 단순화
 const MessageItem = ({ message }: { message: Message }) => {
-  const shouldAnimate = message.role === "assistant" && message.isStreaming;
-  const typedText = useTypewriter(message.text, 15);
-
-  const content = shouldAnimate ? typedText : message.text;
-
   return (
     <div className={`flex w-full ${message.role === "user" ? "justify-end" : "justify-start"}`}>
       <div
@@ -84,22 +50,21 @@ const MessageItem = ({ message }: { message: Message }) => {
                 hr: ({ node, ...props }) => (
                   <hr {...props} className="my-10 border-slate-600" />
                 ),
-                // 👇 [수정됨] 제목 스타일: Sky Blue -> Soft Violet (라벤더)
-                // 전체적으로 핑크/보라 톤인 앱과 훨씬 조화롭습니다.
                 em: ({ node, ...props }) => (
                   <em {...props} className="not-italic text-violet-400 font-bold mr-1" />
                 ),
-                // 👇 [강조] 핑크색 유지
                 strong: ({ node, ...props }) => (
                   <strong {...props} className="text-pink-300 font-extrabold" />
                 ),
               }}
             >
-              {content || "..."}
+              {/* [수정] typedText 대신 원본 text 그대로 출력 */}
+              {message.text}
             </ReactMarkdown>
+            {/* [추가] 커서 깜빡임 효과 (생성 중일 때만 보임) */}
           </div>
         ) : (
-          <p>{content}</p>
+          <p>{message.text}</p>
         )}
       </div>
     </div>
@@ -112,41 +77,32 @@ export default function Home() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
 
-  const [threadId, setThreadId] = useState("");
+  // [추가] 진행 상태 로그 (예: "🔎 조사 완료: ...")
+  const [statusLog, setStatusLog] = useState("");
+
+  // [추가] 자동 스크롤 Ref
+  const messagesEndRef = useRef<HTMLDivElement>(null);
+
+  const scrollToBottom = () => {
+    messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
+  };
 
   useEffect(() => {
-    const savedId = localStorage.getItem("chat_thread_id");
-    if (savedId) {
-      setThreadId(savedId);
-    } else {
-      const newId = crypto.randomUUID();
-      localStorage.setItem("chat_thread_id", newId);
-      setThreadId(newId);
-    }
-  }, []);
-
-  const handleNewChat = () => {
-    if (loading) return;
-    const newId = crypto.randomUUID();
-    localStorage.setItem("chat_thread_id", newId);
-    setThreadId(newId);
-    setMessages([]);
-    setInputValue("");
-    setError("");
-    console.log("Session Reset. New Thread ID:", newId);
-  };
+    scrollToBottom();
+  }, [messages, statusLog]); // 메시지나 로그가 바뀔 때마다 스크롤
 
   const handleSubmit = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
 
     const trimmed = inputValue.trim();
-    if (!trimmed || !threadId) return;
+    if (!trimmed) return;
 
-    setMessages((prev) => prev.map(m => ({ ...m, isStreaming: false })));
-    setMessages((prev) => [...prev, { role: "user", text: trimmed, isStreaming: false }]);
+    // 1. 유저 메시지 추가
+    setMessages((prev) => [...prev, { role: "user", text: trimmed }]);
     setInputValue("");
     setError("");
     setLoading(true);
+    setStatusLog("AI가 요청을 분석 중입니다..."); // 초기 로그
 
     try {
       const response = await fetch(API_URL, {
@@ -154,7 +110,6 @@ export default function Home() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           user_query: trimmed,
-          thread_id: threadId
         }),
       });
 
@@ -162,7 +117,8 @@ export default function Home() {
         throw new Error("서버 연결 실패");
       }
 
-      setMessages((prev) => [...prev, { role: "assistant", text: "", isStreaming: true }]);
+      // 2. 봇 응답용 빈 말풍선 미리 추가
+      setMessages((prev) => [...prev, { role: "assistant", text: "" }]);
 
       const reader = response.body.getReader();
       const decoder = new TextDecoder();
@@ -176,8 +132,10 @@ export default function Home() {
         if (value) {
           const chunk = decoder.decode(value, { stream: true });
           buffer += chunk;
+
+          // SSE 포맷은 double newline(\n\n)으로 구분됨
           const lines = buffer.split("\n\n");
-          buffer = lines.pop() || "";
+          buffer = lines.pop() || ""; // 불완전한 마지막 조각은 버퍼에 남김
 
           for (const line of lines) {
             const trimmedLine = line.trim();
@@ -187,26 +145,47 @@ export default function Home() {
               const jsonStr = trimmedLine.replace("data: ", "");
               const data = JSON.parse(jsonStr);
 
+              // [수정 3] 핵심 스트리밍 로직
+
+              // Case A: 답변 토큰 도착 (한 글자씩)
               if (data.type === "answer") {
+                setStatusLog("");
                 setMessages((prev) => {
                   const updated = [...prev];
-                  const lastMsg = updated[updated.length - 1];
+                  const lastIndex = updated.length - 1;
+                  const lastMsg = updated[lastIndex];
+
+                  // [중요] 덮어쓰기(=)가 아니라 이어붙이기(+=)
                   if (lastMsg.role === "assistant") {
-                    lastMsg.text = data.content;
+                    updated[lastIndex] = {
+                      ...lastMsg,
+                      text: lastMsg.text + data.content, // 새로운 문자열 생성
+                    };
                   }
                   return updated;
                 });
               }
+              // Case B: 로그 메시지 도착 (Researcher 단계)
+              else if (data.type === "log") {
+                setStatusLog(data.content);
+              }
+              // Case C: 에러 처리
+              else if (data.type === "error") {
+                setStatusLog(`오류: ${data.content}`);
+              }
+
             } catch (e) {
-              console.error("Parsing Error:", e);
+              console.error("JSON Parsing Error:", e);
             }
           }
         }
       }
     } catch (e) {
       setError("응답을 받아오는 중 오류가 발생했습니다.");
+      setMessages((prev) => [...prev, { role: "assistant", text: "죄송합니다. 오류가 발생했습니다." }]);
     } finally {
       setLoading(false);
+      setStatusLog(""); // 종료 시 로그 초기화
     }
   };
 
@@ -214,63 +193,64 @@ export default function Home() {
     <div className="flex min-h-screen flex-col bg-slate-950 px-4 py-12 text-slate-50">
       <div className="mx-auto w-full max-w-3xl space-y-8">
 
-        <header className="space-y-2">
+        <header className="space-y-2 text-center sm:text-left">
           <p className="text-sm uppercase tracking-[0.4em] text-slate-400">Perfume Assistant</p>
           <div className="flex items-center justify-between">
             <h1 className="text-3xl font-semibold text-white">SCENTENCE AI</h1>
-
             <button
-              onClick={handleNewChat}
+              onClick={() => { setMessages([]); setInputValue(""); }}
               disabled={loading}
-              className="group flex items-center gap-2 rounded-full border border-slate-700 bg-slate-800/50 px-4 py-2 text-xs font-medium text-slate-300 transition-all hover:bg-slate-700 hover:text-white hover:border-pink-500/50 active:scale-95 disabled:opacity-50"
+              className="group flex items-center gap-2 rounded-full border border-slate-700 bg-slate-800/50 px-4 py-2 text-xs font-medium text-slate-300 transition-all hover:bg-slate-700 hover:text-white"
             >
-              <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" className="w-4 h-4 transition-transform group-hover:rotate-180">
-                <path strokeLinecap="round" strokeLinejoin="round" d="M16.023 9.348h4.992v-.001M2.985 19.644v-4.992m0 0h4.992m-4.993 0l3.181 3.183a8.25 8.25 0 0013.803-3.7M4.031 9.865a8.25 8.25 0 0113.803-3.7l3.181 3.182m0-4.991v4.99" />
-              </svg>
               새 대화
             </button>
           </div>
-          <p className="text-slate-300">LangGraph 기반 실시간 스트리밍 챗봇</p>
-          <p className="text-slate-300">테스트 모드 추가 "/t [목적],[시나리오],[기대출력] 내용입력"</p>
-          <p className="text-slate-300">복사해서 쓰세요 /t [],[],[] </p>
+          <p className="text-slate-300">LangGraph & Real-time Streaming</p>
         </header>
 
-        <section className="min-h-[400px] rounded-2xl border border-slate-800 bg-white/5 p-6 shadow-lg shadow-slate-900/40">
-          <div className="space-y-6">
+        <section className="relative min-h-[500px] flex flex-col rounded-2xl border border-slate-800 bg-white/5 p-6 shadow-lg shadow-slate-900/40">
+          <div className="flex-1 space-y-6 overflow-y-auto pb-4 custom-scrollbar">
             {messages.length === 0 && (
-              <p className="text-slate-400">질문을 입력하면 AI가 분석 및 조사를 시작합니다.</p>
+              <div className="flex h-full flex-col items-center justify-center text-slate-500 space-y-2">
+                <p>원하는 향기나 분위기를 말씀해주세요.</p>
+                <p className="text-xs text-slate-600">예) "여름에 쓰기 좋은 시트러스 향수 추천해줘"</p>
+              </div>
             )}
+
             {messages.map((msg, idx) => (
               <MessageItem key={idx} message={msg} />
             ))}
-            {loading && messages[messages.length - 1]?.role === "user" && (
-              <div className="flex justify-start">
-                <div className="rounded-2xl bg-slate-700/50 px-5 py-4 text-sm text-slate-400 animate-pulse">
-                  AI가 생각하고 있습니다... 💭
+
+            {/* [추가] 상태 로그 표시 (검색 중일 때 하단에 작게 뜸) */}
+            {loading && statusLog && (
+              <div className="flex justify-start animate-fade-in">
+                <div className="flex items-center gap-2 rounded-lg bg-slate-800/50 px-4 py-2 text-xs text-pink-300 border border-pink-500/20">
+                  <span className="animate-spin">⏳</span> {statusLog}
                 </div>
               </div>
             )}
+            <div ref={messagesEndRef} />
           </div>
         </section>
 
         <form onSubmit={handleSubmit} className="space-y-3">
           <div className="flex gap-3">
             <input
-              className="flex-1 rounded-2xl border border-slate-800 bg-slate-900/80 px-4 py-3 text-base text-white outline-none focus:border-pink-500/50 transition-colors"
-              placeholder="예) 여름에 쓰기 좋은 시트러스 향수"
+              className="flex-1 rounded-2xl border border-slate-800 bg-slate-900/80 px-4 py-3 text-base text-white outline-none focus:border-pink-500/50 transition-colors disabled:opacity-50"
+              placeholder="질문을 입력하세요..."
               value={inputValue}
               onChange={(e) => setInputValue(e.target.value)}
               disabled={loading}
             />
             <button
-              className="rounded-2xl bg-gradient-to-r from-pink-500 to-purple-500 px-6 py-3 font-semibold text-white hover:opacity-90 transition-opacity disabled:opacity-50"
+              className="rounded-2xl bg-gradient-to-r from-pink-600 to-purple-600 px-6 py-3 font-semibold text-white hover:opacity-90 transition-opacity disabled:opacity-50 disabled:cursor-not-allowed"
               type="submit"
               disabled={loading}
             >
               {loading ? "..." : "전송"}
             </button>
           </div>
-          {error && <p className="text-sm text-rose-300">{error}</p>}
+          {error && <p className="text-sm text-rose-300 text-center">{error}</p>}
         </form>
       </div>
     </div>

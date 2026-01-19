@@ -1,18 +1,29 @@
+# backend/main.py
+
 import json
-import traceback
-from typing import Any, AsyncGenerator
+import time
+
+# import asyncio # 안 쓰면 생략 가능
+from typing import Generator
 
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import StreamingResponse
-from pydantic import BaseModel # 👈 Pydantic 모델 직접 정의를 위해 추가
+from langchain_core.messages import HumanMessage
 
-# graph.py에서 빌드된 그래프 가져오기
-from graph import build_graph
+# 모듈 임포트
+from schemas import ChatRequest
+from graph import app_graph
 
-app = FastAPI(title="Perfume Chat Workflow")
+# from database import get_db_connection  # <-- 로깅 안 할 거면 DB 연결 함수도 당장 필요 없음
 
-origins = ["http://localhost:3000", "http://127.0.0.1:3000"]
+app = FastAPI(title="Perfume Re-Act Chatbot")
+
+# CORS 설정
+origins = [
+    "http://localhost:3000",
+    "http://127.0.0.1:3000",
+]
 
 app.add_middleware(
     CORSMiddleware,
@@ -22,86 +33,129 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-# 1. 그래프 빌드 (MemorySaver가 graph.py에 포함되어 있어야 함)
-workflow = build_graph()
+# =================================================================
+# 1. 헬퍼 함수: 채팅 로그 저장 (지금은 사용 안 함 - 주석 처리)
+# =================================================================
+# def save_chat_log(thread_id: str, role: str, content: str):
+#     conn = None
+#     try:
+#         conn = get_db_connection()
+#         cur = conn.cursor()
+#         sql = """
+#             INSERT INTO tb_chat_logs (session_id, role, content, created_at)
+#             VALUES (%s, %s, %s, NOW())
+#         """
+#         cur.execute(sql, (thread_id, role, content))
+#         conn.commit()
+#     except Exception as e:
+#         print(f"⚠️ 채팅 로그 저장 실패: {e}")
+#     finally:
+#         if conn: conn.close()
 
-# 2. 요청 데이터 모델 정의 (thread_id 필수)
-# schemas.py를 안 쓰고 여기서 바로 정의해도 됩니다.
-class ChatRequest(BaseModel):
-    user_query: str
-    thread_id: str
 
-@app.get("/health")
-def health() -> dict[str, Any]:
-    return {"status": "ok"}
+# =================================================================
+# 2. 헬퍼 함수: 가짜 스트리밍
+# =================================================================
+def simulate_streaming(text: str, delay: float = 0.03) -> Generator[str, None, None]:
+    for char in text:
+        data = json.dumps({"type": "answer", "content": char}, ensure_ascii=False)
+        yield f"data: {data}\n\n"
+        time.sleep(delay)
 
-# 3. 스트리밍 제너레이터 수정 (비동기 async 적용)
-async def stream_generator(user_query: str, thread_id: str) -> AsyncGenerator[str, None]:
-    """LangGraph 실행 결과를 SSE 포맷으로 실시간 전송"""
-    
-    # LangGraph에 전달할 입력값
-    inputs = {
-        "user_query": user_query,
-        # 'messages'나 'history'는 MemorySaver가 알아서 관리하므로 넣지 않아도 됩니다.
-    }
-    
-    # 👇 [핵심] 스레드 ID를 설정에 넣어줘야 기억을 찾습니다.
+
+# =================================================================
+# 3. 핵심 로직: 스트림 제너레이터
+# =================================================================
+# backend/main.py
+
+
+async def stream_generator(
+    user_query: str, thread_id: str
+) -> Generator[str, None, None]:
     config = {"configurable": {"thread_id": thread_id}}
+    inputs = {"messages": [HumanMessage(content=user_query)]}
+
+    full_response = ""
 
     try:
-        # workflow.stream 대신 .astream 사용 (비동기)
-        async for event in workflow.astream(inputs, config=config):
-            for node_name, state_update in event.items():
+        # [수정] astream_events를 사용하여 실시간 이벤트를 추적합니다.
+        # version="v2" 사용을 권장합니다.
+        async for event in app_graph.astream_events(
+            inputs, config=config, version="v2"
+        ):
+            kind = event["event"]
+            node_name = event["metadata"].get("langgraph_node", "")
 
-                # 1. Researcher 로그 전송 (기존 로직 유지)
-                if node_name == "researcher" and "search_logs" in state_update:
-                    logs = state_update["search_logs"]
-                    if logs:
-                        log_content = logs[-1]
-                        log_data = json.dumps(
-                            {
-                                "type": "log",
-                                "content": f"🔎 {log_content[:40]}...",
-                            },
-                            ensure_ascii=False,
-                        )
-                        yield f"data: {log_data}\n\n"
+            # ---------------------------------------------------------
+            # [A & B] Interviewer & Writer: 실시간 토큰 스트리밍
+            # ---------------------------------------------------------
+            if kind == "on_chat_model_stream":
+                # Writer 혹은 Interviewer 노드에서 생성되는 토큰만 필터링
+                if node_name in ["interviewer", "writer"]:
 
-                # 2. Writer 또는 Interviewer의 최종 텍스트 전송
-                if node_name in ["writer", "interviewer", "supervisor"]:
-                    # final_response가 있으면 정답으로 전송
-                    if "final_response" in state_update:
-                        final_res = state_update["final_response"]
+                    # [주의] Interviewer가 Researcher로 넘어가기 전의 메시지는 출력하지 않기로 한 로직 반영
+                    # astream_events에서는 실행 중 'next_step'을 알 수 없으므로,
+                    # 노드 출력(on_chain_end) 시점에 제어하거나 노드 설계 단에서 필터링이 필요할 수 있습니다.
+                    # 여기서는 일단 모든 토큰을 실시간으로 보냅니다.
 
-                        # ================= [ksu] 토큰 사용량 전송 =================
-                        usage_data = {
-                            "input": state_update.get("input_tokens", 0),
-                            "output": state_update.get("output_tokens", 0)
-                        }
-                        # =======================================================
-                        
-                        # "usage": usage_data 추가
+                    content = event["data"]["chunk"].content
+                    if content:
+                        full_response += content
                         data = json.dumps(
-                            {"type": "answer", "content": final_res, "usage": usage_data}, ensure_ascii=False
+                            {"type": "answer", "content": content}, ensure_ascii=False
                         )
                         yield f"data: {data}\n\n"
-                    
-                    # Supervisor가 질문이 부족해서 바로 끝내는 경우 등 처리
-                    elif "final_response" not in state_update and node_name == "interviewer":
-                         pass 
 
+            # ---------------------------------------------------------
+            # [C] Researcher (로그): 도구 호출 감지
+            # ---------------------------------------------------------
+            elif kind == "on_chat_model_end" and node_name == "researcher":
+                # Researcher가 도구를 호출하려고 할 때 로그 전송
+                output = event["data"]["output"]
+                if hasattr(output, "tool_calls") and output.tool_calls:
+                    tool_name = output.tool_calls[0]["name"]
+                    log_msg = f"🔎 [검색 중] {tool_name} 도구를 사용하고 있습니다..."
+                    data = json.dumps(
+                        {"type": "log", "content": log_msg}, ensure_ascii=False
+                    )
+                    yield f"data: {data}\n\n"
+
+            # ---------------------------------------------------------
+            # [D] Tools (로그): 도구 실행 완료 감지
+            # ---------------------------------------------------------
+            elif kind == "on_chain_end" and node_name == "tools":
+                log_msg = "✅ 데이터 조회 완료! 분석 중입니다..."
+                data = json.dumps(
+                    {"type": "log", "content": log_msg}, ensure_ascii=False
+                )
+                yield f"data: {data}\n\n"
+
+    except GeneratorExit:
+        print(f"👋 Client disconnected (Thread: {thread_id})")
+        return
     except Exception as e:
-        print(f"\n🚨 [Main Stream Error] 🚨")
-        traceback.print_exc()
-        
+        print(f"🚨 Server Error: {e}")
         error_msg = json.dumps({"type": "error", "content": str(e)}, ensure_ascii=False)
         yield f"data: {error_msg}\n\n"
 
 
+# =================================================================
+# 4. API 엔드포인트
+# =================================================================
+@app.get("/health")
+def health():
+    return {"status": "ok"}
+
+
 @app.post("/chat")
 async def chat_stream(request: ChatRequest):
-    # stream_generator에 thread_id 전달
     return StreamingResponse(
-        stream_generator(request.user_query, request.thread_id), 
-        media_type="text/event-stream"
+        stream_generator(request.user_query, request.thread_id),
+        media_type="text/event-stream",
     )
+
+
+if __name__ == "__main__":
+    import uvicorn
+
+    uvicorn.run("main:app", host="0.0.0.0", port=8000, reload=True)
