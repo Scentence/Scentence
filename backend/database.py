@@ -1,4 +1,4 @@
-# database.py
+# backend/database.py
 import os
 import traceback
 import json
@@ -8,7 +8,7 @@ from psycopg2.extras import RealDictCursor
 from dotenv import load_dotenv
 from openai import OpenAI
 
-# 오탈자 보정 라이브러리 (없으면 더미 함수 사용)
+# 오탈자 보정 라이브러리
 try:
     from Levenshtein import distance
 except ImportError:
@@ -32,18 +32,7 @@ DB_CONFIG = {
 
 client = OpenAI(api_key=os.getenv("OPENAI_API_KEY"))
 
-# [★Mapping Constants] LLM 용어 -> DB 용어 매핑
-GENDER_MAP = {
-    "women": "Feminine",
-    "female": "Feminine",
-    "men": "Masculine",
-    "male": "Masculine",
-}
-
-# DB에 있는 성별 키워드
-DB_GENDER_KEYWORDS = {"Feminine", "Masculine"}
-
-# [★New] 브랜드 목록 캐싱 (반복 쿼리 방지)
+# 브랜드 목록 캐싱
 BRAND_CACHE = []
 
 
@@ -68,7 +57,7 @@ def get_embedding(text: str) -> List[float]:
 
 
 # ==========================================
-# [★New] 브랜드명 자동 보정 함수
+# 1. 브랜드명 자동 보정 함수
 # ==========================================
 def get_all_brands() -> List[str]:
     """DB에 존재하는 모든 브랜드 목록을 가져옵니다 (캐싱 적용)"""
@@ -89,7 +78,7 @@ def get_all_brands() -> List[str]:
 
 def match_brand_name(user_input: str) -> str:
     """
-    사용자 입력(예: '샤넬', 'Chanle')을 DB의 정확한 브랜드명(예: 'Chanel')으로 변환합니다.
+    사용자 입력(예: '샤넬')을 DB의 정확한 브랜드명(예: 'Chanel')으로 변환합니다.
     """
     if not user_input:
         return user_input
@@ -126,7 +115,7 @@ def match_brand_name(user_input: str) -> str:
 
 
 # ==========================================
-# 1. 메타데이터 로더
+# 2. 메타데이터 로더 (신규 테이블 반영)
 # ==========================================
 def fetch_meta_data() -> Dict[str, str]:
     meta = {}
@@ -135,20 +124,22 @@ def fetch_meta_data() -> Dict[str, str]:
         conn = get_db_connection()
         cur = conn.cursor()
 
-        cur.execute("SELECT DISTINCT season FROM TB_PERFUME_SEASON_M")
+        # [수정] _R 테이블에서 메타데이터 로드
+        cur.execute("SELECT DISTINCT season FROM TB_PERFUME_SEASON_R")
         meta["seasons"] = ", ".join([str(r[0]) for r in cur.fetchall() if r[0]])
 
-        cur.execute("SELECT DISTINCT occasion FROM TB_PERFUME_OCA_M")
+        cur.execute("SELECT DISTINCT occasion FROM TB_PERFUME_OCA_R")
         meta["occasions"] = ", ".join([str(r[0]) for r in cur.fetchall() if r[0]])
 
-        cur.execute("SELECT DISTINCT accord FROM TB_PERFUME_ACCORD_M LIMIT 100")
+        cur.execute("SELECT DISTINCT accord FROM TB_PERFUME_ACCORD_R LIMIT 100")
         meta["accords"] = ", ".join([str(r[0]) for r in cur.fetchall() if r[0]])
 
-        cur.execute("SELECT DISTINCT audience FROM TB_PERFUME_AUD_M")
-        all_aud = {str(r[0]) for r in cur.fetchall() if r[0]}
-        styles = all_aud - DB_GENDER_KEYWORDS
+        # [수정] 성별은 고정값이므로 하드코딩 혹은 R테이블 조회
         meta["genders"] = "Women, Men, Unisex"
-        meta["styles"] = ", ".join(list(styles))
+
+        # Style은 현재 별도 R 테이블이 없으므로 Occasion이나 Accord를 참고하거나 비워둠
+        # 일단 빈 문자열로 둡니다 (필요 시 수정)
+        meta["styles"] = ""
 
         cur.execute(
             "SELECT perfume_brand, COUNT(*) as cnt FROM TB_PERFUME_BASIC_M GROUP BY perfume_brand ORDER BY cnt DESC LIMIT 50"
@@ -165,20 +156,15 @@ def fetch_meta_data() -> Dict[str, str]:
 
 
 # ==========================================
-# 2. Tool A-1: 문자 기반 노트 교정 (Hard Filter용)
+# 3. Tool 함수들 (노트 검색)
 # ==========================================
 def lookup_note_by_string(keyword: str) -> List[str]:
-    """
-    사용자가 직접 입력한 키워드를 바탕으로 DB에서 정확한 노트 명칭을 찾습니다.
-    완전 일치 확인 후, 오탈자(편집 거리 2 이하)를 교정합니다.
-    """
     conn = get_db_connection()
     cur = conn.cursor()
     keyword_clean = keyword.strip().lower()
     found_notes = set()
 
     try:
-        # 1. 완전 일치 확인 (Exact Match)
         cur.execute(
             "SELECT note FROM TB_PERFUME_NOTES_M WHERE LOWER(note) = %s LIMIT 1",
             (keyword_clean,),
@@ -187,7 +173,6 @@ def lookup_note_by_string(keyword: str) -> List[str]:
         if row:
             return [row[0]]
 
-        # 2. 오탈자 교정 (Fuzzy Match - Levenshtein Distance)
         cur.execute("SELECT DISTINCT note FROM TB_PERFUME_NOTES_M")
         all_notes = [r[0] for r in cur.fetchall() if r[0]]
 
@@ -196,7 +181,6 @@ def lookup_note_by_string(keyword: str) -> List[str]:
                 if keyword_clean == db_note.lower():
                     found_notes.add(db_note)
                 continue
-
             if distance(keyword_clean, db_note.lower()) <= 2:
                 found_notes.add(db_note)
 
@@ -208,23 +192,13 @@ def lookup_note_by_string(keyword: str) -> List[str]:
         conn.close()
 
 
-# ==========================================
-# 2. Tool A-2: 벡터 기반 의미 검색 (Strategy Filter용)
-# ==========================================
 def lookup_note_by_vector(keyword: str) -> List[str]:
-    """
-    AI가 제안한 추상적 키워드를 바탕으로 벡터 DB에서 의미상 유사한 노드를 찾습니다.
-    리서처가 최종 선택할 수 있도록 후보군을 10개까지 추출합니다.
-    """
     conn = get_db_connection()
     cur = conn.cursor()
-
     try:
         query_vector = get_embedding(keyword)
         if not query_vector:
             return []
-
-        # [★수정] 코사인 유사도 기반 상위 10개 노트 추출 (리서처 선택 풀 확보)
         sql = "SELECT note FROM TB_NOTE_EMBEDDING_M ORDER BY embedding <=> %s::vector LIMIT 10"
         cur.execute(sql, (query_vector,))
         return [r[0] for r in cur.fetchall()]
@@ -236,7 +210,7 @@ def lookup_note_by_vector(keyword: str) -> List[str]:
 
 
 # ==========================================
-# 3. Tool B: 정밀 검색 엔진 (search_perfumes)
+# 4. 정밀 검색 엔진 (search_perfumes) - [핵심 수정]
 # ==========================================
 def search_perfumes(
     hard_filters: Dict[str, Any],
@@ -248,7 +222,8 @@ def search_perfumes(
     cur = conn.cursor(cursor_factory=RealDictCursor)
 
     try:
-        # 1. SELECT 절: 10% 투표 비중 이상의 어코드만 추출 로직 반영
+        # [1] SELECT 절 수정: 복잡한 연산 제거, _R 테이블 단순 조회
+        # 노트 정보는 대소문자 이슈 방지를 위해 UPPER() 사용
         sql = """
             SELECT DISTINCT 
                 m.perfume_id as id, 
@@ -256,136 +231,107 @@ def search_perfumes(
                 m.perfume_name as name, 
                 m.img_link as image_url,
                 (
-                    SELECT STRING_AGG(DISTINCT a.accord, ', ') 
-                    FROM TB_PERFUME_ACCORD_M a 
-                    JOIN (
-                        SELECT perfume_id, SUM(vote) as total_vote 
-                        FROM TB_PERFUME_ACCORD_M 
-                        GROUP BY perfume_id
-                    ) totals ON a.perfume_id = totals.perfume_id
-                    WHERE a.perfume_id = m.perfume_id 
-                      AND (a.vote::float / NULLIF(totals.total_vote, 0)) >= 0.1
+                    SELECT STRING_AGG(DISTINCT accord, ', ') 
+                    FROM TB_PERFUME_ACCORD_R 
+                    WHERE perfume_id = m.perfume_id
                 ) as accords,
                 (
-                    SELECT audience 
-                    FROM TB_PERFUME_AUD_M 
-                    WHERE perfume_id = m.perfume_id AND audience IN ('Feminine', 'Masculine')
-                    GROUP BY audience 
-                    ORDER BY SUM(vote) DESC 
+                    SELECT gender
+                    FROM TB_PERFUME_GENDER_R
+                    WHERE perfume_id = m.perfume_id
                     LIMIT 1
                 ) as gender,
-                (SELECT STRING_AGG(DISTINCT n.note, ', ') FROM TB_PERFUME_NOTES_M n WHERE n.perfume_id = m.perfume_id AND n.type = 'TOP') as top_notes,
-                (SELECT STRING_AGG(DISTINCT n.note, ', ') FROM TB_PERFUME_NOTES_M n WHERE n.perfume_id = m.perfume_id AND n.type = 'MIDDLE') as middle_notes,
-                (SELECT STRING_AGG(DISTINCT n.note, ', ') FROM TB_PERFUME_NOTES_M n WHERE n.perfume_id = m.perfume_id AND n.type = 'BASE') as base_notes
+                (SELECT STRING_AGG(DISTINCT n.note, ', ') FROM TB_PERFUME_NOTES_M n WHERE n.perfume_id = m.perfume_id AND UPPER(n.type) = 'TOP') as top_notes,
+                (SELECT STRING_AGG(DISTINCT n.note, ', ') FROM TB_PERFUME_NOTES_M n WHERE n.perfume_id = m.perfume_id AND UPPER(n.type) = 'MIDDLE') as middle_notes,
+                (SELECT STRING_AGG(DISTINCT n.note, ', ') FROM TB_PERFUME_NOTES_M n WHERE n.perfume_id = m.perfume_id AND UPPER(n.type) = 'BASE') as base_notes
             FROM TB_PERFUME_BASIC_M m
         """
         params = []
         where_clauses = []
 
-        # [0] 중복 방지 처리 (보안 및 에러 방지를 위해 %s 사용)
+        # [0] 중복 방지 처리
         if exclude_ids and len(exclude_ids) > 0:
             placeholders = ", ".join(["%s"] * len(exclude_ids))
             where_clauses.append(f"m.perfume_id NOT IN ({placeholders})")
             params.extend(exclude_ids)
 
         # ---------------------------------------------------------
-        # 1. HARD FILTERS (사용자 명시 조건 - AND 결합)
+        # 1. HARD FILTERS (사용자 명시 조건)
         # ---------------------------------------------------------
+
+        # [1-1] Gender Logic (TB_PERFUME_GENDER_R 사용)
         gender_req = hard_filters.get("gender", "").lower()
         if gender_req:
+            target_gender = ""
             if gender_req in ["women", "female"]:
-                cond = "(SUM(CASE WHEN audience = 'Feminine' THEN vote ELSE 0 END)::float / NULLIF(SUM(CASE WHEN audience IN ('Feminine', 'Masculine') THEN vote ELSE 0 END), 0)) > 0.66"
+                target_gender = "Feminine"
             elif gender_req in ["men", "male"]:
-                cond = "(SUM(CASE WHEN audience = 'Masculine' THEN vote ELSE 0 END)::float / NULLIF(SUM(CASE WHEN audience IN ('Feminine', 'Masculine') THEN vote ELSE 0 END), 0)) > 0.66"
-            else:
-                cond = "(SUM(CASE WHEN audience = 'Feminine' THEN vote ELSE 0 END)::float / NULLIF(SUM(CASE WHEN audience IN ('Feminine', 'Masculine') THEN vote ELSE 0 END), 0)) BETWEEN 0.34 AND 0.66"
-            where_clauses.append(
-                f"m.perfume_id IN (SELECT perfume_id FROM TB_PERFUME_AUD_M WHERE audience IN ('Feminine', 'Masculine') GROUP BY perfume_id HAVING {cond})"
-            )
+                target_gender = "Masculine"
+            elif gender_req in ["unisex"]:
+                target_gender = "Unisex"
 
+            if target_gender:
+                where_clauses.append(
+                    f"m.perfume_id IN (SELECT perfume_id FROM TB_PERFUME_GENDER_R WHERE gender = %s)"
+                )
+                params.append(target_gender)
+
+        # [1-2] Brand Logic
         if hard_filters.get("brand"):
             corrected_brand = match_brand_name(hard_filters["brand"])
             where_clauses.append("m.perfume_brand ILIKE %s")
             params.append(corrected_brand)
 
+        # [1-3] Other Hard Filters (Season, Occasion, Accord, Note)
+        # Note는 기존 M 테이블 유지, 나머지는 R 테이블로 교체
         hard_meta_map = {
-            "season": ("TB_PERFUME_SEASON_M", "season"),
-            "occasion": ("TB_PERFUME_OCA_M", "occasion"),
-            "accord": ("TB_PERFUME_ACCORD_M", "accord"),
+            "season": ("TB_PERFUME_SEASON_R", "season"),
+            "occasion": ("TB_PERFUME_OCA_R", "occasion"),
+            "accord": ("TB_PERFUME_ACCORD_R", "accord"),
             "note": ("TB_PERFUME_NOTES_M", "note"),
         }
+
         for key, (table, col) in hard_meta_map.items():
             val = hard_filters.get(key)
             if not val:
                 continue
-            if key == "note":
-                where_clauses.append(
-                    f"m.perfume_id IN (SELECT perfume_id FROM {table} WHERE {col} ILIKE %s)"
-                )
-                params.append(val)
-            else:
-                where_clauses.append(
-                    f"""
-                    m.perfume_id IN (
-                        SELECT t.perfume_id FROM {table} t
-                        JOIN (SELECT perfume_id, SUM(vote) as tv FROM {table} GROUP BY perfume_id) totals ON t.perfume_id = totals.perfume_id
-                        WHERE t.{col} ILIKE %s AND (t.vote::float / NULLIF(totals.tv, 0)) >= 0.1
-                    )
-                """
-                )
-                params.append(val)
+
+            # 단순 존재 여부 확인 (투표 계산 없음)
+            where_clauses.append(
+                f"m.perfume_id IN (SELECT perfume_id FROM {table} WHERE {col} ILIKE %s)"
+            )
+            params.append(val)
 
         # ---------------------------------------------------------
-        # 2. STRATEGY FILTERS (AI 전략 제안 조건 - 범주 내 OR 결합)
+        # 2. STRATEGY FILTERS (AI 전략 제안 조건)
         # ---------------------------------------------------------
+        # 매핑 테이블을 _R 테이블로 변경
         strategy_map = {
-            "accord": ("TB_PERFUME_ACCORD_M", "accord", True),
-            "season": ("TB_PERFUME_SEASON_M", "season", True),
-            "occasion": ("TB_PERFUME_OCA_M", "occasion", True),
-            "note": ("TB_PERFUME_NOTES_M", "note", False),
-            "style": ("TB_PERFUME_AUD_M", "audience", True),
+            "accord": ("TB_PERFUME_ACCORD_R", "accord"),
+            "season": ("TB_PERFUME_SEASON_R", "season"),
+            "occasion": ("TB_PERFUME_OCA_R", "occasion"),
+            "note": ("TB_PERFUME_NOTES_M", "note"),
+            # Style은 현재 별도 R 테이블이 없으므로 로직에서 제외하거나 필요한 경우 추가
         }
 
         for key, values in strategy_filters.items():
             if not values or key == "gender":
                 continue
+
             mapping = strategy_map.get(key.lower())
             if not mapping:
                 continue
-            table_name, col_name, has_vote = mapping
 
-            # [★핵심 수정] 동일 범주(예: 여러 Accord) 내의 필터들을 OR로 묶기 위한 리스트
+            table_name, col_name = mapping
+
+            # 범주 내 OR 조건 생성 (예: Accord가 Citrus OR Fresh 인 것)
             category_clauses = []
             for val in values:
-                if key.lower() == "style" and has_vote:
-                    category_clauses.append(
-                        f"""
-                        m.perfume_id IN (
-                            SELECT t.perfume_id FROM {table_name} t
-                            JOIN (SELECT perfume_id, SUM(vote) as tv FROM {table_name} WHERE audience NOT IN ('Feminine', 'Masculine') GROUP BY perfume_id) totals ON t.perfume_id = totals.perfume_id
-                            WHERE t.{col_name} ILIKE %s AND (t.vote::float / NULLIF(totals.tv, 0)) >= 0.1
-                        )
-                    """
-                    )
-                    params.append(val)
-                elif has_vote:
-                    category_clauses.append(
-                        f"""
-                        m.perfume_id IN (
-                            SELECT t.perfume_id FROM {table_name} t
-                            JOIN (SELECT perfume_id, SUM(vote) as tv FROM {table_name} GROUP BY perfume_id) totals ON t.perfume_id = totals.perfume_id
-                            WHERE t.{col_name} ILIKE %s AND (t.vote::float / NULLIF(totals.tv, 0)) >= 0.1
-                        )
-                    """
-                    )
-                    params.append(val)
-                else:
-                    category_clauses.append(
-                        f"m.perfume_id IN (SELECT perfume_id FROM {table_name} WHERE {col_name} ILIKE %s)"
-                    )
-                    params.append(val)
+                category_clauses.append(
+                    f"m.perfume_id IN (SELECT perfume_id FROM {table_name} WHERE {col_name} ILIKE %s)"
+                )
+                params.append(val)
 
-            # 범주 내에 조건이 있다면 (OR)로 감싸서 전체 WHERE 절에 추가
             if category_clauses:
                 where_clauses.append("(" + " OR ".join(category_clauses) + ")")
 
@@ -394,6 +340,11 @@ def search_perfumes(
             sql += " WHERE " + " AND ".join(where_clauses)
 
         sql += " LIMIT 5"
+
+        # 디버깅용 로그 (필요시 주석 해제)
+        # print(f"Executing SQL: {sql}")
+        # print(f"Params: {params}")
+
         cur.execute(sql, params)
         return [dict(row) for row in cur.fetchall()]
 
