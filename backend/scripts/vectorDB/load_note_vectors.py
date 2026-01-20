@@ -8,7 +8,7 @@ from psycopg2.extras import execute_batch
 # ==========================================
 CURRENT_DIR = os.path.dirname(os.path.abspath(__file__))
 # [수정] 확장된 데이터 파일 경로 사용
-JSON_FILE_PATH = os.path.join(CURRENT_DIR, "raw", "notes_vector_db_ready_expanded.json")
+JSON_FILE_PATH = os.path.join(CURRENT_DIR, "raw", "notes_vector_db_ready_final.json")
 
 # DB 접속 정보
 DB_CONFIG = {
@@ -16,21 +16,22 @@ DB_CONFIG = {
     "user": "scentence",
     "password": "scentence",
     "host": os.getenv("DB_HOST", "db"),
-    "port": os.getenv("DB_PORT", "5432")
+    "port": os.getenv("DB_PORT", "5432"),
 }
 
 TABLE_NAME = "tb_note_embedding_m"
 
+
 def load_vector_data():
     print(f"🚀 [Expanded] 노트 임베딩 데이터 적재 시작: {JSON_FILE_PATH}")
-    
+
     # 1. JSON 파일 읽기
     if not os.path.exists(JSON_FILE_PATH):
         print(f"❌ 파일을 찾을 수 없습니다: {JSON_FILE_PATH}")
         return
 
     try:
-        with open(JSON_FILE_PATH, 'r', encoding='utf-8') as f:
+        with open(JSON_FILE_PATH, "r", encoding="utf-8") as f:
             data = json.load(f)
             print(f"📂 JSON 로드 완료: {len(data)}개 데이터")
     except Exception as e:
@@ -45,10 +46,10 @@ def load_vector_data():
         # [★중요 추가] 0. pgvector 확장 및 테이블 생성 확인
         # 볼륨을 날렸으므로 테이블도 다시 만들어야 합니다.
         print("🛠️ 테이블 및 벡터 확장 확인 중...")
-        
+
         # 벡터 익스텐션 활성화 (혹시 모르니)
         cur.execute("CREATE EXTENSION IF NOT EXISTS vector;")
-        
+
         # 테이블 생성
         create_table_sql = f"""
             CREATE TABLE IF NOT EXISTS {TABLE_NAME} (
@@ -75,12 +76,12 @@ def load_vector_data():
 
         records = []
         for item in data:
-            note = item.get('note')
-            description = item.get('description_en') 
-            vector = item.get('embedding')
+            note = item.get("note")
+            description = item.get("description_en")
+            vector = item.get("embedding")
 
             if vector is None:
-                vector = item.get('semantic_vector')
+                vector = item.get("semantic_vector")
 
             if not vector:
                 print(f"⚠️ 경고: {note}의 벡터 데이터가 없습니다.")
@@ -94,7 +95,7 @@ def load_vector_data():
                     vector = json.loads(vector)
                 except:
                     continue
-                
+
             records.append((note, description, vector))
 
         if records:
@@ -117,6 +118,7 @@ def load_vector_data():
     finally:
         if conn:
             conn.close()
+
 
 if __name__ == "__main__":
     load_vector_data()
