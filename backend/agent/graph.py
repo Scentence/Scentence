@@ -215,6 +215,7 @@ def interviewer_node(state: AgentState):
 
 
 async def parallel_reco_node(state: AgentState):
+
     member_id = state.get("member_id", 0)
     user_prefs = state.get("user_preferences", {})
     current_context = json.dumps(user_prefs, ensure_ascii=False)
@@ -263,9 +264,14 @@ async def parallel_reco_node(state: AgentState):
             s_filters = {}
 
         try:
+
             candidates, _match_type = await smart_search_with_retry_async(
                 h_filters, s_filters, query_text=plan.reason
             )
+
+        except Exception as e:
+
+            return None
         except Exception as e:
             return None
 
@@ -325,7 +331,9 @@ async def parallel_reco_node(state: AgentState):
 
     async def generate_output(prepared_data: dict):
         """Phase 2: LLM output generation with streaming (sequential)"""
+        print(f"[DEBUG] generate_output started for priority {prepared_data.get('priority') if prepared_data else 'None'}", flush=True) # DEBUG 로그입니다 후에 삭제할 에정 - ksu.
         if not prepared_data:
+            print("[DEBUG] no prepared_data, skipping", flush=True) # DEBUG 로그입니다 후에 삭제할 에정 - ksu.
             return None
             
         section_data = prepared_data["section_data"]
@@ -403,7 +411,9 @@ async def parallel_reco_node(state: AgentState):
         ]
 
         try:
+            print(f"[DEBUG] invoking SUPER_SMART_LLM for priority {priority}", flush=True)
             response = await SUPER_SMART_LLM.ainvoke(messages)
+            print(f"[DEBUG] SUPER_SMART_LLM finished for priority {priority}. length: {len(response.content)}", flush=True)
             result_text = response.content
             if result_text:
                 header_index = result_text.find("##")

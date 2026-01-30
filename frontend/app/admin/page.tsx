@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import Link from "next/link";
 import { useSession } from "next-auth/react";
 import Sidebar from "@/components/common/sidebar";
+import ChatbotTester from "@/components/Admin/ChatbotTester";
 
 interface MemberRow {
   member_id: string;
@@ -147,13 +148,35 @@ export default function AdminPage() {
       {/* [STANDARD HEADER] Simplified for Admin */}
       <header className="fixed top-0 left-0 right-0 z-50 flex items-center justify-between px-5 py-4 bg-[#FDFBF8] border-b border-[#F0F0F0]">
         <Link href="/" className="text-xl font-bold tracking-tight text-black">
-          Scentence
+          Scentence 관리자 페이지
         </Link>
 
         {/* 탭 네비게이션: 회원 관리 / 챗봇 테스터 (가운데 배치 등 자유롭지만 일단 중앙 또는 우측보다 좌측에 둘 수도 있음, 여기서는 Title 아래에 두는 게 일반적) */}
         {/* 여기서는 헤더에 둘 수도 있지만, 본문에 두는 게 더 자연스러움. 헤더는 글로벌 네비게이션 역할 */}
 
-        <div className="flex items-center gap-4">
+        <div className="flex items-center gap-6">
+          {/* [Nav Buttons] 센스있는 헤더 메뉴 배치 */}
+          <nav className="hidden md:flex items-center gap-1 bg-gray-100/50 p-1 rounded-lg">
+            <button
+              onClick={() => setActiveTab('MEMBERS')}
+              className={`px-4 py-1.5 text-xs font-bold rounded-md transition-all duration-200 ${activeTab === 'MEMBERS'
+                ? 'bg-white text-black shadow-sm'
+                : 'text-gray-400 hover:text-gray-600'
+                }`}
+            >
+              회원 관리
+            </button>
+            <button
+              onClick={() => setActiveTab('CHATBOT')}
+              className={`px-4 py-1.5 text-xs font-bold rounded-md transition-all duration-200 ${activeTab === 'CHATBOT'
+                ? 'bg-white text-black shadow-sm'
+                : 'text-gray-400 hover:text-gray-600'
+                }`}
+            >
+              챗테스터
+            </button>
+          </nav>
+
           {/* 글로벌 내비게이션 토글 버튼 */}
           <button
             id="global-menu-toggle"
@@ -173,31 +196,9 @@ export default function AdminPage() {
         </div>
       </header>
 
-      <main className="flex-1 px-5 py-8 w-full max-w-5xl mx-auto pt-[120px] space-y-6">
+      <main className="flex-1 px-5 py-8 w-full max-w-[95%] mx-auto pt-[80px] space-y-6">
         <div>
-          <h2 className="text-2xl font-bold mb-6">관리자 페이지</h2>
-
-          {/* 탭 메뉴 */}
-          <div className="flex border-b border-gray-200 gap-8">
-            <button
-              onClick={() => setActiveTab('MEMBERS')}
-              className={`pb-3 text-sm font-medium transition-colors relative ${activeTab === 'MEMBERS'
-                  ? 'text-black font-bold after:absolute after:bottom-0 after:left-0 after:w-full after:h-[2px] after:bg-black'
-                  : 'text-gray-400 hover:text-gray-600'
-                }`}
-            >
-              회원 관리
-            </button>
-            <button
-              onClick={() => setActiveTab('CHATBOT')}
-              className={`pb-3 text-sm font-medium transition-colors relative ${activeTab === 'CHATBOT'
-                  ? 'text-black font-bold after:absolute after:bottom-0 after:left-0 after:w-full after:h-[2px] after:bg-black'
-                  : 'text-gray-400 hover:text-gray-600'
-                }`}
-            >
-              챗봇 테스터
-            </button>
-          </div>
+          {/* 탭 메뉴 제거됨 (헤더로 이동) */}
         </div>
 
         {!isAdmin && (
@@ -261,16 +262,10 @@ export default function AdminPage() {
               </section>
             )}
 
-            {/* [TAB 2] 챗봇 테스터 (Placeholder) */}
+            {/* [TAB 2] 챗봇 테스터 */}
             {activeTab === 'CHATBOT' && (
-              <section className="rounded-2xl border border-dashed border-[#EEE] p-12 flex flex-col items-center justify-center min-h-[400px] text-center animate-on-scroll">
-                <div className="w-16 h-16 bg-gray-50 rounded-full flex items-center justify-center mb-4 text-gray-300">
-                  <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" className="w-8 h-8">
-                    <path strokeLinecap="round" strokeLinejoin="round" d="M9.75 3.104v5.714a2.25 2.25 0 0 1-.659 1.591L5 14.5M9.75 3.104c-.251.023-.501.05-.75.082m.75-.082a24.301 24.301 0 0 1 4.5 0m0 0v5.714c0 .597.237 1.17.659 1.591L19.8 15.3M14.25 3.104c.251.023.501.05.75.082M19.8 15.3l-1.57.393A9.065 9.065 0 0 1 12 15a9.065 9.065 0 0 0-6.23-.693L5 14.5m14.8.8 1.402 1.402c1.232 1.232.65 3.318-1.067 3.611A48.309 48.309 0 0 1 12 21c-2.773 0-5.491-.235-8.135-.687-1.718-.293-2.3-2.379-1.067-3.61L5 14.5" />
-                  </svg>
-                </div>
-                <h3 className="text-lg font-bold text-gray-400 mb-2">챗봇 테스터 준비 중</h3>
-                <p className="text-sm text-gray-400">관리자 전용 챗봇 테스트 환경이 곧 추가됩니다.</p>
+              <section className="animate-on-scroll">
+                <ChatbotTester />
               </section>
             )}
           </>
