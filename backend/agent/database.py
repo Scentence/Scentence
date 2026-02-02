@@ -194,6 +194,7 @@ def search_perfumes(
     hard_filters: Dict[str, Any],
     strategy_filters: Dict[str, List[str]],
     exclude_ids: List[int] = None,
+    exclude_brands: List[str] = None,
     limit: int = 20,
 ) -> List[Dict[str, Any]]:
     conn = get_db_connection()
@@ -215,6 +216,12 @@ def search_perfumes(
                 f"m.perfume_id NOT IN ({','.join(['%s']*len(exclude_ids))})"
             )
             params.extend(exclude_ids)
+
+        if exclude_brands:
+            where_clauses.append(
+                f"m.perfume_brand NOT IN ({','.join(['%s']*len(exclude_brands))})"
+            )
+            params.extend(exclude_brands)
 
         if hard_filters.get("gender"):
             g = hard_filters["gender"].lower()
@@ -290,14 +297,50 @@ def search_perfumes(
 # 3. 비동기 리랭킹 엔진
 # ==========================================
 async def rerank_perfumes_async(
-    candidates: List[Dict[str, Any]], query_text: str, top_k: int = 5
+    candidates: List[Dict[str, Any]],
+    query_text: str,
+    top_k: int = 5,
+    rank_mode: str = "DEFAULT",
 ) -> List[Dict[str, Any]]:
     if not candidates or not query_text:
         return candidates[:top_k]
+
     conn = get_db_connection()
     cur = conn.cursor(cursor_factory=RealDictCursor)
     try:
-        # [최적화] 비동기 번역 및 스타일링
+        # [Task D2] Popularity Ranking
+        if rank_mode == "POPULAR":
+            candidate_ids = [p["id"] for p in candidates]
+            if not candidate_ids:
+                return []
+
+            # Query vote counts (SUM of votes from TB_PERFUME_ACCORD_M)
+            # Using placeholders for array of IDs
+            placeholders = ",".join(["%s"] * len(candidate_ids))
+            sql = f"""
+                SELECT perfume_id, SUM(vote) as total_vote
+                FROM TB_PERFUME_ACCORD_M
+                WHERE perfume_id IN ({placeholders})
+                GROUP BY perfume_id
+            """
+            cur.execute(sql, candidate_ids)
+            vote_map = {
+                row["perfume_id"]: row["total_vote"] for row in cur.fetchall()
+            }
+
+            # Assign votes and Sort
+            for p in candidates:
+                p["review_score"] = vote_map.get(
+                    p["id"], 0
+                )  # Use review_score field for compatibility
+                p["best_review"] = (
+                    f"인기도(Vote): {p['review_score']}"  # Optional info
+                )
+
+            candidates.sort(key=lambda x: x.get("review_score", 0), reverse=True)
+            return candidates[:top_k]
+
+        # [Default] Semantic Reranking (비동기 번역 및 스타일링)
         system_prompt = "You are a Perfume Data Analyst. Transform the Korean logic into a sensory description..."
         translation = await async_client.chat.completions.create(
             model="gpt-4o-mini",

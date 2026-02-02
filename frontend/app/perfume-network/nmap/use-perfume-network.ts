@@ -305,13 +305,13 @@ export function usePerfumeNetwork(sessionUserId?: string | number) {
   useEffect(() => {
     const fetchLabels = async () => {
       try {
-        const res = await fetch(`${API_BASE}/scentmap/labels`);
+        const res = await fetch(`${API_BASE}/labels`);
         if (res.ok) setLabelsData(await res.json());
       } catch (e) { }
     };
     const fetchFilters = async () => {
       try {
-        const res = await fetch(`${API_BASE}/scentmap/nmap/filter-options`);
+        const res = await fetch(`${API_BASE}/nmap/filter-options`);
         if (res.ok) setFilterOptions(await res.json());
       } catch (e) { }
     };
@@ -323,7 +323,7 @@ export function usePerfumeNetwork(sessionUserId?: string | number) {
   const requestUrl = useMemo(() => {
     const params = new URLSearchParams({ min_similarity: "0.0", top_accords: "5" });
     if (memberId) params.set("member_id", memberId);
-    return `${API_BASE}/scentmap/nmap/perfumes?${params.toString()}`;
+    return `${API_BASE}/nmap/perfumes?${params.toString()}`;
   }, [memberId]);
 
   useEffect(() => {

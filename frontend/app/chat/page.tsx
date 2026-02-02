@@ -46,14 +46,11 @@ export default function ChatPage() {
             }
         }
 
-        const savedId = localStorage.getItem("chat_thread_id");
-        if (savedId) {
-            setThreadId(savedId);
-        } else {
-            const newId = crypto.randomUUID();
-            localStorage.setItem("chat_thread_id", newId);
-            setThreadId(newId);
-        }
+        // Always start a new session on visit (per requirements)
+        const newId = crypto.randomUUID();
+        localStorage.setItem("chat_thread_id", newId);
+        setThreadId(newId);
+        setMessages([]);
     }, []);
 
     useEffect(() => {
