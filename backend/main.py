@@ -48,21 +48,45 @@ async def stream_generator(
     save_chat_message(thread_id, member_id, "user", user_query)
     config = {"configurable": {"thread_id": thread_id}}
 
-    db_history = get_chat_history(thread_id)
-    restored_messages = []
+    # [★ 수정] 히스토리 중복 방지 로직
+    # checkpointer에 state가 있는지 확인
+    try:
+        current_state = app_graph.get_state(config)
+        has_checkpointed_state = (
+            current_state
+            and current_state.values
+            and current_state.values.get("messages")
+        )
+    except Exception:
+        has_checkpointed_state = False
 
-    for msg in db_history:
-        if msg["role"] == "user" and msg["text"] == user_query:
-            continue
-        if msg["role"] == "user":
-            restored_messages.append(HumanMessage(content=msg["text"]))
-        else:
-            restored_messages.append(AIMessage(content=msg["text"]))
+    # checkpointer가 비어있으면 (서버 재시작 등) DB에서 복원
+    if not has_checkpointed_state:
+        print(f"   🔄 [History] Checkpointer empty, restoring from DB (thread_id: {thread_id})")
+        db_history = get_chat_history(thread_id)
+        restored_messages = []
+
+        for msg in db_history:
+            if msg["role"] == "user" and msg["text"] == user_query:
+                continue
+            if msg["role"] == "user":
+                restored_messages.append(HumanMessage(content=msg["text"]))
+            else:
+                restored_messages.append(AIMessage(content=msg["text"]))
+
+        # 첫 요청: DB 복원 메시지 + 새 메시지
+        input_messages = restored_messages + [HumanMessage(content=user_query)]
+        print(f"   📊 [History] Restored {len(restored_messages)} messages from DB")
+    else:
+        # checkpointer에 state 있음: 새 메시지만 전달
+        input_messages = [HumanMessage(content=user_query)]
+        existing_count = len(current_state.values.get("messages", []))
+        print(f"   ✅ [History] Using checkpointer ({existing_count} existing messages)")
 
     normalized_mode = normalize_user_mode(user_mode)
-    
+
     inputs = {
-        "messages": restored_messages + [HumanMessage(content=user_query)],
+        "messages": input_messages,
         "member_id": member_id,
         "user_mode": normalized_mode,
     }
