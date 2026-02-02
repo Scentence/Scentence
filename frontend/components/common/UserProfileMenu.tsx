@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import { useSession, signOut } from "next-auth/react";
 import Link from "next/link";
 import { motion, AnimatePresence } from "framer-motion";
+import { User, Shield, LogOut, Library } from "lucide-react";
 
 interface UserProfileMenuProps {
     isOpen: boolean;
@@ -11,21 +12,25 @@ interface UserProfileMenuProps {
 }
 
 // [MENU ITEM] 스타일 컴포넌트 (Sidebar와 동일 스타일)
-function MenuItem({ href, icon, title, desc, onClick, className = "" }: any) {
+function MenuItem({ href, icon: Icon, title, desc, onClick, className = "" }: any) {
     return (
         <Link
             href={href}
             onClick={onClick}
-            className={`flex items-center justify-between p-3 rounded-xl hover:bg-[#FDFBF8] transition-colors group ${className}`}
+            className={`flex items-center gap-4 p-4 hover:bg-white/10 transition-all duration-300 group rounded-xl ${className}`}
         >
+            <div className="relative group-hover:scale-110 transition-transform duration-300">
+                <Icon strokeWidth={1.5} className="w-5 h-5 text-[#1a1a1a] group-hover:text-black transition-colors" />
+            </div>
+
             <div className="flex flex-col">
-                <span className="text-lg font-bold text-[#1a1a1a] tracking-tight group-hover:tracking-wide transition-all duration-300">
+                <span className="text-base font-bold text-[#1a1a1a] tracking-tight group-hover:tracking-widest transition-all duration-500 whitespace-nowrap">
                     {title}
                 </span>
-                {desc && <span className="text-[10px] text-gray-400 mt-0.5">{desc}</span>}
+                {desc && <span className="text-[10px] text-gray-500 mt-0.5">{desc}</span>}
             </div>
             {/* Dot Indicator */}
-            <div className="w-1.5 h-1.5 rounded-full bg-black opacity-0 group-hover:opacity-100 transition-all transform scale-0 group-hover:scale-100" />
+            <div className="ml-auto w-1.5 h-1.5 rounded-full bg-black opacity-0 group-hover:opacity-100 transition-all transform scale-0 group-hover:scale-100 shadow-[0_0_8px_rgba(0,0,0,0.1)]" />
         </Link>
     );
 }
@@ -76,7 +81,6 @@ export default function UserProfileMenu({ isOpen, onClose }: UserProfileMenuProp
         // *심플한 닫기 처리를 위해 메뉴 클릭 시 닫히도록 MenuItem에 onClose 연결함
     }, [isOpen, onClose]);
 
-    // 배경 클릭 시 닫기용
     const handleOverlayClick = () => onClose();
 
     // [ANIMATION VARIANTS]
@@ -89,6 +93,9 @@ export default function UserProfileMenu({ isOpen, onClose }: UserProfileMenuProp
         exit: { opacity: 0, scale: 0.95, y: -10, transition: { duration: 0.2 } }
     };
 
+    // [HYPER-REALISTIC LIQUID GLASS BLOCK]
+    const liquidGlassBlock = "bg-gradient-to-br from-white/[0.08] to-transparent backdrop-blur-[16px] border border-white/40 shadow-[inset_0_1px_1px_rgba(255,255,255,0.9),inset_0_15px_30px_rgba(255,255,255,0.15),inset_0_-2px_10px_rgba(0,0,0,0.05),0_20px_40px_-10px_rgba(0,0,0,0.2)] overflow-hidden rounded-[32px]";
+
     return (
         <AnimatePresence>
             {isOpen && (
@@ -100,7 +107,7 @@ export default function UserProfileMenu({ isOpen, onClose }: UserProfileMenuProp
                     />
 
                     <motion.div
-                        className="fixed top-[70px] right-[70px] z-50 w-[240px] flex flex-col gap-2"
+                        className="fixed top-20 right-20 z-50 w-[260px] flex flex-col gap-4"
                         variants={containerVariants}
                         initial="hidden"
                         animate="show"
@@ -108,21 +115,21 @@ export default function UserProfileMenu({ isOpen, onClose }: UserProfileMenuProp
                     >
                         {/* --- CHUNK 1: ADMIN STUDIO --- */}
                         {isAdmin && (
-                            <div className="bg-white/80 backdrop-blur-xl rounded-[1.5rem] p-1.5 shadow-2xl border border-blue-100/50 overflow-hidden">
-                                <MenuItem href="/admin" title="ADMIN STUDIO" className="text-blue-600" onClick={onClose} />
-                            </div>
+                            <motion.div className={`${liquidGlassBlock} p-1`}>
+                                <MenuItem href="/admin" icon={Shield} title="관리자 페이지" className="!text-blue-600" onClick={onClose} />
+                            </motion.div>
                         )}
 
-                        {/* --- CHUNK 2: PERSONAL (My Page & Gallery) --- */}
-                        <div className="bg-white/80 backdrop-blur-xl rounded-[1.5rem] p-1.5 shadow-2xl border border-white/40 overflow-hidden">
-                            <div className="flex flex-col gap-1">
-                                <MenuItem href="/mypage" title="MY PAGE" desc="마이 페이지" onClick={onClose} />
-                                <MenuItem href="/archives" title="MY GALLERY" desc="향수 컬렉션" onClick={onClose} />
+                        {/* --- CHUNK 2: PERSONAL --- */}
+                        <motion.div className={`${liquidGlassBlock} p-1`}>
+                            <div className="flex flex-col divide-y divide-black/5">
+                                <MenuItem href="/mypage" icon={User} title="마이 페이지" desc="내 정보 및 프로필 관리" onClick={onClose} />
+                                <MenuItem href="/archives" icon={Library} title="마이 컬렉션" desc="나만의 향수 라이브러리" onClick={onClose} />
                             </div>
-                        </div>
+                        </motion.div>
 
                         {/* --- CHUNK 3: LOGOUT --- */}
-                        <div className="bg-white/80 backdrop-blur-xl rounded-[1.5rem] p-1.5 shadow-2xl border border-white/40 overflow-hidden">
+                        <motion.div className={`${liquidGlassBlock} p-1`}>
                             <button
                                 onClick={() => {
                                     if (session) signOut({ callbackUrl: "/login" });
@@ -131,14 +138,12 @@ export default function UserProfileMenu({ isOpen, onClose }: UserProfileMenuProp
                                         setLocalUser(null); onClose();
                                     }
                                 }}
-                                className="w-full text-left flex items-center justify-between p-3 rounded-xl hover:bg-black hover:text-white transition-all duration-300 group"
+                                className="w-full flex items-center justify-between p-4 px-6 hover:bg-white/10 transition-all duration-300 group rounded-xl"
                             >
-                                <span className="text-sm font-bold tracking-widest pl-1">LOG OUT</span>
-                                <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor" className="w-4 h-4 group-hover:text-red-500 group-hover:rotate-180 transition-all duration-500">
-                                    <path strokeLinecap="round" strokeLinejoin="round" d="M5.636 5.636a9 9 0 1012.728 0M12 3v9" />
-                                </svg>
+                                <span className="text-base font-bold text-[#1a1a1a] tracking-tight group-hover:tracking-widest transition-all duration-500">로그아웃</span>
+                                <LogOut strokeWidth={1.5} className="w-5 h-5 text-gray-400 group-hover:text-red-500 transition-all duration-300" />
                             </button>
-                        </div>
+                        </motion.div>
                     </motion.div>
                 </>
             )}
