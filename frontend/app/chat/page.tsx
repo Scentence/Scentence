@@ -115,7 +115,7 @@ export default function ChatPage() {
         localStorage.setItem("chat_thread_id", id); // 로컬 스토리지 갱신
 
         try {
-            const response = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/chat/history/${id}`);
+            const response = await fetch(`/api/chat/history/${id}`);
             if (!response.ok) throw new Error("내역 로드 실패");
 
             const data = await response.json();

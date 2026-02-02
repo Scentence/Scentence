@@ -18,6 +18,9 @@ export default function LandingPage() {
   const [localUser, setLocalUser] = useState<{ memberId?: string | null; email?: string | null; nickname?: string | null; roleType?: string | null; isAdmin?: boolean } | null>(null);
   const [profileImageUrl, setProfileImageUrl] = useState<string | null>(null);
 
+  // 최신 닉네임을 저장할 State 추가
+  const [profileNickname, setProfileNickname] = useState<string | null>(null);
+
   useEffect(() => {
     if (typeof window === "undefined") return;
     const stored = localStorage.getItem("localAuth");
@@ -43,6 +46,10 @@ export default function LandingPage() {
     fetch(`${apiBaseUrl}/users/profile/${memberId}`)
       .then((res) => (res.ok ? res.json() : null))
       .then((data) => {
+        // 가져온 데이터에 닉네임이 있으면 저장하기
+        if (data?.nickname) {
+          setProfileNickname(data.nickname);
+        }
         if (data?.profile_image_url) {
           const url = data.profile_image_url.startsWith("http")
             ? data.profile_image_url
@@ -54,7 +61,7 @@ export default function LandingPage() {
   }, [localUser, session]);
 
   // [Display Name Logic]
-  const displayName = session?.user?.name || localUser?.nickname || localUser?.email?.split('@')[0] || "Guest";
+  const displayName = profileNickname || session?.user?.name || localUser?.nickname || localUser?.email?.split('@')[0] || "Guest";
   const isLoggedIn = Boolean(session || localUser);
 
   const handleNewChat = () => {
@@ -105,6 +112,9 @@ export default function LandingPage() {
               </div>
             ) : (
               <div className="flex items-center gap-3">
+                <span className="hidden md:inline-block text-sm font-medium text-gray-600 mr-2">
+                  <strong className="font-bold text-gray-900">{displayName}</strong>님 반가워요!
+                </span>
                 <button
                   id="profile-menu-toggle"
                   onClick={() => setIsProfileMenuOpen(!isProfileMenuOpen)}

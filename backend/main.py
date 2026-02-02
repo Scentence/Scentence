@@ -13,7 +13,7 @@ from langchain_core.messages import HumanMessage, AIMessage
 from agent.schemas import ChatRequest
 from agent.graph import app_graph
 from agent.database import save_chat_message, get_chat_history, get_user_chat_list
-from routers import users, perfumes, archive # <--- 아카이브 연동 라우터 추가 ksu
+from routers import users, perfumes, archive # <--- ksu 추가
 
 app = FastAPI(title="Perfume Re-Act Chatbot")
 
@@ -200,6 +200,11 @@ async def chat_stream(request: ChatRequest):
     return StreamingResponse(
         stream_generator(request.user_query, request.thread_id, request.member_id, request.user_mode),
         media_type="text/event-stream",
+        headers={
+            "Cache-Control": "no-cache, no-transform",
+            "Connection": "keep-alive",
+            "X-Accel-Buffering": "no",
+        },
     )
 
 

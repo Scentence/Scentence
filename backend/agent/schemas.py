@@ -33,6 +33,13 @@ class AgentState(Dict):
     # [★추가] 정보 검색(Info Graph) 에이전트와 상태를 공유하기 위한 필드
     info_type: Optional[str] 
     target_name: Optional[str]
+    
+    # [★추가] 인터뷰어 질문 상한 및 폴백 추적
+    question_count: Optional[int]
+    fallback_triggered: Optional[bool]
+    
+    # [★추가] 세션 레벨 추천 다양성 추적
+    recommended_history: Optional[List[int]]
 
 
 # =================================================================
@@ -43,7 +50,8 @@ class UserPreferences(BaseModel):
     target: str = Field(description="대상 정보 (예: 20대 여성, 30대 남성 등)")
     gender: str = Field(description="성별 정보 (Women, Men, Unisex)")
     
-    brand: Optional[str] = Field(None, description="특정 브랜드")
+    reference_brand: Optional[str] = Field(None, description="참고 브랜드 (유사한 향 찾기 - 소프트 필터)")
+    target_brand: Optional[str] = Field(None, description="특정 브랜드 (해당 브랜드만 - 하드 필터)")
     perfume: Optional[str] = Field(None, description="특정 향수")
     situation: Optional[str] = Field(None, description="상황 정보")
     season: Optional[str] = Field(None, description="계절 정보")
@@ -80,7 +88,7 @@ class RoutingDecision(BaseModel):
 # =================================================================
 class HardFilters(BaseModel):
     gender: str = Field(description="성별 (Women, Men, Unisex)")
-    brand: Optional[str] = Field(None, description="브랜드")
+    target_brand: Optional[str] = Field(None, description="특정 브랜드 (하드 필터)")
     season: Optional[str] = Field(None, description="계절")
     occasion: Optional[str] = Field(None, description="상황")
     accord: Optional[str] = Field(None, description="어코드")
@@ -91,7 +99,6 @@ class StrategyFilters(BaseModel):
     accord: Optional[List[str]] = Field(None, description="향의 분위기")
     occasion: Optional[List[str]] = Field(None, description="상황")
     note: Optional[List[str]] = Field(None, description="구체적 노트")
-    style: Optional[List[str]] = Field(None, description="스타일")
 
 
 class SearchStrategyPlan(BaseModel):

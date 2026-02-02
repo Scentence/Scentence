@@ -61,16 +61,6 @@ const nextConfig: NextConfig = {
         source: '/api/layering/:path*',
         destination: `${layeringApiUrl}/layering/:path*`,
       },
-      // Archive API routes [KSU] 챗봇 테스터 API 경로 추가 26.01.30
-      {
-        source: '/api/archive/:path*',
-        destination: `${backendUrl}/archive/:path*`,
-      },
-      // Admin Test API routes [KSU] 챗봇 테스터 API 경로 추가 26.01.30
-      {
-        source: '/api/admin/test/:path*',
-        destination: `${backendUrl}/admin/test/:path*`,
-      },
       // Scentmap API routes
       {
         source: '/api/scentmap/:path*',
