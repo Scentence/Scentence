@@ -212,7 +212,39 @@ def classify_followup_rule_based(
 
 
 # =================================================================
-# 4. 확인 질문이 필요한지 판단
+# 4. Public API (Wrapper for graph integration)
+# =================================================================
+
+def classify_followup(
+    current_query: str,
+    recent_messages: Optional[list] = None,
+    current_constraints: Optional[dict] = None,
+) -> FollowUpIntent:
+    """
+    Follow-up 판별 공개 API
+    
+    Graph에서 호출하는 안정적인 인터페이스.
+    내부적으로 규칙 기반 분류기를 호출함.
+    
+    Args:
+        current_query: 현재 사용자 쿼리
+        recent_messages: 최근 대화 메시지 리스트 (선택)
+        current_constraints: 현재 제약 조건 dict (선택)
+    
+    Returns:
+        FollowUpIntent: 판별 결과
+    """
+    # Build previous_context for rule-based classifier
+    previous_context = {
+        "messages": recent_messages or [],
+        "user_preferences": current_constraints or {},
+    }
+    
+    return classify_followup_rule_based(current_query, previous_context)
+
+
+# =================================================================
+# 5. 확인 질문이 필요한지 판단
 # =================================================================
 
 def should_ask_confirmation(result: FollowUpIntent) -> bool:
@@ -226,7 +258,7 @@ def should_ask_confirmation(result: FollowUpIntent) -> bool:
 
 
 # =================================================================
-# 5. 사용 예시 (주석)
+# 6. 사용 예시 (주석)
 # =================================================================
 
 """
