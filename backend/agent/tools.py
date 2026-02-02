@@ -39,6 +39,7 @@ async def advanced_perfume_search_tool(
     hard_filters: Dict[str, Any],
     strategy_filters: Dict[str, List[str]],
     exclude_ids: List[int],
+    exclude_brands: List[str],
     query_text: str,
     rank_mode: str = "DEFAULT",
 ) -> List[Dict[str, Any]]:
@@ -55,6 +56,7 @@ async def advanced_perfume_search_tool(
         hard_filters=hard_filters,
         strategy_filters=strategy_filters,
         exclude_ids=exclude_ids,
+        exclude_brands=exclude_brands,
         limit=20,
     )
 

@@ -152,7 +152,7 @@ def classify_followup_rule_based(
             is_followup=False,
             intent="RESET",
             keep_slots=[],
-            drop_slots=["brand", "season", "occasion", "target", "style", "accord", "note"],
+            drop_slots=["accord", "brand", "gender", "like", "note", "occasion", "reference_brand", "season", "situation", "style", "target"],
             confidence=0.9,
             reason=f"리셋 키워드 감지: {reset_matches}"
         )
@@ -164,7 +164,7 @@ def classify_followup_rule_based(
             is_followup=False,
             intent="NEW_RECO",
             keep_slots=[],  # 모든 제약 제거
-            drop_slots=["brand", "season", "occasion", "target", "style", "accord", "note"],
+            drop_slots=["accord", "brand", "gender", "like", "note", "occasion", "reference_brand", "season", "situation", "style", "target"],
             confidence=0.95,
             reason=f"대상 전환 키워드 감지: {target_matches}"
         )

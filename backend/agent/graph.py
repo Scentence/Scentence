@@ -29,6 +29,7 @@ from .schemas import (
 
 # [Import] Expression Loader for dynamic dictionary injection
 from .expression_loader import ExpressionLoader
+from .brand_exclusion_parser import parse_brand_exclusions, should_clear_brand_fields
 
 from .tools import (
     advanced_perfume_search_tool,
@@ -365,6 +366,14 @@ def interviewer_node(state: AgentState):
             current_constraints=current_prefs,
         )
 
+        # [★추가] 브랜드 제외 파싱
+        exclude_brands, has_exclusion = parse_brand_exclusions(current_query)
+        if has_exclusion:
+            print(
+                f"🚫 [Exclusion] Detected exclude_brands: {exclude_brands}",
+                flush=True,
+            )
+
         current_frame_id = state.get("frame_id")
         if classification.intent in ["NEW_RECO", "RESET"]:
             frame_id = str(uuid.uuid4())
@@ -390,6 +399,18 @@ def interviewer_node(state: AgentState):
         new_prefs = interview_result.user_preferences
         for key, value in new_prefs.model_dump(exclude_none=True).items():
             merged_prefs[key] = value
+
+        # [★추가] 브랜드 제외 처리
+        if has_exclusion:
+            merged_prefs["exclude_brands"] = exclude_brands
+            # 제외 브랜드가 있으면 brand, reference_brand 클리어
+            if should_clear_brand_fields(exclude_brands):
+                merged_prefs["brand"] = None
+                merged_prefs["reference_brand"] = None
+                print(
+                    f"   → brand/reference_brand cleared due to exclusions",
+                    flush=True,
+                )
 
         for slot in classification.drop_slots:
             if slot not in merged_prefs:

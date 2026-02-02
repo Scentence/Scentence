@@ -194,6 +194,7 @@ def search_perfumes(
     hard_filters: Dict[str, Any],
     strategy_filters: Dict[str, List[str]],
     exclude_ids: List[int] = None,
+    exclude_brands: List[str] = None,
     limit: int = 20,
 ) -> List[Dict[str, Any]]:
     conn = get_db_connection()
@@ -215,6 +216,12 @@ def search_perfumes(
                 f"m.perfume_id NOT IN ({','.join(['%s']*len(exclude_ids))})"
             )
             params.extend(exclude_ids)
+
+        if exclude_brands:
+            where_clauses.append(
+                f"m.perfume_brand NOT IN ({','.join(['%s']*len(exclude_brands))})"
+            )
+            params.extend(exclude_brands)
 
         if hard_filters.get("gender"):
             g = hard_filters["gender"].lower()

@@ -75,6 +75,9 @@ class UserPreferences(BaseModel):
     
     # [★추가] 추천 개수 (사용자가 명시한 경우)
     recommended_count: Optional[int] = Field(None, description="사용자가 요청한 추천 향수 개수")
+    
+    # [★추가] 제외 브랜드 (말고/제외/빼고)
+    exclude_brands: Optional[List[str]] = Field(None, description="검색에서 제외할 브랜드 목록 (최대 5개, 정규화된 브랜드명)")
 
 class InterviewResult(BaseModel):
     user_preferences: UserPreferences = Field(description="추출된 사용자 선호 정보")
