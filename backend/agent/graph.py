@@ -620,11 +620,15 @@ async def parallel_reco_node(state: AgentState):
 
         selected_perfume = None
         async with seen_ids_lock:
+            # [★수정] 사용자가 특정 브랜드를 명시한 경우 브랜드 다양성 제한 해제
+            user_requested_brand = user_prefs.get("brand") or user_prefs.get("reference_brand")
+            
             for candidate in candidates:
                 brand = candidate.get("brand", "")
-                # [★추가] 브랜드 다양성: 동일 브랜드 최대 2개 제한
-                if brand_counts.get(brand, 0) >= 2:
-                    continue
+                # [★추가] 브랜드 다양성: 사용자가 브랜드를 지정하지 않았을 때만 동일 브랜드 최대 2개 제한
+                if not user_requested_brand:
+                    if brand_counts.get(brand, 0) >= 2:
+                        continue
                 # 현재 배치 내 중복 확인
                 if candidate["id"] not in seen_ids and candidate["id"] not in exclude_id_set:
                     selected_perfume = candidate
