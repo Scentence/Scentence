@@ -5,9 +5,9 @@ TDD RED Phase: 브랜드 누수 방지 테스트
 같은 thread_id에서 주제가 전환될 때 이전 브랜드가 user_preferences에 누수되는 것을 탐지.
 
 테스트 목표:
-1. 1차 요청: "딥디크 추천해줘" → user_preferences에 target_brand="딥디크" 포함
-2. 2차 요청: "겨울 남자 향수 추천해줘" → user_preferences에 target_brand가 없거나 "딥디크"가 아님
-3. 현재 버그: 2차 요청에서도 target_brand="딥디크"가 유지됨 (누수 발생)
+1. 1차 요청: "딥디크 추천해줘" → user_preferences에 brand="딥디크" 포함
+2. 2차 요청: "겨울 남자 향수 추천해줘" → user_preferences에 brand가 없거나 "딥디크"가 아님
+3. 현재 버그: 2차 요청에서도 brand="딥디크"가 유지됨 (누수 발생)
 """
 
 import asyncio
@@ -35,11 +35,11 @@ class TestBrandLeakage:
          이전 브랜드가 제거되지 않고 유지되기 때문)
         
         시나리오:
-        1. "딥디크 추천해줘" → target_brand="딥디크"
-        2. "겨울 남자 향수 추천해줘" → target_brand 없음 (또는 다른 값)
+        1. "딥디크 추천해줘" → brand="딥디크"
+        2. "겨울 남자 향수 추천해줘" → brand 없음 (또는 다른 값)
         
-        기대: 2차 요청에서 target_brand가 "딥디크"로 고정되지 않아야 함
-        실제 (버그): 2차 요청에서도 target_brand="딥디크"가 유지됨
+        기대: 2차 요청에서 brand가 "딥디크"로 고정되지 않아야 함
+        실제 (버그): 2차 요청에서도 brand="딥디크"가 유지됨
         """
         from agent import graph as graph_mod
         from agent.schemas import InterviewResult, UserPreferences
@@ -98,23 +98,23 @@ class TestBrandLeakage:
         class FakeInterviewer:
             def __init__(self, counter):
                 self.counter = counter
-            
-            async def ainvoke(self, messages, config=None):
+
+            def invoke(self, messages, config=None):
                 self.counter["count"] += 1
-                
+
                 # 1차 요청: "딥디크 추천해줘"
                 if self.counter["count"] == 1:
                     return InterviewResult(
                         user_preferences=UserPreferences(
                             target="일반 사용자",
                             gender="Unisex",
-                            target_brand="딥디크",  # 브랜드 하드 필터 설정
+                            brand="딥디크",  # 브랜드 하드 필터 설정
                         ),
                         is_sufficient=True,
                         response_message="딥디크 향수를 추천해드리겠습니다.",
                         is_off_topic=False,
                     )
-                
+
                 # 2차 요청: "겨울 남자 향수 추천해줘"
                 else:
                     return InterviewResult(
@@ -122,14 +122,22 @@ class TestBrandLeakage:
                             target="남성",
                             gender="Men",
                             season="겨울",
-                            # target_brand 없음 (새로운 주제, 브랜드 지정 없음)
+                            # brand 없음 (새로운 주제, 브랜드 지정 없음)
                         ),
                         is_sufficient=True,
                         response_message="겨울 남성 향수를 추천해드리겠습니다.",
                         is_off_topic=False,
                     )
+
+            async def ainvoke(self, messages, config=None):
+                return self.invoke(messages, config)
         
         class FakeStructured:
+            def invoke(self, messages, config=None):
+                # For RoutingDecision - always route to interviewer
+                from agent.schemas import RoutingDecision
+                return RoutingDecision(next_step="interviewer")
+
             async def ainvoke(self, messages, config=None):
                 # For RoutingDecision - always route to interviewer
                 from agent.schemas import RoutingDecision
@@ -164,12 +172,12 @@ class TestBrandLeakage:
                 if isinstance(node_state, dict):
                     first_state = node_state
         
-        # 1차 검증: user_preferences에 target_brand="딥디크" 포함
+        # 1차 검증: user_preferences에 brand="딥디크" 포함
         assert first_state is not None, "첫 번째 요청이 완료되지 않았습니다"
         first_prefs = first_state.get("user_preferences", {})
-        assert first_prefs.get("target_brand") == "딥디크", (
-            f"1차 요청 후 target_brand가 '딥디크'이어야 합니다. "
-            f"실제: {first_prefs.get('target_brand')}"
+        assert first_prefs.get("brand") == "딥디크", (
+            f"1차 요청 후 brand가 '딥디크'이어야 합니다. "
+            f"실제: {first_prefs.get('brand')}"
         )
         
         print(f"\n[1차 요청 완료] user_preferences: {first_prefs}")
@@ -188,24 +196,24 @@ class TestBrandLeakage:
                 if isinstance(node_state, dict):
                     second_state = node_state
         
-        # 2차 검증: user_preferences에 target_brand="딥디크"가 없어야 함
+        # 2차 검증: user_preferences에 brand="딥디크"가 없어야 함
         assert second_state is not None, "두 번째 요청이 완료되지 않았습니다"
         second_prefs = second_state.get("user_preferences", {})
         
         print(f"\n[2차 요청 완료] user_preferences: {second_prefs}")
         
         # RED phase: 이 assertion은 FAIL해야 함 (현재는 "딥디크"가 누수됨)
-        assert second_prefs.get("target_brand") != "딥디크", (
+        assert second_prefs.get("brand") != "딥디크", (
             f"[RED PHASE] 브랜드 누수 발생! "
-            f"2차 요청에서 target_brand가 '딥디크'로 유지되어서는 안 됩니다. "
+            f"2차 요청에서 brand가 '딥디크'로 유지되어서는 안 됩니다. "
             f"실제 user_preferences: {second_prefs}"
         )
         
-        # 추가 검증: target_brand가 None이거나 다른 값이어야 함
+        # 추가 검증: brand가 None이거나 다른 값이어야 함
         # (주제가 전환되었으므로 이전 브랜드 필터가 제거되어야 함)
-        assert second_prefs.get("target_brand") is None or second_prefs.get("target_brand") == "", (
-            f"2차 요청에서 target_brand가 비어있어야 합니다. "
-            f"실제: {second_prefs.get('target_brand')}"
+        assert second_prefs.get("brand") is None or second_prefs.get("brand") == "", (
+            f"2차 요청에서 brand가 비어있어야 합니다. "
+            f"실제: {second_prefs.get('brand')}"
         )
         
         print(f"\n[성공] 브랜드 누수가 방지되었습니다!")
@@ -274,10 +282,10 @@ class TestBrandLeakage:
         class FakeInterviewer:
             def __init__(self, counter):
                 self.counter = counter
-            
-            async def ainvoke(self, messages, config=None):
+
+            def invoke(self, messages, config=None):
                 self.counter["count"] += 1
-                
+
                 # 1차: "조말론 같은 향수 추천해줘"
                 if self.counter["count"] == 1:
                     return InterviewResult(
@@ -290,7 +298,7 @@ class TestBrandLeakage:
                         response_message="조말론과 유사한 향수를 추천해드리겠습니다.",
                         is_off_topic=False,
                     )
-                
+
                 # 2차: "여름 향수 추천해줘"
                 else:
                     return InterviewResult(
@@ -304,12 +312,19 @@ class TestBrandLeakage:
                         response_message="여름 향수를 추천해드리겠습니다.",
                         is_off_topic=False,
                     )
+
+            async def ainvoke(self, messages, config=None):
+                return self.invoke(messages, config)
         
         class FakeStructured:
+            def invoke(self, messages, config=None):
+                from agent.schemas import RoutingDecision
+                return RoutingDecision(next_step="interviewer")
+
             async def ainvoke(self, messages, config=None):
                 from agent.schemas import RoutingDecision
                 return RoutingDecision(next_step="interviewer")
-        
+
         monkeypatch.setattr(graph_mod, "SMART_LLM", FakeSmartLLM())
         
         class FakeWriterLLM:

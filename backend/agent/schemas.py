@@ -49,15 +49,15 @@ class UserPreferences(BaseModel):
     """인터뷰어가 사용자 대화에서 추출한 핵심 정보입니다."""
     target: str = Field(description="대상 정보 (예: 20대 여성, 30대 남성 등)")
     gender: str = Field(description="성별 정보 (Women, Men, Unisex)")
-    
+
     reference_brand: Optional[str] = Field(None, description="참고 브랜드 (유사한 향 찾기 - 소프트 필터)")
-    target_brand: Optional[str] = Field(None, description="특정 브랜드 (해당 브랜드만 - 하드 필터)")
+    brand: Optional[str] = Field(None, description="특정 브랜드 (해당 브랜드만 - 하드 필터)")
     perfume: Optional[str] = Field(None, description="특정 향수")
     situation: Optional[str] = Field(None, description="상황 정보")
     season: Optional[str] = Field(None, description="계절 정보")
     like: Optional[str] = Field(None, description="취향 정보")
     style: Optional[str] = Field(None, description="이미지 정보")
-    
+
     # [★수정] Accord(계열)와 Note(원료)를 엄격하게 분리
     accord: Optional[str] = Field(None, description="선호하는 향의 분위기나 계열 (예: Woody, Floral, Citrus, Spicy)")
     note: Optional[str] = Field(None, description="구체적으로 선호하는 향 원료 (예: Rose, Vetiver, Sandalwood, Vanilla)")
@@ -88,7 +88,7 @@ class RoutingDecision(BaseModel):
 # =================================================================
 class HardFilters(BaseModel):
     gender: str = Field(description="성별 (Women, Men, Unisex)")
-    target_brand: Optional[str] = Field(None, description="특정 브랜드 (하드 필터)")
+    brand: Optional[str] = Field(None, description="특정 브랜드 (하드 필터)")
     season: Optional[str] = Field(None, description="계절")
     occasion: Optional[str] = Field(None, description="상황")
     accord: Optional[str] = Field(None, description="어코드")
