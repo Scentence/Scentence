@@ -200,6 +200,11 @@ async def chat_stream(request: ChatRequest):
     return StreamingResponse(
         stream_generator(request.user_query, request.thread_id, request.member_id, request.user_mode),
         media_type="text/event-stream",
+        headers={
+            "Cache-Control": "no-cache, no-transform",
+            "Connection": "keep-alive",
+            "X-Accel-Buffering": "no",
+        },
     )
 
 
