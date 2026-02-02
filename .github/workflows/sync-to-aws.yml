@@ -1,0 +1,86 @@
+name: Sync to AWS Deploy Repository
+
+on:
+  push:
+    branches:
+      - main
+  workflow_dispatch:  # 수동 실행 가능
+
+jobs:
+  # 1단계: CI 통과 확인
+  wait-for-ci:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Wait for other checks to complete
+        uses: lewagon/wait-on-check-action@v1.3.1
+        with:
+          ref: ${{ github.sha }}
+          repo-token: ${{ secrets.GITHUB_TOKEN }}
+          wait-interval: 10
+          running-workflow-name: 'wait-for-ci'  # 자기 자신 제외
+
+  # 2단계: AWS 레포에 PR 생성
+  create-pr-to-aws:
+    needs: wait-for-ci
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout main repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0  # 전체 히스토리
+
+      - name: Setup Git
+        run: |
+          git config --global user.name "github-actions[bot]"
+          git config --global user.email "github-actions[bot]@users.noreply.github.com"
+
+      - name: Add AWS remote and create PR
+        env:
+          AWS_TOKEN: ${{ secrets.AWS_REPO_TOKEN }}
+          GH_TOKEN: ${{ secrets.AWS_REPO_TOKEN }}
+        run: |
+          # AWS 레포 추가
+          git remote add aws-deploy https://x-access-token:${AWS_TOKEN}@github.com/Scentence/Scentence_aws.git
+          
+          # 브랜치 이름 생성
+          TIMESTAMP=$(date +%Y%m%d-%H%M%S)
+          BRANCH_NAME="sync-from-main-${TIMESTAMP}"
+          SHORT_SHA=$(git rev-parse --short HEAD)
+          
+          # 새 브랜치 생성 및 푸시
+          git checkout -b $BRANCH_NAME
+          git push aws-deploy $BRANCH_NAME
+          
+          # PR 생성
+          gh pr create \
+            --repo Scentence/Scentence_aws \
+            --base main \
+            --head $BRANCH_NAME \
+            --title "🚀 Auto-sync: ${SHORT_SHA}" \
+            --body "## 🔄 자동 동기화
+          
+          **소스**: [Scentence/Scentence](https://github.com/Scentence/Scentence)
+          **커밋**: \`${{ github.sha }}\`
+          **작성자**: @${{ github.actor }}
+          **시간**: $(date -u '+%Y-%m-%d %H:%M:%S UTC')
+          
+          ---
+          
+          ### ✅ 체크리스트
+          - [x] 메인 레포 CI 통과
+          - [ ] 배포 전 최종 검토
+          - [ ] AWS 배포 승인
+          
+          ### 📝 최근 커밋
+          \`\`\`
+          ${{ github.event.head_commit.message }}
+          \`\`\`
+          
+          **머지 후 자동으로 AWS에 배포됩니다.**" \
+            --label "auto-sync" \
+            --label "deployment"
+          
+          echo "✅ PR 생성 완료: https://github.com/Scentence/Scentence_aws/pulls"
