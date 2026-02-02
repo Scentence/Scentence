@@ -1,8 +1,10 @@
-'use client';
+"use client";
 
 import { useEffect, useState } from "react";
-import { useSession, signOut } from "next-auth/react";
+import { useSession } from "next-auth/react";
 import Link from "next/link";
+import { motion, AnimatePresence } from "framer-motion";
+import { Home, Sparkles, Layers, Map as MapIcon, BookOpen, Phone, Info } from "lucide-react";
 
 interface SidebarProps {
     isOpen: boolean;
@@ -10,21 +12,29 @@ interface SidebarProps {
     context: "home" | "chat";
 }
 
-// [MENU ITEM COMPONENT] 아이콘 + 제목 + 설명 구조
-function MenuItem({ href, icon, title, desc, onClick, colorClass = "bg-gray-100 text-gray-600" }: any) {
+// [MENU ITEM] Icon + Text + Glass Interaction
+function MenuItem({ href, icon: Icon, title, desc, onClick, className = "" }: any) {
     return (
         <Link
             href={href}
             onClick={onClick}
-            className="flex items-start gap-4 p-3 rounded-xl hover:bg-gray-50 transition-colors group"
+            className={`flex items-center gap-4 py-3.5 px-6 hover:bg-white/10 transition-all duration-300 group rounded-xl ${className}`}
         >
-            <div className={`w-10 h-10 rounded-full flex items-center justify-center shrink-0 ${colorClass} group-hover:scale-105 transition-transform`}>
-                {icon}
+            {/* Icon with Glassy Glow */}
+            <div className="relative group-hover:scale-110 transition-transform duration-300">
+                <Icon strokeWidth={1.5} className="w-6 h-6 text-[#1a1a1a] group-hover:text-black transition-colors" />
+                <div className="absolute inset-0 bg-white/20 blur-md opacity-0 group-hover:opacity-100 transition-opacity" />
             </div>
-            <div className="flex-1">
-                <p className="text-sm font-bold text-gray-900 leading-tight mb-0.5">{title}</p>
-                <p className="text-[11px] text-gray-400 leading-snug">{desc}</p>
+
+            <div className="flex flex-col">
+                <span className="text-lg font-bold text-[#1a1a1a] tracking-tight group-hover:tracking-widest transition-all duration-500 whitespace-nowrap">
+                    {title}
+                </span>
+                {desc && <span className="text-[10px] text-gray-500 mt-0.5">{desc}</span>}
             </div>
+
+            {/* Hidden Dot Indicator */}
+            <div className="ml-auto w-1.5 h-1.5 rounded-full bg-black opacity-0 group-hover:opacity-100 transition-all transform scale-0 group-hover:scale-100 shadow-[0_0_8px_rgba(0,0,0,0.1)]" />
         </Link>
     );
 }
@@ -32,273 +42,105 @@ function MenuItem({ href, icon, title, desc, onClick, colorClass = "bg-gray-100 
 export default function Sidebar({ isOpen, onClose, context }: SidebarProps) {
     const { data: session } = useSession();
     const [localUser, setLocalUser] = useState<{ memberId?: string | null; email?: string | null; nickname?: string | null; roleType?: string | null; isAdmin?: boolean } | null>(null);
-    const [profileRoleType, setProfileRoleType] = useState<string | null>(null);
-    const [profileImageUrl, setProfileImageUrl] = useState<string | null>(null);
-    const apiBaseUrl = process.env.NEXT_PUBLIC_API_URL || "";
 
-    // [AUTH CHECK LOGIC] 기존 로직 유지
     useEffect(() => {
         if (!isOpen) return;
         if (typeof window === "undefined") return;
         const stored = localStorage.getItem("localAuth");
-        if (!stored) {
-            setLocalUser(null);
-            return;
-        }
-        try {
-            setLocalUser(JSON.parse(stored));
-        } catch {
-            setLocalUser(null);
-        }
+        if (!stored) { setLocalUser(null); return; }
+        try { setLocalUser(JSON.parse(stored)); } catch { setLocalUser(null); }
     }, [isOpen]);
 
-    useEffect(() => {
-        if (!isOpen) return;
-        if (typeof window === "undefined") return;
-        const memberId = session?.user?.id || localUser?.memberId;
-        if (!memberId) {
-            setProfileImageUrl(null);
-            return;
-        }
-        fetch(`${apiBaseUrl}/users/profile/${memberId}`)
-            .then((res) => (res.ok ? res.json() : null))
-            .then((data) => {
-                if (data?.profile_image_url) {
-                    const url = data.profile_image_url.startsWith("http")
-                        ? data.profile_image_url
-                        : `${apiBaseUrl}${data.profile_image_url}`;
-                    setProfileImageUrl(url);
-                } else {
-                    setProfileImageUrl(null);
-                }
-                if (data?.role_type) {
-                    setProfileRoleType(data.role_type);
-                }
-            })
-            .catch(() => setProfileImageUrl(null));
-    }, [isOpen, localUser, session]);
-
-    const isLoggedIn = Boolean(session || localUser);
-    const resolvedRoleType = (
-        localUser?.roleType ||
-        (localUser?.isAdmin ? "ADMIN" : "") ||
-        profileRoleType ||
-        ""
-    ).toUpperCase();
-    const isAdmin = resolvedRoleType === "ADMIN";
-
-    // [CLICK OUTSIDE LOGIC] overlay 제거 후 ref로 외부 클릭 감지
-    const sidebarRef = useState<HTMLDivElement | null>(null);
     const [ref, setRef] = useState<HTMLDivElement | null>(null);
-
     useEffect(() => {
         function handleClickOutside(event: MouseEvent) {
-            // [수정] 햄버거 버튼(id="global-menu-toggle") 클릭 시에는 닫기 동작 수행 X (버튼 자체의 토글 기능과 충돌 방지)
             const target = event.target as Element;
             if (target.closest("#global-menu-toggle")) return;
-
-            if (ref && !ref.contains(target as Node)) {
-                onClose();
-            }
+            if (ref && !ref.contains(target as Node)) { onClose(); }
         }
-        if (isOpen) {
-            document.addEventListener("mousedown", handleClickOutside);
-        }
-        return () => {
-            document.removeEventListener("mousedown", handleClickOutside);
-        };
+        if (isOpen) { document.addEventListener("mousedown", handleClickOutside); }
+        return () => { document.removeEventListener("mousedown", handleClickOutside); };
     }, [isOpen, ref, onClose]);
 
-    if (!isOpen) return null;
+    // [ANIMATION VARIANTS] EC2 빌드 에러 방지를 위해 'as const' 추가 - ksu.
+    const containerVariants = {
+        hidden: { opacity: 0, x: 20 },
+        show: {
+            opacity: 1, x: 0,
+            transition: { type: "spring", stiffness: 300, damping: 30, staggerChildren: 0.1 }
+        },
+        exit: { opacity: 0, x: 20, transition: { duration: 0.2 } }
+    } as const;
+
+    // 애니메이션 속성 타입 고정을 위해 'as const' 적용 - ksu.
+    const cardVariants = {
+        hidden: { opacity: 0, y: 10, scale: 0.95 },
+        show: { opacity: 1, y: 0, scale: 1 },
+        exit: { opacity: 0, y: 10, scale: 0.95 }
+    } as const;
+
+    // [HYPER-REALISTIC LIQUID GLASS BLOCK]
+    // 1. Specular Highlights: Multiple inset shadows for the sharp rim and surface sheen.
+    // 2. Volumetric Depth: Bottom inset shadow to simulate the glass meniscus.
+    // 3. Clarity: Minimal background color with high-intensity blur.
+    const liquidGlassBlock = "bg-gradient-to-br from-white/[0.08] to-transparent backdrop-blur-[16px] border border-white/40 shadow-[inset_0_1px_1px_rgba(255,255,255,0.9),inset_0_15px_30px_rgba(255,255,255,0.15),inset_0_-2px_10px_rgba(0,0,0,0.05),0_20px_40px_-10px_rgba(0,0,0,0.2)] overflow-hidden rounded-[36px]";
+
+    // [OBSIDIAN LIQUID GLASS BLOCK]
+    const obsidianGlassBlock = "bg-gradient-to-br from-black/80 to-black/40 backdrop-blur-[20px] border border-white/10 shadow-[inset_0_1px_1px_rgba(255,255,255,0.3),inset_0_10px_20px_rgba(255,255,255,0.05),inset_0_-2px_10px_rgba(0,0,0,0.5),0_20px_40px_-5px_rgba(0,0,0,0.4)] overflow-hidden rounded-[32px]";
 
     return (
-        <>
-            {/* [POPOVER MENU] fixed 적용으로 스크롤 시에도 위치 고정, 세련된 애니메이션 적용 */}
-            <div ref={setRef} className="fixed top-[72px] right-5 z-50 w-[320px] max-h-[calc(100vh-100px)] bg-white rounded-2xl shadow-2xl border border-gray-100 overflow-y-auto custom-scrollbar animate-in fade-in zoom-in-95 slide-in-from-top-2 duration-300 ease-out">
-                <div className="p-2 space-y-1">
+        <AnimatePresence>
+            {isOpen && (
+                <>
+                    <div className="fixed inset-0 z-40 bg-transparent" />
 
-                    {/* --- HOME CONTEXT --- */}
-                    {context === "home" && (
-                        <>
-                            {!isLoggedIn ? (
-                                // [LOGGED OUT]
-                                <div className="p-2 space-y-2">
-                                    <MenuItem
-                                        href="/login"
-                                        onClick={onClose}
-                                        icon={<span className="text-lg">🔐</span>}
-                                        title="로그인 / 회원가입"
-                                        desc="센텐스의 모든 기능을 이용해보세요"
-                                        colorClass="bg-black text-white"
-                                    />
+                    <motion.div
+                        ref={setRef}
+                        className="fixed top-24 right-8 z-50 w-[300px] flex flex-col gap-5"
+                        variants={containerVariants}
+                        initial="hidden"
+                        animate="show"
+                        exit="exit"
+                    >
+                        {/* --- CHUNK 1: HOME --- */}
+                        <motion.div variants={cardVariants} className={`${liquidGlassBlock} p-1`}>
+                            <MenuItem href="/" icon={Home} title="첫 화면" onClick={onClose} />
+                        </motion.div>
 
-                                    <div className="h-px bg-gray-100 my-1 mx-2" />
-
-                                    <MenuItem
-                                        href="/chat"
-                                        onClick={onClose}
-                                        icon={<span className="text-lg">✨</span>}
-                                        title="AI 향수 추천"
-                                        desc="챗봇과 대화하며 취향 찾기"
-                                        colorClass="bg-yellow-50 text-yellow-600"
-                                    />
-
-                                    <MenuItem
-                                        href="/about"
-                                        onClick={onClose}
-                                        icon={<span className="text-lg">ℹ️</span>}
-                                        title="서비스 소개"
-                                        desc="센텐스가 추구하는 가치"
-                                    />
-                                    <MenuItem
-                                        href="/contact"
-                                        onClick={onClose}
-                                        icon={<span className="text-lg">📞</span>}
-                                        title="문의하기"
-                                        desc="궁금한 점을 물어보세요"
-                                    />
-                                </div>
-                            ) : (
-                                // [LOGGED IN]
-                                <div className="p-1 space-y-1">
-                                    {!isAdmin && (
-                                        <MenuItem
-                                            href="/mypage"
-                                            onClick={onClose}
-                                            icon={<span className="text-lg">👤</span>}
-                                            title="마이페이지"
-                                            desc="내 정보 및 프로필 관리"
-                                        />
-                                    )}
-                                    {isAdmin && (
-                                        <MenuItem
-                                            href="/admin"
-                                            onClick={onClose}
-                                            icon={<span className="text-lg">🛠️</span>}
-                                            title="관리자 페이지"
-                                            desc="시스템 관리 및 모니터링"
-                                            colorClass="bg-blue-100 text-blue-600"
-                                        />
-                                    )}
-
-                                    <div className="h-px bg-gray-100 my-1 mx-2" />
-
-                                    <MenuItem
-                                        href="/chat"
-                                        onClick={onClose}
-                                        icon={<span className="text-lg">✨</span>}
-                                        title="AI 향수 추천"
-                                        desc="챗봇과 대화하며 취향 찾기"
-                                        colorClass="bg-yellow-50 text-yellow-600"
-                                    />
-                                    <MenuItem
-                                        href="/archives"
-                                        onClick={onClose}
-                                        icon={<span className="text-lg">📂</span>}
-                                        title="나만의 아카이브"
-                                        desc="저장한 향수 카드 모음집"
-                                        colorClass="bg-orange-50 text-orange-600"
-                                    />
-                                    <MenuItem
-                                        href="/layering"
-                                        onClick={onClose}
-                                        icon={<span className="text-lg">🧪</span>}
-                                        title="향수 레이어링"
-                                        desc="나만의 향수 조합 실험실"
-                                        colorClass="bg-purple-50 text-purple-600"
-                                    />
-                                    <MenuItem
-                                        href="/perfume-network/nmap"
-                                        onClick={onClose}
-                                        icon={<span className="text-lg">🗺️</span>}
-                                        title="향수 관계맵"
-                                        desc="향수의 연결고리 탐험하기"
-                                        colorClass="bg-blue-50 text-blue-600"
-                                    />
-
-                                    <div className="h-px bg-gray-100 my-1 mx-2" />
-
-                                    <MenuItem
-                                        href="/about"
-                                        onClick={onClose}
-                                        icon={<span className="text-lg">ℹ️</span>}
-                                        title="서비스 소개"
-                                        desc="센텐스가 추구하는 가치"
-                                    />
-                                    <MenuItem
-                                        href="/contact"
-                                        onClick={onClose}
-                                        icon={<span className="text-lg">📞</span>}
-                                        title="문의하기"
-                                        desc="불편사항 및 제안 접수"
-                                    />
-
-                                    {/* LOGOUT BUTTON */}
-                                    <button
-                                        onClick={() => {
-                                            if (session) signOut({ callbackUrl: "/login" });
-                                            else {
-                                                if (typeof window !== "undefined") {
-                                                    localStorage.removeItem("localAuth");
-                                                    window.location.href = "/login";
-                                                }
-                                                setLocalUser(null);
-                                                onClose();
-                                            }
-                                        }}
-                                        className="w-full text-left flex items-center gap-4 p-3 rounded-xl hover:bg-red-50 group transition-colors mt-2"
-                                    >
-                                        <div className="w-10 h-10 rounded-full flex items-center justify-center shrink-0 bg-gray-100 text-gray-400 group-hover:bg-red-100 group-hover:text-red-500 transition-colors">
-                                            <span className="text-lg">🚪</span>
-                                        </div>
-                                        <div>
-                                            <p className="text-sm font-bold text-gray-500 group-hover:text-red-600 transition-colors">로그아웃</p>
-                                        </div>
-                                    </button>
-                                </div>
-                            )}
-                        </>
-                    )}
-
-                    {/* --- CHAT CONTEXT --- */}
-                    {context === "chat" && (
-                        <div className="p-2 space-y-2">
-                            <MenuItem
-                                href="/chat"
-                                onClick={onClose}
-                                icon={<span className="text-lg">✨</span>}
-                                title="새 채팅 시작하기"
-                                desc="새로운 주제로 대화하기"
-                                colorClass="bg-black text-white"
-                            />
-
-                            <div className="h-px bg-gray-100 my-2 mx-2" />
-
-                            <div className="px-3 py-2">
-                                <p className="text-xs font-bold text-gray-400 uppercase tracking-wider mb-2">History</p>
-                                <ul className="space-y-1">
-                                    <li className="text-xs text-gray-600 p-2 hover:bg-gray-50 rounded-lg cursor-pointer truncate">
-                                        24.01.19 데이트 향수 추천...
-                                    </li>
-                                    <li className="text-xs text-gray-600 p-2 hover:bg-gray-50 rounded-lg cursor-pointer truncate">
-                                        24.01.15 우디 계열 문의...
-                                    </li>
-                                </ul>
+                        {/* --- CHUNK 2: CORE FEATURES (The Big Glass Square) --- */}
+                        <motion.div variants={cardVariants} className={`${liquidGlassBlock} p-1`}>
+                            <div className="flex flex-col divide-y divide-black/5">
+                                <MenuItem href="/chat" icon={Sparkles} title="향수 추천" onClick={onClose} />
+                                <MenuItem href="/layering" icon={Layers} title="향수 레이어링" onClick={onClose} />
+                                <MenuItem href="/perfume-network/nmap" icon={MapIcon} title="향수 지도" onClick={onClose} />
+                                <MenuItem href="/perfume-wiki" icon={BookOpen} title="향수 백과" onClick={onClose} />
                             </div>
+                        </motion.div>
 
-                            <div className="h-px bg-gray-100 my-2 mx-2" />
+                        {/* --- CHUNK 3: FOOTER (Obsidian Glass) --- */}
+                        <motion.div variants={cardVariants} className={`${obsidianGlassBlock} p-6 flex flex-col gap-4`}>
+                            <Link href="/contact" onClick={onClose} className="flex items-center justify-between group">
+                                <span className="text-xs font-bold tracking-[0.2em] text-gray-400 group-hover:text-white transition-colors">CONTACT</span>
+                                {/* 살아있는 레드 도트 (Pulse 애니메이션) */}
+                                <span className="relative flex h-2 w-2">
+                                    <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-red-400 opacity-75"></span>
+                                    <span className="relative inline-flex rounded-full h-2 w-2 bg-red-500 shadow-[0_0_8px_rgba(239,68,68,0.8)] group-hover:bg-green-500 transition-all"></span>
+                                </span>
+                            </Link>
 
-                            <MenuItem
-                                href="/"
-                                onClick={onClose}
-                                icon={<span className="text-lg">🏠</span>}
-                                title="홈으로 나가기"
-                                desc="메인 화면으로 이동"
-                            />
-                        </div>
-                    )}
-                </div>
-            </div>
-        </>
+                            <div className="h-px bg-white/5" />
+
+                            <Link href="/about" onClick={onClose} className="cursor-pointer group flex flex-col items-start mt-1 gap-0.5">
+                                <p className="text-[10px] text-white/40 font-medium leading-none">About.</p>
+                                <div className="flex items-center justify-between w-full">
+                                    <span className="text-sm font-black tracking-[0.05em] text-gray-300 group-hover:tracking-[0.2em] group-hover:text-white transition-all duration-500">SCENTENCE</span>
+                                    <span className="text-xl font-black text-gray-500 group-hover:text-white transition-all duration-500 transform rotate-90 group-hover:rotate-0 opacity-50 group-hover:opacity-100 mr-1">!</span>
+                                </div>
+                            </Link>
+                        </motion.div>
+                    </motion.div>
+                </>
+            )}
+        </AnimatePresence>
     );
 }

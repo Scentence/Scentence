@@ -233,6 +233,7 @@ async def stream_generator(
         error_msg = json.dumps({"type": "error", "content": str(e)}, ensure_ascii=False)
         yield f"data: {error_msg}\n\n"
 
+
 @app.post("/chat")
 async def chat_stream(request: ChatRequest):
     recommended_count = resolve_recommended_count(

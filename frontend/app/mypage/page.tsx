@@ -4,6 +4,8 @@ import { FormEvent, useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import { useSession } from "next-auth/react";
 import Sidebar from "@/components/common/sidebar";
+import UserProfileMenu from "@/components/common/UserProfileMenu";
+import ImageCropperModal from './ImageCropperModal';
 
 interface ProfileData {
   member_id: string;
@@ -23,8 +25,9 @@ interface ProfileData {
 }
 
 export default function MyPage() {
-  const { data: session } = useSession();
+  const { data: session, update } = useSession();
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
+  const [isProfileMenuOpen, setIsProfileMenuOpen] = useState(false);
   const [memberId, setMemberId] = useState<string | null>(null);
   const [profile, setProfile] = useState<ProfileData | null>(null);
   const [nickname, setNickname] = useState("");
@@ -47,6 +50,8 @@ export default function MyPage() {
   const [currentPassword, setCurrentPassword] = useState("");
   const [newPassword, setNewPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
+  const [selectedFile, setSelectedFile] = useState<string | null>(null); // 자르기 전 원본 이미지 URL
+  const [isCropperOpen, setIsCropperOpen] = useState(false); // 모달 열림 여부
 
   const apiBaseUrl = process.env.NEXT_PUBLIC_API_URL || "";
   const resolvedProfileImageUrl = profileImageUrl
@@ -77,28 +82,9 @@ export default function MyPage() {
     }
   }, [session]);
 
-  useEffect(() => {
-    if (typeof window === "undefined") return;
-    const stored = localStorage.getItem("localAuth");
-    if (!stored) return;
-    try {
-      const parsed = JSON.parse(stored);
-      const roleType = parsed?.roleType || (parsed?.isAdmin ? "ADMIN" : "");
-      if ((roleType || "").toUpperCase() === "ADMIN") {
-        window.location.href = "/admin";
-      }
-    } catch (error) {
-      return;
-    }
-  }, []);
 
-  useEffect(() => {
-    if ((profile?.role_type || "").toUpperCase() === "ADMIN") {
-      if (typeof window !== "undefined") {
-        window.location.href = "/admin";
-      }
-    }
-  }, [profile]);
+
+
 
   useEffect(() => {
     if (!memberId) return;
@@ -230,11 +216,47 @@ export default function MyPage() {
         }
       }
 
+      await update({ name: nickname });
       setProfileMessage("회원정보가 저장되었습니다.");
     } catch (error) {
       setProfileMessage("회원정보 수정에 실패했습니다.");
     } finally {
       setIsSubmittingProfile(false);
+    }
+  };
+
+  // 크롭 완료 후 실행될 함수 (실제 업로드 로직)
+  const handleCropComplete = async (croppedBlob: Blob) => {
+    if (!memberId) return;
+    setIsUploadingImage(true);
+    setIsCropperOpen(false); // 모달 닫기
+
+    try {
+      const formData = new FormData();
+      // Blob을 File 객체로 변환해서 전송
+      const file = new File([croppedBlob], "profile_cropped.jpg", { type: "image/jpeg" });
+      formData.append("file", file);
+
+      const response = await fetch(`/api/users/profile/${memberId}/image`, {
+        method: "POST",
+        body: formData,
+      });
+
+      if (!response.ok) {
+        setProfileMessage("이미지 업로드에 실패했습니다.");
+        return;
+      }
+
+      const data = await response.json();
+      if (data?.profile_image_url) {
+        setProfileImageUrl(data.profile_image_url);
+        setProfileMessage("프로필 이미지가 변경되었습니다.");
+      }
+    } catch (error) {
+      setProfileMessage("오류가 발생했습니다.");
+    } finally {
+      setIsUploadingImage(false);
+      setSelectedFile(null); // 초기화
     }
   };
 
@@ -340,33 +362,38 @@ export default function MyPage() {
       )}
 
       {/* [STANDARD HEADER] 메인 페이지(app/page.tsx)와 100% 동일한 구조 및 디자인 적용 */}
-      <header className="fixed top-0 left-0 right-0 flex items-center justify-between px-5 py-4 bg-[#FDFBF8] border-b border-[#F0F0F0] z-50">
+      <header className="fixed top-0 left-0 right-0 flex items-center justify-between px-6 md:px-10 py-5 bg-[#FDFBF8] border-b border-[#F0F0F0] z-50">
         {/* 로고 영역: font-bold, text-black, tracking-tight (표준) */}
-        <Link href="/" className="text-xl font-bold text-black tracking-tight">
-          Scentence
+        <Link href="/" className="text-lg font-bold text-black tracking-[0.15em] uppercase">
+          SCENTENCE
         </Link>
 
         {/* 우측 상단 UI: 로그인 상태 및 사이드바 토글 버튼 (표준) */}
         <div className="flex items-center gap-4">
           <div className="flex items-center gap-3">
-            <span className="text-sm font-bold text-gray-800 hidden sm:block">
-              {displayName}님 반가워요!
-            </span>
             {/* 프로필 이미지 Link: 표준 크기(w-9 h-9) 및 스타일 적용 */}
-            <Link href="/mypage" className="block w-9 h-9 rounded-full overflow-hidden border border-gray-100 shadow-sm hover:opacity-80 transition-opacity">
+            <button
+              id="profile-menu-toggle"
+              onClick={() => setIsProfileMenuOpen(!isProfileMenuOpen)}
+              className="block w-9 h-9 rounded-full overflow-hidden border border-gray-100 shadow-sm hover:opacity-80 transition-opacity"
+            >
               <img
                 src={resolvedProfileImageUrl}
                 alt="Profile"
                 className="w-full h-full object-cover"
                 onError={(e) => { e.currentTarget.src = "/default_profile.png"; }}
               />
-            </Link>
+            </button>
+            <UserProfileMenu
+              isOpen={isProfileMenuOpen}
+              onClose={() => setIsProfileMenuOpen(false)}
+            />
           </div>
           {/* 글로벌 내비게이션 토글 버튼 (px-5 py-4 패딩 및 w-8 h-8 규격 준수) */}
           <button
             id="global-menu-toggle"
             onClick={() => setIsSidebarOpen(!isSidebarOpen)}
-            className="p-1 rounded-md hover:bg-gray-100 transition-colors"
+            className="w-9 h-9 flex items-center justify-center rounded-full hover:bg-gray-100 transition-colors"
           >
             {isSidebarOpen ? (
               <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" className="w-8 h-8 text-[#555]">
@@ -411,31 +438,17 @@ export default function MyPage() {
                 type="file"
                 accept="image/*"
                 className="hidden"
-                onChange={async (event) => {
-                  if (!memberId) return;
+                onChange={(event) => {
                   const file = event.target.files?.[0];
-                  if (!file) return;
-                  setIsUploadingImage(true);
-                  try {
-                    const formData = new FormData();
-                    formData.append("file", file);
-                    const response = await fetch(`/api/users/profile/${memberId}/image`, {
-                      method: "POST",
-                      body: formData,
+                  if (file) {
+                    // 파일을 읽어서 URL로 변환 후 모달 열기
+                    const reader = new FileReader();
+                    reader.addEventListener("load", () => {
+                      setSelectedFile(reader.result?.toString() || null);
+                      setIsCropperOpen(true);
                     });
-                    if (!response.ok) {
-                      const data = await response.json().catch(() => null);
-                      setProfileMessage(data?.detail || "이미지 업로드에 실패했습니다.");
-                      return;
-                    }
-                    const data = await response.json().catch(() => null);
-                    if (data?.profile_image_url) {
-                      setProfileImageUrl(data.profile_image_url);
-                    }
-                  } catch (error) {
-                    setProfileMessage("이미지 업로드에 실패했습니다.");
-                  } finally {
-                    setIsUploadingImage(false);
+                    reader.readAsDataURL(file);
+                    // 동일 파일 다시 선택 가능하도록 초기화
                     event.target.value = "";
                   }
                 }}
@@ -472,14 +485,14 @@ export default function MyPage() {
           </div>
 
           <div className="space-y-2">
-            <label htmlFor="subEmail" className="text-sm font-bold text-gray-700">보조 이메일</label>
+            <label htmlFor="subEmail" className="text-sm font-bold text-gray-700">복구 이메일 (선택)</label>
             <input
               id="subEmail"
               name="subEmail"
               type="email"
               value={subEmail}
               onChange={(event) => setSubEmail(event.target.value)}
-              placeholder="보조 이메일을 입력하세요"
+              placeholder="계정 복구용 이메일을 입력하세요"
               className="w-full rounded-xl border border-gray-200 px-4 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-black/10 transition-shadow"
             />
           </div>
@@ -710,6 +723,17 @@ export default function MyPage() {
           </button>
         </section>
       </main>
+      {/* [MODAL] 이미지 크롭퍼 모달 */}
+      {isCropperOpen && selectedFile && (
+        <ImageCropperModal
+          imageSrc={selectedFile}
+          onClose={() => {
+            setIsCropperOpen(false);
+            setSelectedFile(null);
+          }}
+          onCropComplete={handleCropComplete}
+        />
+      )}
     </div>
   );
 }

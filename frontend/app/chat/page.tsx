@@ -8,6 +8,8 @@ import ChatList from "../../components/Chat/ChatList";
 import { Message } from "../../components/Chat/MessageItem";
 import ChatSidebar from "../../components/Chat/Sidebar"; // 좌측 채팅 기록 사이드바
 import NavSidebar from "../../components/common/sidebar"; // 우측 내비게이션 팝오버
+import MagneticButton from "../../components/common/MagneticButton"; // [NEW] 마그네틱 버튼 추가
+import UserProfileMenu from "../../components/common/UserProfileMenu"; // [NEW] UserProfileMenu 추가
 import { SavedPerfumesProvider } from "../../contexts/SavedPerfumesContext";
 
 const API_URL = "/api/chat";
@@ -17,6 +19,7 @@ export default function ChatPage() {
     const router = useRouter();
     const [isSidebarOpen, setIsSidebarOpen] = useState(false); // 좌측 채팅 내역 사이드바
     const [isNavOpen, setIsNavOpen] = useState(false); // 우측 내비게이션 팝오버
+    const [isProfileMenuOpen, setIsProfileMenuOpen] = useState(false); // [NEW] 프로필 메뉴 상태
 
     const [messages, setMessages] = useState<Message[]>([]);
     const [inputValue, setInputValue] = useState("");
@@ -266,45 +269,49 @@ export default function ChatPage() {
                     context="home"
                 />
 
-                {/* [STANDARD HEADER] 메인 페이지(app/page.tsx)와 100% 동일한 구조 및 디자인 적용 */}
-                <header className="fixed top-0 left-0 right-0 flex items-center justify-between px-5 py-4 bg-[#FDFBF8] border-b border-[#F0F0F0] z-50">
-                    {/* 로고 영역: font-bold, text-black, tracking-tight (표준) */}
-                    <Link href="/" className="text-xl font-bold text-black tracking-tight">
-                        Scentence
-                    </Link>
+                {/* [STANDARD HEADER] Fully Transparent for Chat Page (Standard Size Icons, z-30 to match Wiki) */}
+                <header className="fixed top-0 left-0 right-0 z-30 flex items-center justify-between px-6 md:px-10 py-5 bg-transparent border-b border-transparent">
+                    {/* 로고 영역: Wiki와 동일하게 div로 감싸 구조 통일 */}
+                    <div className="flex items-center gap-4">
+                        <Link href="/" className="text-lg font-bold text-black tracking-[0.15em] uppercase hover:opacity-70 transition">
+                            SCENTENCE
+                        </Link>
+                    </div>
 
                     {/* 우측 상단 UI: 로그인 상태 및 사이드바 토글 버튼 (표준) */}
+                    {/* 우측 상단 UI: Perfume Wiki와 동일하게 통일 */}
                     <div className="flex items-center gap-4">
                         {!isLoggedIn ? (
-                            // 비로그인 상태 UI
                             <div className="flex items-center gap-2 text-sm font-medium text-gray-400">
                                 <Link href="/login" className="hover:text-black transition-colors">Sign in</Link>
                                 <span className="text-gray-300">|</span>
                                 <Link href="/signup" className="hover:text-black transition-colors">Sign up</Link>
                             </div>
                         ) : (
-                            // 로그인 상태 UI: 이름과 프로필 이미지
                             <div className="flex items-center gap-3">
-                                <span className="text-sm font-bold text-gray-800 hidden sm:block">
-                                    {displayName}님 반가워요!
-                                </span>
-                                <Link href="/mypage" className="block w-9 h-9 rounded-full overflow-hidden border border-gray-100 shadow-sm hover:opacity-80 transition-opacity">
+                                <button
+                                    id="profile-menu-toggle"
+                                    onClick={() => setIsProfileMenuOpen(!isProfileMenuOpen)}
+                                    className="block w-9 h-9 rounded-full overflow-hidden border border-gray-100 shadow-sm hover:opacity-80 transition-opacity"
+                                >
                                     <img
                                         src={profileImageUrl || "/default_profile.png"}
                                         alt="Profile"
                                         className="w-full h-full object-cover"
                                         onError={(e) => { e.currentTarget.src = "/default_profile.png"; }}
                                     />
-                                </Link>
+                                </button>
+                                <UserProfileMenu
+                                    isOpen={isProfileMenuOpen}
+                                    onClose={() => setIsProfileMenuOpen(false)}
+                                />
                             </div>
                         )}
 
-                        {/* 글로벌 내비게이션 토글 버튼 (px-5 py-4 패딩 및 w-8 h-8 규격 준수) */}
-                        {/* 글로벌 내비게이션 토글 버튼 (px-5 py-4 패딩 및 w-8 h-8 규격 준수) */}
                         <button
                             id="global-menu-toggle"
                             onClick={() => setIsNavOpen(!isNavOpen)}
-                            className="p-1 rounded-md hover:bg-gray-100 transition-colors"
+                            className="w-9 h-9 flex items-center justify-center rounded-full hover:bg-gray-100 transition-colors"
                         >
                             {isNavOpen ? (
                                 <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" className="w-8 h-8 text-[#555]">
@@ -399,14 +406,19 @@ export default function ChatPage() {
                             - w-full: 화면이 좁아질 때 유연하게 줄어듦
                             - px-4: 좌우 여백 확보
                         */}
-                        <div className="shrink-0 px-4 pb-5 z-30 w-full max-w-5xl mx-auto">
-                            <form onSubmit={handleSubmit} className="relative bg-white rounded-3xl shadow-sm border border-[#E5E4DE] focus-within:ring-1 focus-within:ring-[#D97757]/30 transition-all">
-                                <div className="flex flex-col min-h-[120px]">
+                        <div className="shrink-0 px-4 pb-5 z-30 w-[80%] max-w-3xl mx-auto">
+                            <form onSubmit={handleSubmit} className="relative bg-white rounded-[26px] shadow-sm border border-[#E5E4DE] focus-within:ring-1 focus-within:ring-[#D97757]/30 transition-all">
+                                <div className="flex items-center min-h-[50px] pr-2">
                                     <textarea
-                                        className="flex-1 w-full bg-transparent p-5 text-[#393939] placeholder:text-gray-400 outline-none resize-none text-base custom-scrollbar"
+                                        className="flex-1 w-full bg-transparent py-3 pl-5 text-[#393939] placeholder:text-gray-400 outline-none resize-none text-base custom-scrollbar"
                                         placeholder={"어떤 향수를 찾으시나요? 무엇이든 물어보세요."}
+                                        rows={1}
                                         value={inputValue}
-                                        onChange={(e) => setInputValue(e.target.value)}
+                                        onChange={(e) => {
+                                            setInputValue(e.target.value);
+                                            e.target.style.height = 'auto';
+                                            e.target.style.height = `${Math.min(e.target.scrollHeight, 120)}px`;
+                                        }}
                                         onKeyDown={(e) => {
                                             if (e.key === 'Enter' && !e.shiftKey) {
                                                 e.preventDefault();
@@ -415,10 +427,7 @@ export default function ChatPage() {
                                         }}
                                         disabled={loading}
                                     />
-                                    <div className="flex justify-between items-center px-4 pb-3">
-                                        <div className="flex gap-2">
-                                            {/* (Optional) 파일 첨부 아이콘 등 추후 확장 가능 */}
-                                        </div>
+                                    <div className="flex shrink-0 gap-2 items-center">
                                         <button
                                             className={`
                                                 flex items-center justify-center transition-all duration-200 ease-in-out
@@ -428,7 +437,7 @@ export default function ChatPage() {
                                             `}
                                             type="submit"
                                             disabled={loading || !inputValue.trim()}
-                                            style={{ width: "42px", height: "42px", borderRadius: "50%" }}
+                                            style={{ width: "38px", height: "38px", borderRadius: "50%" }}
                                         >
                                             <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" className="w-5 h-5">
                                                 <path fillRule="evenodd" d="M10.5 3a.75.75 0 0 1 .75.75v2.25h1.5V3.75a.75.75 0 0 1 1.5 0v3a.75.75 0 0 1-.75.75h-3a.75.75 0 0 1-.75-.75v-3a.75.75 0 0 1 .75-.75ZM7.5 9a2.25 2.25 0 0 1 2.25-2.25h4.5A2.25 2.25 0 0 1 16.5 9v9.75a2.25 2.25 0 0 1-2.25 2.25h-4.5A2.25 2.25 0 0 1 7.5 18.75V9ZM12 11.25a1.5 1.5 0 1 0 0 3 1.5 1.5 0 0 0 0-3Z" clipRule="evenodd" />
