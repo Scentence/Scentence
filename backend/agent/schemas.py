@@ -1,5 +1,5 @@
 # backend/agent/schemas.py
-from typing import List, Optional, Dict, Any, Literal, Annotated
+from typing import List, Optional, Dict, Literal, Annotated
 from pydantic import BaseModel, Field
 from langchain_core.messages import BaseMessage
 from langgraph.graph.message import add_messages
@@ -40,6 +40,11 @@ class AgentState(Dict):
     
     # [★추가] 세션 레벨 추천 다양성 추적
     recommended_history: Optional[List[int]]
+
+    # [★추가] 프레임 컨텍스트/제약 메타데이터
+    frame_id: str | None = None
+    constraint_scope: Literal["FRAME", "SESSION", "PROFILE"] | None = None
+    constraint_source: Literal["explicit_user", "inferred", "system_default"] | None = None
 
 
 # =================================================================
