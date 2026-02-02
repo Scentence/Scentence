@@ -14,7 +14,6 @@ from agent.schemas import ChatRequest
 from agent.graph import app_graph
 from agent.database import save_chat_message, get_chat_history, get_user_chat_list
 from routers import users, perfumes, archive # <--- 아카이브 연동 라우터 추가 ksu
-from agent.test import router as test_router  # <--- 챗봇 테스터 라우터 추가 ksu
 
 app = FastAPI(title="Perfume Re-Act Chatbot")
 
@@ -25,7 +24,6 @@ app.mount("/uploads", StaticFiles(directory=uploads_dir), name="uploads")
 app.include_router(users.router)
 app.include_router(perfumes.router) # <--- ksu 추가
 app.include_router(archive.router) # <--- ksu 추가
-app.include_router(test_router) # <--- ksu 추가
 
 # CORS origins from environment variable
 cors_origins_env = os.getenv("BACKEND_CORS_ORIGINS", "")

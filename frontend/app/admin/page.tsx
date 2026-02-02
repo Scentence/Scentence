@@ -4,7 +4,7 @@ import { useEffect, useState } from "react";
 import Link from "next/link";
 import { useSession } from "next-auth/react";
 import Sidebar from "@/components/common/sidebar";
-import ChatbotTester from "@/components/Admin/ChatbotTester";
+import UserProfileMenu from "@/components/common/UserProfileMenu";
 
 interface MemberRow {
   member_id: string;
@@ -20,6 +20,8 @@ const statusOptions = ["NORMAL", "LOCK", "DORMANT", "WITHDRAW_REQ", "WITHDRAW"] 
 export default function AdminPage() {
   const { data: session } = useSession();
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
+  const [isProfileMenuOpen, setIsProfileMenuOpen] = useState(false);
+  const [profileImageUrl, setProfileImageUrl] = useState<string | null>(null);
   const [memberId, setMemberId] = useState<string | null>(null);
   const [roleType, setRoleType] = useState<string | null>(null);
   const [members, setMembers] = useState<MemberRow[]>([]);
@@ -64,6 +66,13 @@ export default function AdminPage() {
         const data = await response.json().catch(() => null);
         if (data?.role_type) {
           setRoleType(data.role_type);
+        }
+        if (data?.profile_image_url) {
+          // URL 처리 로직 (Sidebar와 동일)
+          const url = data.profile_image_url.startsWith("http")
+            ? data.profile_image_url
+            : `${apiBaseUrl}${data.profile_image_url}`;
+          setProfileImageUrl(url);
         }
       } catch (error) {
         return;
@@ -128,8 +137,6 @@ export default function AdminPage() {
     }
   };
 
-  const [activeTab, setActiveTab] = useState<'MEMBERS' | 'CHATBOT'>('MEMBERS');
-
   return (
     <div className="min-h-screen bg-[#FDFBF8] text-black flex flex-col font-sans">
       <Sidebar
@@ -151,31 +158,26 @@ export default function AdminPage() {
           Scentence 관리자 페이지
         </Link>
 
-        {/* 탭 네비게이션: 회원 관리 / 챗봇 테스터 (가운데 배치 등 자유롭지만 일단 중앙 또는 우측보다 좌측에 둘 수도 있음, 여기서는 Title 아래에 두는 게 일반적) */}
-        {/* 여기서는 헤더에 둘 수도 있지만, 본문에 두는 게 더 자연스러움. 헤더는 글로벌 네비게이션 역할 */}
-
         <div className="flex items-center gap-6">
-          {/* [Nav Buttons] 센스있는 헤더 메뉴 배치 */}
-          <nav className="hidden md:flex items-center gap-1 bg-gray-100/50 p-1 rounded-lg">
+          {/* User Profile Button */}
+          <div className="relative">
             <button
-              onClick={() => setActiveTab('MEMBERS')}
-              className={`px-4 py-1.5 text-xs font-bold rounded-md transition-all duration-200 ${activeTab === 'MEMBERS'
-                ? 'bg-white text-black shadow-sm'
-                : 'text-gray-400 hover:text-gray-600'
-                }`}
+              id="profile-menu-toggle"
+              onClick={() => setIsProfileMenuOpen(!isProfileMenuOpen)}
+              className="block w-9 h-9 rounded-full overflow-hidden border border-gray-100 shadow-sm hover:opacity-80 transition-opacity"
             >
-              회원 관리
+              <img
+                src={profileImageUrl || "/default_profile.png"}
+                alt="Profile"
+                className="w-full h-full object-cover"
+                onError={(e) => { e.currentTarget.src = "/default_profile.png"; }}
+              />
             </button>
-            <button
-              onClick={() => setActiveTab('CHATBOT')}
-              className={`px-4 py-1.5 text-xs font-bold rounded-md transition-all duration-200 ${activeTab === 'CHATBOT'
-                ? 'bg-white text-black shadow-sm'
-                : 'text-gray-400 hover:text-gray-600'
-                }`}
-            >
-              챗테스터
-            </button>
-          </nav>
+            <UserProfileMenu
+              isOpen={isProfileMenuOpen}
+              onClose={() => setIsProfileMenuOpen(false)}
+            />
+          </div>
 
           {/* 글로벌 내비게이션 토글 버튼 */}
           <button
@@ -198,7 +200,6 @@ export default function AdminPage() {
 
       <main className="flex-1 px-5 py-8 w-full max-w-[95%] mx-auto pt-[80px] space-y-6">
         <div>
-          {/* 탭 메뉴 제거됨 (헤더로 이동) */}
         </div>
 
         {!isAdmin && (
@@ -208,67 +209,55 @@ export default function AdminPage() {
         )}
 
         {isAdmin && (
-          <>
-            {/* [TAB 1] 회원 관리 */}
-            {activeTab === 'MEMBERS' && (
-              <section className="rounded-2xl border border-[#EEE] p-6 space-y-4 animate-on-scroll">
-                <div className="flex items-center justify-between">
-                  <h3 className="text-lg font-semibold">회원 목록</h3>
-                  {isLoading && <span className="text-xs text-[#999]">불러오는 중...</span>}
-                </div>
+          <section className="rounded-2xl border border-[#EEE] p-6 space-y-4 animate-on-scroll">
+            <div className="flex items-center justify-between">
+              <h3 className="text-lg font-semibold">회원 목록</h3>
+              {isLoading && <span className="text-xs text-[#999]">불러오는 중...</span>}
+            </div>
 
-                {message && <p className="text-xs text-red-600">{message}</p>}
+            {message && <p className="text-xs text-red-600">{message}</p>}
 
-                <div className="overflow-x-auto">
-                  <table className="w-full text-sm table-fixed">
-                    <thead className="text-left text-[#666]">
-                      <tr>
-                        <th className="py-2 w-20">MEMBER_ID</th>
-                        <th className="py-2 w-52">이메일</th>
-                        <th className="py-2 w-40">닉네임</th>
-                        <th className="py-2 w-28">가입일</th>
-                        <th className="py-2 w-28">상태</th>
-                        <th className="py-2 w-24">가입 방식</th>
-                        <th className="py-2 w-32">관리</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {members.map((member) => (
-                        <tr key={member.member_id} className="border-t">
-                          <td className="py-2 truncate">{member.member_id}</td>
-                          <td className="py-2 truncate">{member.email ?? "-"}</td>
-                          <td className="py-2 truncate">{member.nickname ?? "-"}</td>
-                          <td className="py-2">{member.join_dt ? new Date(member.join_dt).toLocaleDateString() : "-"}</td>
-                          <td className="py-2">{member.member_status ?? "-"}</td>
-                          <td className="py-2">{member.join_channel ?? "-"}</td>
-                          <td className="py-2">
-                            <select
-                              className="rounded border border-[#DDD] px-2 py-1 text-sm outline-none focus:border-black transition-colors"
-                              value={member.member_status ?? "NORMAL"}
-                              onChange={(event) => updateStatus(member.member_id, event.target.value)}
-                            >
-                              {statusOptions.map((status) => (
-                                <option key={status} value={status}>
-                                  {status}
-                                </option>
-                              ))}
-                            </select>
-                          </td>
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
-                </div>
-              </section>
-            )}
-
-            {/* [TAB 2] 챗봇 테스터 */}
-            {activeTab === 'CHATBOT' && (
-              <section className="animate-on-scroll">
-                <ChatbotTester />
-              </section>
-            )}
-          </>
+            <div className="overflow-x-auto">
+              <table className="w-full text-sm table-fixed">
+                <thead className="text-left text-[#666]">
+                  <tr>
+                    <th className="py-2 w-20">MEMBER_ID</th>
+                    <th className="py-2 w-52">이메일</th>
+                    <th className="py-2 w-40">닉네임</th>
+                    <th className="py-2 w-28">가입일</th>
+                    <th className="py-2 w-28">상태</th>
+                    <th className="py-2 w-24">가입 방식</th>
+                    <th className="py-2 w-32">관리</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {members.map((member) => (
+                    <tr key={member.member_id} className="border-t">
+                      <td className="py-2 truncate">{member.member_id}</td>
+                      <td className="py-2 truncate">{member.email ?? "-"}</td>
+                      <td className="py-2 truncate">{member.nickname ?? "-"}</td>
+                      <td className="py-2">{member.join_dt ? new Date(member.join_dt).toLocaleDateString() : "-"}</td>
+                      <td className="py-2">{member.member_status ?? "-"}</td>
+                      <td className="py-2">{member.join_channel ?? "-"}</td>
+                      <td className="py-2">
+                        <select
+                          className="rounded border border-[#DDD] px-2 py-1 text-sm outline-none focus:border-black transition-colors"
+                          value={member.member_status ?? "NORMAL"}
+                          onChange={(event) => updateStatus(member.member_id, event.target.value)}
+                        >
+                          {statusOptions.map((status) => (
+                            <option key={status} value={status}>
+                              {status}
+                            </option>
+                          ))}
+                        </select>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          </section>
         )}
       </main>
     </div>
