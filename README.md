@@ -103,8 +103,3 @@ docker compose exec backend python scripts/migrate_profile_images_to_s3.py
 - S3에 업로드한 후
 - DB를 CDN URL로 업데이트합니다
 - Idempotent: 재실행해도 안전합니다
-
-
-graph.py 수정사항
-# DEBUG 로그입니다 후에 삭제할 에정 - ksu.
-라고표기함.
