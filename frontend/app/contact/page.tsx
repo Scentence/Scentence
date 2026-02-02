@@ -5,6 +5,7 @@ import Link from "next/link";
 import { useSession } from "next-auth/react";
 import Sidebar from "@/components/common/sidebar";
 import UserProfileMenu from "@/components/common/UserProfileMenu";
+import { motion } from "framer-motion";
 
 export default function ContactPage() {
     const { data: session } = useSession();
@@ -51,13 +52,6 @@ export default function ContactPage() {
     return (
         <div className="min-h-screen bg-[#FDFBF8] text-black font-sans relative selection:bg-black selection:text-white overflow-x-hidden flex flex-col">
             <style jsx global>{`
-                @keyframes marquee {
-                    0% { transform: translateX(0); }
-                    100% { transform: translateX(-50%); }
-                }
-                .animate-marquee {
-                    animation: marquee 20s linear infinite;
-                }
                 .hover-invert {
                     transition: all 0.3s cubic-bezier(0.16, 1, 0.3, 1);
                 }
@@ -75,9 +69,11 @@ export default function ContactPage() {
                 onClose={() => setIsSidebarOpen(false)}
                 context="home"
             />
-            {isSidebarOpen && (
-                <div className="fixed inset-0 bg-transparent z-40 md:hidden" onClick={() => setIsSidebarOpen(false)} />
-            )}
+            {
+                isSidebarOpen && (
+                    <div className="fixed inset-0 bg-transparent z-40 md:hidden" onClick={() => setIsSidebarOpen(false)} />
+                )
+            }
 
             {/* [HEADER UI: Profile + Hamburger] */}
             <div className="fixed top-0 right-0 z-50 py-5 px-6 md:px-10 flex items-center gap-4">
@@ -128,28 +124,41 @@ export default function ContactPage() {
             <main className="flex-1 pt-[100px] flex flex-col">
 
                 {/* [MARQUEE SECTION] */}
-                <div className="py-20 overflow-hidden relative border-b border-gray-200 bg-white">
-                    <div className="whitespace-nowrap animate-marquee flex items-center">
-                        <span className="text-8xl md:text-[10rem] font-black tracking-tighter text-transparent stroke-text px-10 opacity-10" style={{ WebkitTextStroke: "2px black" }}>
-                            GET IN TOUCH •
-                        </span>
-                        <span className="text-8xl md:text-[10rem] font-black tracking-tighter text-black px-10">
-                            CONTACT US •
-                        </span>
-                        <span className="text-8xl md:text-[10rem] font-black tracking-tighter text-transparent stroke-text px-10 opacity-10" style={{ WebkitTextStroke: "2px black" }}>
-                            SCENTENCE •
-                        </span>
-                        {/* Duplicate for infinite loop */}
-                        <span className="text-8xl md:text-[10rem] font-black tracking-tighter text-transparent stroke-text px-10 opacity-10" style={{ WebkitTextStroke: "2px black" }}>
-                            GET IN TOUCH •
-                        </span>
-                        <span className="text-8xl md:text-[10rem] font-black tracking-tighter text-black px-10">
-                            CONTACT US •
-                        </span>
-                        <span className="text-8xl md:text-[10rem] font-black tracking-tighter text-transparent stroke-text px-10 opacity-10" style={{ WebkitTextStroke: "2px black" }}>
-                            SCENTENCE •
-                        </span>
-                    </div>
+                <div className="py-20 overflow-hidden relative border-b border-gray-200 bg-white select-none">
+                    <motion.div
+                        className="flex whitespace-nowrap"
+                        animate={{ x: [0, "-50%"] }}
+                        transition={{
+                            duration: 25,
+                            repeat: Infinity,
+                            ease: "linear"
+                        }}
+                    >
+                        {/* FIRST SET */}
+                        <div className="flex items-center shrink-0">
+                            <span className="text-8xl md:text-[10rem] font-black tracking-tighter text-transparent opacity-10 px-6" style={{ WebkitTextStroke: "2px black" }}>
+                                GET IN TOUCH •
+                            </span>
+                            <span className="text-8xl md:text-[10rem] font-black tracking-tighter text-black px-6">
+                                CONTACT US •
+                            </span>
+                            <span className="text-8xl md:text-[10rem] font-black tracking-tighter text-transparent opacity-10 px-6" style={{ WebkitTextStroke: "2px black" }}>
+                                SCENTENCE •
+                            </span>
+                        </div>
+                        {/* SECOND SET (Identical) */}
+                        <div className="flex items-center shrink-0">
+                            <span className="text-8xl md:text-[10rem] font-black tracking-tighter text-transparent opacity-10 px-6" style={{ WebkitTextStroke: "2px black" }}>
+                                GET IN TOUCH •
+                            </span>
+                            <span className="text-8xl md:text-[10rem] font-black tracking-tighter text-black px-6">
+                                CONTACT US •
+                            </span>
+                            <span className="text-8xl md:text-[10rem] font-black tracking-tighter text-transparent opacity-10 px-6" style={{ WebkitTextStroke: "2px black" }}>
+                                SCENTENCE •
+                            </span>
+                        </div>
+                    </motion.div>
                 </div>
 
                 {/* [MAIN GRID] */}
@@ -216,8 +225,8 @@ export default function ContactPage() {
 
                 {/* [FOOTER with LOGO] */}
                 <div className="py-20 flex flex-col items-center justify-center bg-[#FDFBF8]">
-                    <div className="flex items-center gap-3 mb-2 opacity-50 hover:opacity-100 transition-opacity duration-500">
-                        <span className="text-xs font-medium tracking-widest text-[#888]">Since 2026 5S Company Team.</span>
+                    <div className="flex items-center gap-1 mb-2 opacity-50 hover:opacity-100 transition-opacity duration-500">
+                        <span className="text-xs font-medium tracking-widest text-[#888]">Since 2026 Team.</span>
                         {/* Permanently Skewed Logo */}
                         <img
                             src="/images/5s_logo_skewed.png"
@@ -225,11 +234,11 @@ export default function ContactPage() {
                             className="w-8 h-8 object-contain hover:scale-110 transition-transform duration-300"
                         />
                     </div>
-                    <p className="text-[10px] text-gray-300 font-mono mt-4">
+                    {/* <p className="text-[10px] text-gray-300 font-mono mt-4">
                         DESIGNED BY SCENTENCE
-                    </p>
+                    </p> */}
                 </div>
             </main>
-        </div>
+        </div >
     );
 }

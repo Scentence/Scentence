@@ -5,6 +5,7 @@ import Link from "next/link";
 import { useSession } from "next-auth/react";
 import Sidebar from "@/components/common/sidebar";
 import UserProfileMenu from "@/components/common/UserProfileMenu";
+import ImageCropperModal from './ImageCropperModal';
 
 interface ProfileData {
   member_id: string;
@@ -49,6 +50,8 @@ export default function MyPage() {
   const [currentPassword, setCurrentPassword] = useState("");
   const [newPassword, setNewPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
+  const [selectedFile, setSelectedFile] = useState<string | null>(null); // 자르기 전 원본 이미지 URL
+  const [isCropperOpen, setIsCropperOpen] = useState(false); // 모달 열림 여부
 
   const apiBaseUrl = process.env.NEXT_PUBLIC_API_URL || "";
   const resolvedProfileImageUrl = profileImageUrl
@@ -219,6 +222,41 @@ export default function MyPage() {
       setProfileMessage("회원정보 수정에 실패했습니다.");
     } finally {
       setIsSubmittingProfile(false);
+    }
+  };
+
+  // 크롭 완료 후 실행될 함수 (실제 업로드 로직)
+  const handleCropComplete = async (croppedBlob: Blob) => {
+    if (!memberId) return;
+    setIsUploadingImage(true);
+    setIsCropperOpen(false); // 모달 닫기
+
+    try {
+      const formData = new FormData();
+      // Blob을 File 객체로 변환해서 전송
+      const file = new File([croppedBlob], "profile_cropped.jpg", { type: "image/jpeg" });
+      formData.append("file", file);
+
+      const response = await fetch(`/api/users/profile/${memberId}/image`, {
+        method: "POST",
+        body: formData,
+      });
+
+      if (!response.ok) {
+        setProfileMessage("이미지 업로드에 실패했습니다.");
+        return;
+      }
+
+      const data = await response.json();
+      if (data?.profile_image_url) {
+        setProfileImageUrl(data.profile_image_url);
+        setProfileMessage("프로필 이미지가 변경되었습니다.");
+      }
+    } catch (error) {
+      setProfileMessage("오류가 발생했습니다.");
+    } finally {
+      setIsUploadingImage(false);
+      setSelectedFile(null); // 초기화
     }
   };
 
@@ -400,31 +438,17 @@ export default function MyPage() {
                 type="file"
                 accept="image/*"
                 className="hidden"
-                onChange={async (event) => {
-                  if (!memberId) return;
+                onChange={(event) => {
                   const file = event.target.files?.[0];
-                  if (!file) return;
-                  setIsUploadingImage(true);
-                  try {
-                    const formData = new FormData();
-                    formData.append("file", file);
-                    const response = await fetch(`/api/users/profile/${memberId}/image`, {
-                      method: "POST",
-                      body: formData,
+                  if (file) {
+                    // 파일을 읽어서 URL로 변환 후 모달 열기
+                    const reader = new FileReader();
+                    reader.addEventListener("load", () => {
+                      setSelectedFile(reader.result?.toString() || null);
+                      setIsCropperOpen(true);
                     });
-                    if (!response.ok) {
-                      const data = await response.json().catch(() => null);
-                      setProfileMessage(data?.detail || "이미지 업로드에 실패했습니다.");
-                      return;
-                    }
-                    const data = await response.json().catch(() => null);
-                    if (data?.profile_image_url) {
-                      setProfileImageUrl(data.profile_image_url);
-                    }
-                  } catch (error) {
-                    setProfileMessage("이미지 업로드에 실패했습니다.");
-                  } finally {
-                    setIsUploadingImage(false);
+                    reader.readAsDataURL(file);
+                    // 동일 파일 다시 선택 가능하도록 초기화
                     event.target.value = "";
                   }
                 }}
@@ -461,14 +485,14 @@ export default function MyPage() {
           </div>
 
           <div className="space-y-2">
-            <label htmlFor="subEmail" className="text-sm font-bold text-gray-700">보조 이메일</label>
+            <label htmlFor="subEmail" className="text-sm font-bold text-gray-700">복구 이메일 (선택)</label>
             <input
               id="subEmail"
               name="subEmail"
               type="email"
               value={subEmail}
               onChange={(event) => setSubEmail(event.target.value)}
-              placeholder="보조 이메일을 입력하세요"
+              placeholder="계정 복구용 이메일을 입력하세요"
               className="w-full rounded-xl border border-gray-200 px-4 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-black/10 transition-shadow"
             />
           </div>
@@ -699,6 +723,17 @@ export default function MyPage() {
           </button>
         </section>
       </main>
+      {/* [MODAL] 이미지 크롭퍼 모달 */}
+      {isCropperOpen && selectedFile && (
+        <ImageCropperModal
+          imageSrc={selectedFile}
+          onClose={() => {
+            setIsCropperOpen(false);
+            setSelectedFile(null);
+          }}
+          onCropComplete={handleCropComplete}
+        />
+      )}
     </div>
   );
 }

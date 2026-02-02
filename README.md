@@ -8,6 +8,20 @@ package.json에 추가했습니다.
 "@types/three": "^0.182.0",
 "@react-three/postprocessing": "^10.7.7",
 
+**26.02.02 의존성 설치**
+
+### 1. `lucide-react`
+- **용도**: 사이드바 메뉴(`sidebar.tsx`)의 직관적인 디자인을 위한 아이콘 라이브러리.
+- **적용**: Home, Sparkles, Layers, Map, BookOpen 등 고해상도 SVG 아이콘 사용.
+- **설치 명령어**: `npm install lucide-react`
+
+### 2. `framer-motion`
+- **용도**: 'Liquid Glass(리퀴드 글래스)' UI의 핵심인 3D 인터랙션과 애니메이션 구현.
+- **적용**:
+    - `useMotionValue`, `useSpring`, `useTransform`을 활용한 마우스 추적 3D 틸트 효과.
+    - 부드러운 호버 트랜지션 및 광택(Shine) 애니메이션.
+
+
 **실행에 문제있으시면**
 docker compose down 혹은 docker compose down -v로
 컨테이너를 삭제하고 docker compose up --build를 실행해주세요.
@@ -103,8 +117,3 @@ docker compose exec backend python scripts/migrate_profile_images_to_s3.py
 - S3에 업로드한 후
 - DB를 CDN URL로 업데이트합니다
 - Idempotent: 재실행해도 안전합니다
-
-
-graph.py 수정사항
-# DEBUG 로그입니다 후에 삭제할 에정 - ksu.
-라고표기함.

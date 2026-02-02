@@ -1,9 +1,10 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { useSession, signOut } from "next-auth/react";
+import { useSession } from "next-auth/react";
 import Link from "next/link";
 import { motion, AnimatePresence } from "framer-motion";
+import { Home, Sparkles, Layers, Map as MapIcon, BookOpen, Phone, Info } from "lucide-react";
 
 interface SidebarProps {
     isOpen: boolean;
@@ -11,22 +12,29 @@ interface SidebarProps {
     context: "home" | "chat";
 }
 
-// [MENU ITEM] Shared Style
-function MenuItem({ href, icon, title, desc, onClick, className = "" }: any) {
+// [MENU ITEM] Icon + Text + Glass Interaction
+function MenuItem({ href, icon: Icon, title, desc, onClick, className = "" }: any) {
     return (
         <Link
             href={href}
             onClick={onClick}
-            className={`flex items-center justify-between p-3 rounded-xl hover:bg-[#FDFBF8] transition-colors group ${className}`}
+            className={`flex items-center gap-4 py-3.5 px-6 hover:bg-white/10 transition-all duration-300 group rounded-xl ${className}`}
         >
+            {/* Icon with Glassy Glow */}
+            <div className="relative group-hover:scale-110 transition-transform duration-300">
+                <Icon strokeWidth={1.5} className="w-6 h-6 text-[#1a1a1a] group-hover:text-black transition-colors" />
+                <div className="absolute inset-0 bg-white/20 blur-md opacity-0 group-hover:opacity-100 transition-opacity" />
+            </div>
+
             <div className="flex flex-col">
-                <span className="text-lg font-bold text-[#1a1a1a] tracking-tight group-hover:tracking-wide transition-all duration-300">
+                <span className="text-lg font-bold text-[#1a1a1a] tracking-tight group-hover:tracking-widest transition-all duration-500 whitespace-nowrap">
                     {title}
                 </span>
-                {desc && <span className="text-[10px] text-gray-400 mt-0.5">{desc}</span>}
+                {desc && <span className="text-[10px] text-gray-500 mt-0.5">{desc}</span>}
             </div>
-            {/* Dot Indicator */}
-            <div className="w-1.5 h-1.5 rounded-full bg-black opacity-0 group-hover:opacity-100 transition-all transform scale-0 group-hover:scale-100" />
+
+            {/* Hidden Dot Indicator */}
+            <div className="ml-auto w-1.5 h-1.5 rounded-full bg-black opacity-0 group-hover:opacity-100 transition-all transform scale-0 group-hover:scale-100 shadow-[0_0_8px_rgba(0,0,0,0.1)]" />
         </Link>
     );
 }
@@ -34,11 +42,7 @@ function MenuItem({ href, icon, title, desc, onClick, className = "" }: any) {
 export default function Sidebar({ isOpen, onClose, context }: SidebarProps) {
     const { data: session } = useSession();
     const [localUser, setLocalUser] = useState<{ memberId?: string | null; email?: string | null; nickname?: string | null; roleType?: string | null; isAdmin?: boolean } | null>(null);
-    const [profileRoleType, setProfileRoleType] = useState<string | null>(null);
-    const [profileImageUrl, setProfileImageUrl] = useState<string | null>(null);
-    const apiBaseUrl = process.env.NEXT_PUBLIC_API_URL || "";
 
-    // [AUTH CHECK LOGIC]
     useEffect(() => {
         if (!isOpen) return;
         if (typeof window === "undefined") return;
@@ -47,28 +51,6 @@ export default function Sidebar({ isOpen, onClose, context }: SidebarProps) {
         try { setLocalUser(JSON.parse(stored)); } catch { setLocalUser(null); }
     }, [isOpen]);
 
-    useEffect(() => {
-        if (!isOpen) return;
-        if (typeof window === "undefined") return;
-        const memberId = session?.user?.id || localUser?.memberId;
-        if (!memberId) { setProfileImageUrl(null); return; }
-        fetch(`${apiBaseUrl}/users/profile/${memberId}`)
-            .then((res) => (res.ok ? res.json() : null))
-            .then((data) => {
-                if (data?.profile_image_url) {
-                    const url = data.profile_image_url.startsWith("http") ? data.profile_image_url : `${apiBaseUrl}${data.profile_image_url}`;
-                    setProfileImageUrl(url);
-                } else { setProfileImageUrl(null); }
-                if (data?.role_type) setProfileRoleType(data.role_type);
-            })
-            .catch(() => setProfileImageUrl(null));
-    }, [isOpen, localUser, session]);
-
-    const isLoggedIn = Boolean(session || localUser);
-    const resolvedRoleType = (localUser?.roleType || (localUser?.isAdmin ? "ADMIN" : "") || profileRoleType || "").toUpperCase();
-    const isAdmin = resolvedRoleType === "ADMIN";
-
-    // Outside Click Close
     const [ref, setRef] = useState<HTMLDivElement | null>(null);
     useEffect(() => {
         function handleClickOutside(event: MouseEvent) {
@@ -80,33 +62,31 @@ export default function Sidebar({ isOpen, onClose, context }: SidebarProps) {
         return () => { document.removeEventListener("mousedown", handleClickOutside); };
     }, [isOpen, ref, onClose]);
 
-    // [ANIMATION VARIANTS] Staggered Children
+    // [ANIMATION VARIANTS] EC2 빌드 에러 방지를 위해 'as const' 추가 - ksu.
     const containerVariants = {
-        hidden: { opacity: 0 },
+        hidden: { opacity: 0, x: 20 },
         show: {
-            opacity: 1,
-            transition: {
-                staggerChildren: 0.1, // 카드 간 시간차 등장
-                delayChildren: 0.05
-            }
+            opacity: 1, x: 0,
+            transition: { type: "spring", stiffness: 300, damping: 30, staggerChildren: 0.1 }
         },
-        exit: {
-            opacity: 0,
-            transition: { staggerChildren: 0.05, staggerDirection: -1 }
-        }
-    };
+        exit: { opacity: 0, x: 20, transition: { duration: 0.2 } }
+    } as const;
 
+    // 애니메이션 속성 타입 고정을 위해 'as const' 적용 - ksu.
     const cardVariants = {
-        hidden: { opacity: 0, y: -20, scale: 0.95 },
-        show: {
-            opacity: 1, y: 0, scale: 1,
-            transition: { duration: 0.4, ease: [0.33, 1, 0.68, 1] }
-        },
-        exit: {
-            opacity: 0, y: -10, scale: 0.95,
-            transition: { duration: 0.2 }
-        }
-    };
+        hidden: { opacity: 0, y: 10, scale: 0.95 },
+        show: { opacity: 1, y: 0, scale: 1 },
+        exit: { opacity: 0, y: 10, scale: 0.95 }
+    } as const;
+
+    // [HYPER-REALISTIC LIQUID GLASS BLOCK]
+    // 1. Specular Highlights: Multiple inset shadows for the sharp rim and surface sheen.
+    // 2. Volumetric Depth: Bottom inset shadow to simulate the glass meniscus.
+    // 3. Clarity: Minimal background color with high-intensity blur.
+    const liquidGlassBlock = "bg-gradient-to-br from-white/[0.08] to-transparent backdrop-blur-[16px] border border-white/40 shadow-[inset_0_1px_1px_rgba(255,255,255,0.9),inset_0_15px_30px_rgba(255,255,255,0.15),inset_0_-2px_10px_rgba(0,0,0,0.05),0_20px_40px_-10px_rgba(0,0,0,0.2)] overflow-hidden rounded-[36px]";
+
+    // [OBSIDIAN LIQUID GLASS BLOCK]
+    const obsidianGlassBlock = "bg-gradient-to-br from-black/80 to-black/40 backdrop-blur-[20px] border border-white/10 shadow-[inset_0_1px_1px_rgba(255,255,255,0.3),inset_0_10px_20px_rgba(255,255,255,0.05),inset_0_-2px_10px_rgba(0,0,0,0.5),0_20px_40px_-5px_rgba(0,0,0,0.4)] overflow-hidden rounded-[32px]";
 
     return (
         <AnimatePresence>
@@ -114,52 +94,47 @@ export default function Sidebar({ isOpen, onClose, context }: SidebarProps) {
                 <>
                     <div className="fixed inset-0 z-40 bg-transparent" />
 
-                    {/* [CHUNK LAYOUT] Crazy Sensational Stacks */}
                     <motion.div
                         ref={setRef}
-                        className="fixed top-20 right-6 z-50 w-[280px] flex flex-col gap-3"
+                        className="fixed top-24 right-8 z-50 w-[300px] flex flex-col gap-5"
                         variants={containerVariants}
                         initial="hidden"
                         animate="show"
                         exit="exit"
                     >
-
-
-
-
-                        {/* --- CHUNK 1: HOME (Separated) --- */}
-                        <motion.div variants={cardVariants} className="bg-white/80 backdrop-blur-xl rounded-[2rem] p-1.5 shadow-2xl border border-white/40 overflow-hidden">
-                            <MenuItem href="/" title="HOME" desc="메인 홈으로" onClick={onClose} />
+                        {/* --- CHUNK 1: HOME --- */}
+                        <motion.div variants={cardVariants} className={`${liquidGlassBlock} p-1`}>
+                            <MenuItem href="/" icon={Home} title="첫 화면" onClick={onClose} />
                         </motion.div>
 
-                        {/* --- CHUNK 3: CORE FEATURES (Sensational) --- */}
-                        <motion.div variants={cardVariants} className="bg-white/80 backdrop-blur-xl rounded-[2rem] p-1.5 shadow-2xl border border-white/40 overflow-hidden">
-                            <div className="flex flex-col gap-1">
-                                <MenuItem href="/chat" title="SCENT CURATOR" desc="AI 향수 추천" onClick={onClose} />
-                                <MenuItem href="/layering" title="MIX & MATCH" desc="향기 레이어링" onClick={onClose} />
-                                <MenuItem href="/perfume-network/nmap" title="PERFUME MAP" desc="향수 시각화 지도" onClick={onClose} />
-                                <MenuItem href="/perfume-wiki" title="PERFUME WIKI" desc="향수 백과사전" onClick={onClose} />
+                        {/* --- CHUNK 2: CORE FEATURES (The Big Glass Square) --- */}
+                        <motion.div variants={cardVariants} className={`${liquidGlassBlock} p-1`}>
+                            <div className="flex flex-col divide-y divide-black/5">
+                                <MenuItem href="/chat" icon={Sparkles} title="향수 추천" onClick={onClose} />
+                                <MenuItem href="/layering" icon={Layers} title="향수 레이어링" onClick={onClose} />
+                                <MenuItem href="/perfume-network/nmap" icon={MapIcon} title="향수 지도" onClick={onClose} />
+                                <MenuItem href="/perfume-wiki" icon={BookOpen} title="향수 백과" onClick={onClose} />
                             </div>
                         </motion.div>
 
-
-
-                        {/* --- CHUNK 5: FOOTER (Brand & Contact) --- */}
-                        <motion.div variants={cardVariants} className="bg-black text-white rounded-[2rem] p-5 shadow-2xl flex flex-col gap-4">
+                        {/* --- CHUNK 3: FOOTER (Obsidian Glass) --- */}
+                        <motion.div variants={cardVariants} className={`${obsidianGlassBlock} p-6 flex flex-col gap-4`}>
                             <Link href="/contact" onClick={onClose} className="flex items-center justify-between group">
-                                <span className="text-xs font-bold tracking-[0.2em] text-gray-400 group-hover:text-white transition-colors">CONTACT US</span>
-                                <span className="w-2 h-2 rounded-full bg-red-500 shadow-[0_0_10px_rgba(239,68,68,0.8)] group-hover:bg-green-500 group-hover:shadow-[0_0_10px_rgba(34,197,94,0.8)] transition-all duration-300" />
+                                <span className="text-xs font-bold tracking-[0.2em] text-gray-400 group-hover:text-white transition-colors">CONTACT</span>
+                                {/* 살아있는 레드 도트 (Pulse 애니메이션) */}
+                                <span className="relative flex h-2 w-2">
+                                    <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-red-400 opacity-75"></span>
+                                    <span className="relative inline-flex rounded-full h-2 w-2 bg-red-500 shadow-[0_0_8px_rgba(239,68,68,0.8)] group-hover:bg-green-500 transition-all"></span>
+                                </span>
                             </Link>
 
-                            <div className="h-px bg-white/10" />
+                            <div className="h-px bg-white/5" />
 
-                            <Link href="/about" onClick={onClose} className="cursor-pointer group">
-                                <p className="text-[10px] text-gray-500 mb-1">About.</p>
-                                <div className="flex items-center justify-between">
-                                    <span className="text-sm font-black tracking-tighter group-hover:tracking-widest transition-all duration-500">SCENTENCE</span>
-                                    <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor" className="w-4 h-4 opacity-0 group-hover:opacity-100 -translate-x-2 group-hover:translate-x-0 transition-all duration-300">
-                                        <path strokeLinecap="round" strokeLinejoin="round" d="M13.5 4.5L21 12m0 0l-7.5 7.5M21 12H3" />
-                                    </svg>
+                            <Link href="/about" onClick={onClose} className="cursor-pointer group flex flex-col items-start mt-1 gap-0.5">
+                                <p className="text-[10px] text-white/40 font-medium leading-none">About.</p>
+                                <div className="flex items-center justify-between w-full">
+                                    <span className="text-sm font-black tracking-[0.05em] text-gray-300 group-hover:tracking-[0.2em] group-hover:text-white transition-all duration-500">SCENTENCE</span>
+                                    <span className="text-xl font-black text-gray-500 group-hover:text-white transition-all duration-500 transform rotate-90 group-hover:rotate-0 opacity-50 group-hover:opacity-100 mr-1">!</span>
                                 </div>
                             </Link>
                         </motion.div>
