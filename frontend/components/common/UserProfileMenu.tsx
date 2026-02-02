@@ -3,7 +3,7 @@
 import { useEffect, useState } from "react";
 import { useSession, signOut } from "next-auth/react";
 import Link from "next/link";
-import { motion, AnimatePresence } from "framer-motion";
+import { motion, AnimatePresence, Variants } from "framer-motion";
 
 interface UserProfileMenuProps {
     isOpen: boolean;
@@ -80,11 +80,11 @@ export default function UserProfileMenu({ isOpen, onClose }: UserProfileMenuProp
     const handleOverlayClick = () => onClose();
 
     // [ANIMATION VARIANTS]
-    const containerVariants = {
+    const containerVariants: Variants = {
         hidden: { opacity: 0, scale: 0.95, y: -10 },
         show: {
             opacity: 1, scale: 1, y: 0,
-            transition: { type: "spring", stiffness: 300, damping: 30 }
+            transition: { type: "spring" as const, stiffness: 300, damping: 30 }
         },
         exit: { opacity: 0, scale: 0.95, y: -10, transition: { duration: 0.2 } }
     };
