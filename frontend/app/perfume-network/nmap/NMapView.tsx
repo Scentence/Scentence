@@ -61,7 +61,7 @@ export default function NMapView({ sessionUserId }: { sessionUserId?: string | n
       }
       return newAccords;
     });
-    
+
     // 상태 업데이트 반영을 위해 약간의 지연 후 로깅하거나, 
     // 혹은 직접 계산된 값을 전달하여 정확한 데이터를 서버에 전송합니다.
     setTimeout(() => {
@@ -72,7 +72,7 @@ export default function NMapView({ sessionUserId }: { sessionUserId?: string | n
   const isLoading = status === "전체 데이터 로드 중..." || status === "대기 중";
 
   return (
-    <div className="min-h-screen bg-[#F5F2EA] text-[#1F1F1F] relative overflow-x-hidden">
+    <div className="min-h-screen bg-[#FDFBF8] text-black relative overflow-x-hidden">
       <div className={`max-w-7xl mx-auto px-6 py-12 space-y-12 transition-all duration-500 ${showCardModal && generatedCard ? 'mr-[440px]' : ''}`}>
         <NMapHeader />
 
@@ -135,7 +135,7 @@ export default function NMapView({ sessionUserId }: { sessionUserId?: string | n
                 </div>
                 <h3 className="text-xl font-bold text-[#2E2B28] mb-2">향수 정보를 불러오는 중...</h3>
                 <p className="text-sm text-[#7A6B57] text-center max-w-md">
-                  수천 개의 향수 데이터를 분석하고 있어요.<br/>
+                  수천 개의 향수 데이터를 분석하고 있어요.<br />
                   잠시만 기다려주세요! 🌸
                 </p>
                 <div className="mt-8 flex gap-2">

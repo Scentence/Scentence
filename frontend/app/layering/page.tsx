@@ -8,6 +8,7 @@ import { BACKEND_ACCORDS, ACCORD_LABELS } from "@/lib/accords";
 import LayeringPerfumePicker from "@/components/layering/LayeringPerfumePicker"; // 내 향수 불러오기
 import PerfumeInfoModal from "@/components/layering/PerfumeInfoModal";
 import Sidebar from "@/components/common/sidebar";
+import UserProfileMenu from "@/components/common/UserProfileMenu";
 import LayeringPerfumeSearchModal from "@/components/layering/LayeringPerfumeSearchModal";
 
 // ==================== 타입 정의 ====================
@@ -401,6 +402,7 @@ export default function LayeringPage() {
 
   // ==================== [NEW] 전역 헤더 및 프로필 상태 ====================
   const [isNavOpen, setIsNavOpen] = useState(false);
+  const [isProfileMenuOpen, setIsProfileMenuOpen] = useState(false);
   const [localUser, setLocalUser] = useState<any>(null);
   const [profileImageUrl, setProfileImageUrl] = useState<string | null>(null);
 
@@ -443,7 +445,7 @@ export default function LayeringPage() {
     }
   }, [session, localUser?.memberId]);
 
-  const displayName = session?.user?.name || localUser?.userName || "사용자";
+  const displayName = session?.user?.name || localUser?.nickname || localUser?.email?.split('@')[0] || "Guest";
   const isLoggedIn = !!(session || localUser);
 
   /**
@@ -953,45 +955,49 @@ export default function LayeringPage() {
         />
       )}
 
-      {/* [STANDARD HEADER] 메인 페이지(app/page.tsx)와 100% 동일한 구조 및 디자인 적용 */}
-      <header className="fixed top-0 left-0 right-0 z-50 flex items-center justify-between px-5 py-4 bg-[#FDFBF8] border-b border-[#F0F0F0]">
-        {/* 로고 영역: font-bold, text-black, tracking-tight (표준) */}
-        <Link href="/" className="text-xl font-bold tracking-tight text-black">
-          Scentence
-        </Link>
+      {/* [STANDARD HEADER] Perfume Wiki와 동일한 스펙 (z-30, hover effect) */}
+      <header className="fixed top-0 left-0 right-0 z-30 flex items-center justify-between px-6 md:px-10 py-5 bg-[#FDFBF8] border-b border-[#F0F0F0]">
+        {/* 로고 영역: Wiki와 동일하게 div로 감싸 구조 통일 */}
+        <div className="flex items-center gap-4">
+          <Link href="/" className="text-lg font-bold text-black tracking-[0.15em] uppercase hover:opacity-70 transition">
+            SCENTENCE
+          </Link>
+        </div>
 
         {/* 우측 상단 UI: 로그인 상태 및 사이드바 토글 버튼 (표준) */}
+        {/* 우측 상단 UI: Perfume Wiki와 동일하게 통일 */}
         <div className="flex items-center gap-4">
           {!isLoggedIn ? (
-            // 비로그인 상태 UI
             <div className="flex items-center gap-2 text-sm font-medium text-gray-400">
               <Link href="/login" className="hover:text-black transition-colors">Sign in</Link>
               <span className="text-gray-300">|</span>
               <Link href="/signup" className="hover:text-black transition-colors">Sign up</Link>
             </div>
           ) : (
-            // 로그인 상태 UI: 이름과 프로필 이미지
             <div className="flex items-center gap-3">
-              <span className="text-sm font-bold text-gray-800 hidden sm:block">
-                {displayName}님 반가워요!
-              </span>
-              <Link href="/mypage" className="block w-9 h-9 rounded-full overflow-hidden border border-gray-100 shadow-sm hover:opacity-80 transition-opacity">
+              <button
+                id="profile-menu-toggle"
+                onClick={() => setIsProfileMenuOpen(!isProfileMenuOpen)}
+                className="block w-9 h-9 rounded-full overflow-hidden border border-gray-100 shadow-sm hover:opacity-80 transition-opacity"
+              >
                 <img
                   src={profileImageUrl || "/default_profile.png"}
                   alt="Profile"
                   className="w-full h-full object-cover"
                   onError={(e) => { e.currentTarget.src = "/default_profile.png"; }}
                 />
-              </Link>
+              </button>
+              <UserProfileMenu
+                isOpen={isProfileMenuOpen}
+                onClose={() => setIsProfileMenuOpen(false)}
+              />
             </div>
           )}
 
-          {/* 글로벌 내비게이션 토글 버튼 (px-5 py-4 패딩 및 w-8 h-8 규격 준수) */}
-          {/* 글로벌 내비게이션 토글 버튼 (px-5 py-4 패딩 및 w-8 h-8 규격 준수) */}
           <button
             id="global-menu-toggle"
             onClick={() => setIsNavOpen(!isNavOpen)}
-            className="p-1 rounded-md hover:bg-gray-100 transition-colors"
+            className="w-9 h-9 flex items-center justify-center rounded-full hover:bg-gray-100 transition-colors"
           >
             {isNavOpen ? (
               <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" className="w-8 h-8 text-[#555]">

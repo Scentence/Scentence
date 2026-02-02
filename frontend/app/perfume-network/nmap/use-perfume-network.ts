@@ -1,10 +1,10 @@
 import { useState, useEffect, useMemo, useRef } from "react";
-import { 
-  NetworkPayload, 
-  LabelsData, 
-  FilterOptions, 
-  NetworkNode, 
-  NetworkEdge 
+import {
+  NetworkPayload,
+  LabelsData,
+  FilterOptions,
+  NetworkNode,
+  NetworkEdge
 } from "./types";
 import { API_CONFIG, GRAPH_CONFIG } from "../config";
 
@@ -24,7 +24,7 @@ export function usePerfumeNetwork(sessionUserId?: string | number) {
     genders: [],
   });
   const [status, setStatus] = useState("대기 중");
-  
+
   // 클라이언트 사이드 필터링 파라미터
   const [minSimilarity, setMinSimilarity] = useState<number>(
     GRAPH_CONFIG.MIN_SIMILARITY_DEFAULT
@@ -32,7 +32,7 @@ export function usePerfumeNetwork(sessionUserId?: string | number) {
   const [topAccords, setTopAccords] = useState<number>(
     GRAPH_CONFIG.TOP_ACCORDS_DEFAULT
   );
-  
+
   const [selectedAccords, setSelectedAccords] = useState<string[]>(DEFAULT_ACCORDS);
   const [selectedBrands, setSelectedBrands] = useState<string[]>([]);
   const [selectedSeasons, setSelectedSeasons] = useState<string[]>([]);
@@ -58,7 +58,7 @@ export function usePerfumeNetwork(sessionUserId?: string | number) {
   const [isSavingCard, setIsSavingCard] = useState(false);
   const [saveSuccess, setSaveSuccess] = useState(false);
 
-      // 1. 로그인 정보 로드
+  // 1. 로그인 정보 로드
   useEffect(() => {
     if (sessionUserId) {
       setMemberId(String(sessionUserId));
@@ -102,7 +102,7 @@ export function usePerfumeNetwork(sessionUserId?: string | number) {
           try {
             const parsed = JSON.parse(storedAuth);
             if (parsed.mbti) userMbti = parsed.mbti;
-          } catch (e) {}
+          } catch (e) { }
         }
 
         // 새 세션 생성
@@ -169,7 +169,7 @@ export function usePerfumeNetwork(sessionUserId?: string | number) {
           }),
         }
       );
-      
+
       if (response.ok) {
         const result = await response.json();
         console.log("[Activity Log] Server Response:", result);
@@ -190,16 +190,16 @@ export function usePerfumeNetwork(sessionUserId?: string | number) {
     setShowCardTrigger(false);
     setIsGeneratingCard(true);
     setError(null);
-    
+
     try {
       // 로컬 스토리지에서 MBTI 정보 획득
-      let userMbti = "INFJ"; 
+      let userMbti = "INFJ";
       const storedAuth = localStorage.getItem("localAuth");
       if (storedAuth) {
         try {
           const parsed = JSON.parse(storedAuth);
           if (parsed.mbti) userMbti = parsed.mbti;
-        } catch (e) {}
+        } catch (e) { }
       }
 
       // 현재 그래프 가시 영역 향수 ID 리스트 추출
@@ -230,7 +230,7 @@ export function usePerfumeNetwork(sessionUserId?: string | number) {
         method: "POST",
         headers: { "Content-Type": "application/json" },
       });
-      
+
       if (response.ok) {
         const data = await response.json();
         if (!data.card) throw new Error("카드 데이터가 없습니다.");
@@ -251,7 +251,7 @@ export function usePerfumeNetwork(sessionUserId?: string | number) {
 
         // 카드 생성 후 트리거 상태 초기화 (다시 만들기 준비)
         setCardTriggerReady(false);
-        setInteractionCount(0); 
+        setInteractionCount(0);
       } else {
         const errData = await response.json().catch(() => ({ detail: "알 수 없는 오류" }));
         setError(errData.detail || "카드 생성에 실패했습니다.");
@@ -305,15 +305,15 @@ export function usePerfumeNetwork(sessionUserId?: string | number) {
   useEffect(() => {
     const fetchLabels = async () => {
       try {
-        const res = await fetch(`${API_BASE}/labels`);
+        const res = await fetch(`${API_BASE}/scentmap/labels`);
         if (res.ok) setLabelsData(await res.json());
-      } catch (e) {}
+      } catch (e) { }
     };
     const fetchFilters = async () => {
       try {
-        const res = await fetch(`${API_BASE}/nmap/filter-options`);
+        const res = await fetch(`${API_BASE}/scentmap/nmap/filter-options`);
         if (res.ok) setFilterOptions(await res.json());
-      } catch (e) {}
+      } catch (e) { }
     };
     fetchLabels();
     fetchFilters();
@@ -323,7 +323,7 @@ export function usePerfumeNetwork(sessionUserId?: string | number) {
   const requestUrl = useMemo(() => {
     const params = new URLSearchParams({ min_similarity: "0.0", top_accords: "5" });
     if (memberId) params.set("member_id", memberId);
-    return `${API_BASE}/nmap/perfumes?${params.toString()}`;
+    return `${API_BASE}/scentmap/nmap/perfumes?${params.toString()}`;
   }, [memberId]);
 
   useEffect(() => {

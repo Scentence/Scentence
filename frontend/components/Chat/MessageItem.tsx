@@ -221,6 +221,10 @@ const MessageItem = ({ message }: { message: Message }) => {
                 - max-w-[90%]: 모바일에서 화면의 90%까지 시원하게 차지
                 - md:max-w-[80%]: 데스크탑에서는 너무 길어지지 않게 80% 정도로 제한 (가독성 최적화)
             */}
+            {/* [수정 가이드] 말풍선 너비 조절
+                - max-w-[90%]: 모바일에서 화면의 90%까지 시원하게 차지
+                - md:max-w-[80%]: 데스크탑에서는 너무 길어지지 않게 80% 정도로 제한 (가독성 최적화)
+            */}
             <div className={`max-w-[90%] md:max-w-[80%] rounded-2xl px-5 py-4 text-sm leading-relaxed shadow-sm ${message.role === "user"
                 ? "bg-[#E5E4DE] text-[#393939]"
                 : "bg-white text-[#393939] border border-[#E5E4DE]"
