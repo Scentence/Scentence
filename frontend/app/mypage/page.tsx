@@ -54,8 +54,13 @@ export default function MyPage() {
   const [isCropperOpen, setIsCropperOpen] = useState(false); // 모달 열림 여부
 
   const apiBaseUrl = process.env.NEXT_PUBLIC_API_URL || "";
+
+  // [이미지 경로 결정 로직]
+  // 1. 이미 http로 시작하는 전체 경로(S3, 카카오 등)라면 그대로 사용합니다.
+  // 2. /uploads/로 시작하는 상대 경로라면, 도메인을 붙이지 않고 그대로 사용합니다. (Next.js rewrites 활용)
+  // 3. 사진이 없는 경우 기본 이미지를 보여줍니다.
   const resolvedProfileImageUrl = profileImageUrl
-    ? profileImageUrl.startsWith("http")
+    ? (profileImageUrl.startsWith("http") || profileImageUrl.startsWith("/uploads"))
       ? profileImageUrl
       : `${apiBaseUrl}${profileImageUrl}`
     : "/default_profile.png";

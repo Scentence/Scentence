@@ -11,6 +11,7 @@ import PerfumeDetailModal from "@/components/archives/PerfumeDetailModal";
 import HistoryModal from '@/components/archives/HistoryModal';
 import ArchiveGlobeView from "@/components/archives/ArchiveGlobeView";
 import NavSidebar from "@/components/common/sidebar"; // <--- 전역 내비게이션 추가
+import UserProfileMenu from "@/components/common/UserProfileMenu"; // <--- 프로필 메뉴 추가
 import { SavedPerfumesProvider } from "@/contexts/SavedPerfumesContext";
 
 const API_URL = "/api";
@@ -40,6 +41,7 @@ export default function ArchivesPage() {
     const [activeTab, setActiveTab] = useState<TabType>('ALL');
     const [isSidebarOpen, setIsSidebarOpen] = useState(false);
     const [isNavOpen, setIsNavOpen] = useState(false); // <--- 우측 내비게이션 상태
+    const [isProfileMenuOpen, setIsProfileMenuOpen] = useState(false); // <--- 프로필 메뉴 상태 추가
     const [isSearchOpen, setIsSearchOpen] = useState(false);
     const [isKorean, setIsKorean] = useState(true);
     const [isHistoryOpen, setIsHistoryOpen] = useState(false);
@@ -110,10 +112,14 @@ export default function ArchivesPage() {
             .then((res) => (res.ok ? res.json() : null))
             .then((data) => {
                 if (data?.profile_image_url) {
-                    const url = data.profile_image_url.startsWith("http")
-                        ? data.profile_image_url
-                        : `${apiBaseUrl}${data.profile_image_url}`;
-                    setProfileImageUrl(url);
+                    // [이미지 경로 함정 방지 로직]
+                    // 전체 경로(http)나 프록시 경로(/uploads)는 그대로 사용하고,
+                    // 그 외의 경우에만 도메인을 결합하여 사진 깨짐을 방지합니다.
+                    const rawUrl = data.profile_image_url;
+                    const finalUrl = (rawUrl.startsWith("http") || rawUrl.startsWith("/uploads"))
+                        ? rawUrl
+                        : `${apiBaseUrl}${rawUrl}`;
+                    setProfileImageUrl(finalUrl);
                 }
             })
             .catch(() => setProfileImageUrl(null));
@@ -227,48 +233,51 @@ export default function ArchivesPage() {
                     context="home"
                 />
 
-                <ArchiveSidebar isOpen={isSidebarOpen} onClose={() => setIsSidebarOpen(false)} />
-                {isSidebarOpen && <div className="fixed inset-0 bg-black/20 z-40 backdrop-blur-sm" onClick={() => setIsSidebarOpen(false)} />}
+                {/* [HEADER] Perfume Wiki와 100% 동일한 디자인 적용 */}
+                <header className="fixed top-0 left-0 right-0 z-30 flex items-center justify-between px-6 md:px-10 py-5 bg-[#FDFBF8] border-b border-[#F0F0F0]">
+                    <div className="flex items-center gap-4">
+                        <Link href="/" className="text-lg font-bold text-black tracking-[0.15em] uppercase hover:opacity-70 transition">
+                            SCENTENCE
+                        </Link>
+                        {/* [추가] Perfume Wiki 스타일의 보조 라벨 */}
+                        <span className="text-xs font-semibold text-[#8C6A1D] tracking-[0.3em] uppercase border-l border-gray-300 pl-4 hidden sm:block">
+                            My Gallery
+                        </span>
+                    </div>
 
-                {/* [STANDARD HEADER] 메인 페이지(app/page.tsx)와 100% 동일한 구조 및 디자인 적용 */}
-                <header className="fixed top-0 left-0 right-0 z-50 flex items-center justify-between px-5 py-4 bg-[#FDFBF8] border-b border-[#F0F0F0]">
-                    {/* 로고 영역: font-bold, text-black, tracking-tight (표준) */}
-                    <Link href="/" className="text-xl font-bold tracking-tight text-black">
-                        Scentence
-                    </Link>
-
-                    {/* 우측 상단 UI: 로그인 상태 및 사이드바 토글 버튼 (표준) */}
+                    {/* 우측 상단 UI: Perfume Wiki 규격 준수 */}
                     <div className="flex items-center gap-4">
                         {!isLoggedIn ? (
-                            // 비로그인 상태 UI
                             <div className="flex items-center gap-2 text-sm font-medium text-gray-400">
                                 <Link href="/login" className="hover:text-black transition-colors">Sign in</Link>
                                 <span className="text-gray-300">|</span>
                                 <Link href="/signup" className="hover:text-black transition-colors">Sign up</Link>
                             </div>
                         ) : (
-                            // 로그인 상태 UI: 이름과 프로필 이미지
                             <div className="flex items-center gap-3">
-                                <span className="text-sm font-bold text-gray-800 hidden sm:block">
-                                    {displayName}님 반가워요!
-                                </span>
-                                <Link href="/mypage" className="block w-9 h-9 rounded-full overflow-hidden border border-gray-100 shadow-sm hover:opacity-80 transition-opacity">
+                                <button
+                                    id="profile-menu-toggle"
+                                    onClick={() => setIsProfileMenuOpen(!isProfileMenuOpen)}
+                                    className="block w-9 h-9 rounded-full overflow-hidden border border-gray-100 shadow-sm hover:opacity-80 transition-opacity"
+                                >
                                     <img
                                         src={profileImageUrl || "/default_profile.png"}
                                         alt="Profile"
                                         className="w-full h-full object-cover"
                                         onError={(e) => { e.currentTarget.src = "/default_profile.png"; }}
                                     />
-                                </Link>
+                                </button>
+                                <UserProfileMenu
+                                    isOpen={isProfileMenuOpen}
+                                    onClose={() => setIsProfileMenuOpen(false)}
+                                />
                             </div>
                         )}
 
-                        {/* 글로벌 내비게이션 토글 버튼 (px-5 py-4 패딩 및 w-8 h-8 규격 준수) */}
-                        {/* 글로벌 내비게이션 토글 버튼 (px-5 py-4 패딩 및 w-8 h-8 규격 준수) */}
                         <button
                             id="global-menu-toggle"
                             onClick={() => setIsNavOpen(!isNavOpen)}
-                            className="p-1 rounded-md hover:bg-gray-100 transition-colors"
+                            className="w-9 h-9 flex items-center justify-center rounded-full hover:bg-gray-100 transition-colors"
                         >
                             {isNavOpen ? (
                                 <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" className="w-8 h-8 text-[#555]">

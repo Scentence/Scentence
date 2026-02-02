@@ -46,15 +46,23 @@ export default function LandingPage() {
     fetch(`${apiBaseUrl}/users/profile/${memberId}`)
       .then((res) => (res.ok ? res.json() : null))
       .then((data) => {
-        // 가져온 데이터에 닉네임이 있으면 저장하기
+        // [사용자 정보 업데이트] 가져온 데이터에 닉네임이 있으면 저장하기
         if (data?.nickname) {
           setProfileNickname(data.nickname);
         }
+
+        // [프로필 이미지 경로 처리 로직]
+        // 1. 이미 http로 시작하는 전체 경로(S3, 카카오 등)라면 그대로 사용합니다.
+        // 2. /uploads/로 시작하는 상대 경로라면, 도메인을 붙이지 않고 그대로 사용합니다.
+        //    (Next.js의 rewrites 설정 덕분에 브라우저가 알아서 현재 서버의 백엔드로 요청을 보냅니다.)
+        // 3. 이를 통해 'localhost'가 코드에 박히는 현상을 방지하여 팀원들 PC에서도 사진이 잘 나오게 합니다.
         if (data?.profile_image_url) {
-          const url = data.profile_image_url.startsWith("http")
-            ? data.profile_image_url
-            : `${apiBaseUrl}${data.profile_image_url}`;
-          setProfileImageUrl(url);
+          const rawUrl = data.profile_image_url;
+          const finalUrl = (rawUrl.startsWith("http") || rawUrl.startsWith("/uploads"))
+            ? rawUrl
+            : `${apiBaseUrl}${rawUrl}`;
+
+          setProfileImageUrl(finalUrl);
         }
       })
       .catch(() => setProfileImageUrl(null));

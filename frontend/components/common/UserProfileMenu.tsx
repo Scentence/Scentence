@@ -85,16 +85,17 @@ export default function UserProfileMenu({ isOpen, onClose }: UserProfileMenuProp
 
     // [ANIMATION VARIANTS]
     const containerVariants: Variants = {
-        hidden: { opacity: 0, scale: 0.95, y: -10 },
+        hidden: { opacity: 0, scale: 0.95, y: -10, backdropFilter: "blur(0px)" },
         show: {
             opacity: 1, scale: 1, y: 0,
+            backdropFilter: "blur(16px)", // 서서히 흐려지도록 추가
             transition: { type: "spring" as const, stiffness: 300, damping: 30 }
         },
-        exit: { opacity: 0, scale: 0.95, y: -10, transition: { duration: 0.2 } }
+        exit: { opacity: 0, scale: 0.95, y: -10, backdropFilter: "blur(0px)", transition: { duration: 0.2 } }
     };
 
     // [HYPER-REALISTIC LIQUID GLASS BLOCK]
-    const liquidGlassBlock = "bg-gradient-to-br from-white/[0.08] to-transparent backdrop-blur-[16px] border border-white/40 shadow-[inset_0_1px_1px_rgba(255,255,255,0.9),inset_0_15px_30px_rgba(255,255,255,0.15),inset_0_-2px_10px_rgba(0,0,0,0.05),0_20px_40px_-10px_rgba(0,0,0,0.2)] overflow-hidden rounded-[32px]";
+    const liquidGlassBlock = "bg-gradient-to-br from-white/[0.08] to-transparent border border-white/40 shadow-[inset_0_1px_1px_rgba(255,255,255,0.9),inset_0_15px_30px_rgba(255,255,255,0.15),inset_0_-2px_10px_rgba(0,0,0,0.05),0_20px_40px_-10px_rgba(0,0,0,0.2)] overflow-hidden rounded-[32px]";
 
     return (
         <AnimatePresence>
