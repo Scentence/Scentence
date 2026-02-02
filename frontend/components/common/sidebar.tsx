@@ -62,6 +62,7 @@ export default function Sidebar({ isOpen, onClose, context }: SidebarProps) {
         return () => { document.removeEventListener("mousedown", handleClickOutside); };
     }, [isOpen, ref, onClose]);
 
+    // [ANIMATION VARIANTS] EC2 빌드 에러 방지를 위해 'as const' 추가 - ksu.
     const containerVariants = {
         hidden: { opacity: 0, x: 20 },
         show: {
@@ -69,13 +70,14 @@ export default function Sidebar({ isOpen, onClose, context }: SidebarProps) {
             transition: { type: "spring", stiffness: 300, damping: 30, staggerChildren: 0.1 }
         },
         exit: { opacity: 0, x: 20, transition: { duration: 0.2 } }
-    };
+    } as const;
 
+    // 애니메이션 속성 타입 고정을 위해 'as const' 적용 - ksu.
     const cardVariants = {
         hidden: { opacity: 0, y: 10, scale: 0.95 },
         show: { opacity: 1, y: 0, scale: 1 },
         exit: { opacity: 0, y: 10, scale: 0.95 }
-    };
+    } as const;
 
     // [HYPER-REALISTIC LIQUID GLASS BLOCK]
     // 1. Specular Highlights: Multiple inset shadows for the sharp rim and surface sheen.
