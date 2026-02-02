@@ -12,6 +12,9 @@ class ChatRequest(BaseModel):
     thread_id: Optional[str] = Field(None, description="세션 관리를 위한 스레드 ID")
     member_id: int = Field(0, description="로그인한 사용자 ID")
     user_mode: Optional[str] = Field("BEGINNER", description="사용자 모드 (BEGINNER 또는 EXPERT)")
+    recommended_count: Optional[int] = Field(
+        None, description="추천 개수 (명시 시 파싱보다 우선 적용)"
+    )
 
 
 class AgentState(Dict):
@@ -41,6 +44,9 @@ class AgentState(Dict):
     # [★추가] 세션 레벨 추천 다양성 추적
     recommended_history: Optional[List[int]]
 
+    # [★추가] 추천 개수 요청
+    recommended_count: Optional[int]
+
     # [★추가] 프레임 컨텍스트/제약 메타데이터
     frame_id: str | None = None
     constraint_scope: Literal["FRAME", "SESSION", "PROFILE"] | None = None
@@ -66,6 +72,9 @@ class UserPreferences(BaseModel):
     # [★수정] Accord(계열)와 Note(원료)를 엄격하게 분리
     accord: Optional[str] = Field(None, description="선호하는 향의 분위기나 계열 (예: Woody, Floral, Citrus, Spicy)")
     note: Optional[str] = Field(None, description="구체적으로 선호하는 향 원료 (예: Rose, Vetiver, Sandalwood, Vanilla)")
+    
+    # [★추가] 추천 개수 (사용자가 명시한 경우)
+    recommended_count: Optional[int] = Field(None, description="사용자가 요청한 추천 향수 개수")
 
 class InterviewResult(BaseModel):
     user_preferences: UserPreferences = Field(description="추출된 사용자 선호 정보")

@@ -33,3 +33,7 @@ class AdvancedSearchInput(BaseModel):
     query_text: str = Field(
         description="리랭킹을 위한 전략 의도(Reason) 또는 검색 키워드. (예: '비 오는 날 숲속의 차분한 느낌')"
     )
+    rank_mode: str = Field(
+        default="DEFAULT",
+        description="랭킹 모드: 'DEFAULT' (의미 기반) 또는 'POPULAR' (인기순)",
+    )

@@ -40,6 +40,7 @@ async def advanced_perfume_search_tool(
     strategy_filters: Dict[str, List[str]],
     exclude_ids: List[int],
     query_text: str,
+    rank_mode: str = "DEFAULT",
 ) -> List[Dict[str, Any]]:
     """
     [고도화된 비동기 검색 도구]
@@ -62,7 +63,9 @@ async def advanced_perfume_search_tool(
 
     # 2. Semantic Reranking (비동기 LLM 호출)
     # [최적화] rerank_perfumes_async를 호출하여 검색 중 발생하는 지연을 최소화합니다.
-    final_results = await rerank_perfumes_async(candidates, query_text, top_k=5)
+    final_results = await rerank_perfumes_async(
+        candidates, query_text, top_k=5, rank_mode=rank_mode
+    )
 
     return final_results
 

@@ -11,7 +11,7 @@ from langchain_core.messages import HumanMessage, AIMessage
 
 # 모듈 임포트
 from agent.schemas import ChatRequest
-from agent.graph import app_graph
+from agent.graph import app_graph, parse_recommended_count, normalize_recommended_count
 from agent.database import save_chat_message, get_chat_history, get_user_chat_list
 from routers import users, perfumes, archive # <--- ksu 추가
 
@@ -41,8 +41,20 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
+
+def resolve_recommended_count(user_query: str, explicit_count: int | None) -> int:
+    normalized_explicit = normalize_recommended_count(explicit_count)
+    if normalized_explicit is not None:
+        return normalized_explicit
+    parsed_count = parse_recommended_count(user_query)
+    return parsed_count or 3
+
 async def stream_generator(
-    user_query: str, thread_id: str, member_id: int = 0, user_mode: str = "BEGINNER"
+    user_query: str,
+    thread_id: str,
+    member_id: int = 0,
+    user_mode: str = "BEGINNER",
+    recommended_count: int = 3,
 ) -> Generator[str, None, None]:
 
     save_chat_message(thread_id, member_id, "user", user_query)
@@ -89,6 +101,8 @@ async def stream_generator(
         "messages": input_messages,
         "member_id": member_id,
         "user_mode": normalized_mode,
+        "user_query": user_query,
+        "recommended_count": recommended_count,
     }
 
     full_ai_response = ""
@@ -221,8 +235,17 @@ async def stream_generator(
 
 @app.post("/chat")
 async def chat_stream(request: ChatRequest):
+    recommended_count = resolve_recommended_count(
+        request.user_query, request.recommended_count
+    )
     return StreamingResponse(
-        stream_generator(request.user_query, request.thread_id, request.member_id, request.user_mode),
+        stream_generator(
+            request.user_query,
+            request.thread_id,
+            request.member_id,
+            request.user_mode,
+            recommended_count,
+        ),
         media_type="text/event-stream",
         headers={
             "Cache-Control": "no-cache, no-transform",
