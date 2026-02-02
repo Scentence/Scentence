@@ -4,6 +4,7 @@ import React, { useEffect, useState } from 'react';
 import { useSession } from 'next-auth/react';
 import Link from "next/link";
 import Sidebar from "@/components/common/sidebar";
+import UserProfileMenu from "@/components/common/UserProfileMenu";
 import NMapView from './NMapView';
 
 /**
@@ -16,6 +17,7 @@ export default function NMapPage() {
 
   // ==================== [NEW] 전역 헤더 및 프로필 상태 ====================
   const [isNavOpen, setIsNavOpen] = useState(false);
+  const [isProfileMenuOpen, setIsProfileMenuOpen] = useState(false);
   const [localUser, setLocalUser] = useState<any>(null);
   const [profileImageUrl, setProfileImageUrl] = useState<string | null>(null);
   const [isMounted, setIsMounted] = useState(false);
@@ -88,10 +90,10 @@ export default function NMapPage() {
       />
 
       {/* [STANDARD HEADER] 메인 페이지(app/page.tsx)와 100% 동일한 구조 및 디자인 적용 */}
-      <header className="fixed top-0 left-0 right-0 z-50 flex items-center justify-between px-5 py-4 bg-[#FDFBF8] border-b border-[#F0F0F0]">
+      <header className="fixed top-0 left-0 right-0 z-50 flex items-center justify-between px-6 md:px-10 py-5 bg-[#FDFBF8] border-b border-[#F0F0F0]">
         {/* 로고 영역: font-bold, text-black, tracking-tight (표준) */}
-        <Link href="/" className="text-xl font-bold tracking-tight text-black">
-          Scentence
+        <Link href="/" className="text-lg font-bold text-black tracking-[0.15em] uppercase">
+          SCENTENCE
         </Link>
 
         {/* 우측 상단 UI: 로그인 상태 및 사이드바 토글 버튼 (표준) */}
@@ -106,17 +108,22 @@ export default function NMapPage() {
           ) : (
             // 로그인 상태 UI: 이름과 프로필 이미지
             <div className="flex items-center gap-3">
-              <span className="text-sm font-bold text-gray-800 hidden sm:block">
-                {displayName}님 반가워요!
-              </span>
-              <Link href="/mypage" className="block w-9 h-9 rounded-full overflow-hidden border border-gray-100 shadow-sm hover:opacity-80 transition-opacity">
+              <button
+                id="profile-menu-toggle"
+                onClick={() => setIsProfileMenuOpen(!isProfileMenuOpen)}
+                className="block w-9 h-9 rounded-full overflow-hidden border border-gray-100 shadow-sm hover:opacity-80 transition-opacity"
+              >
                 <img
                   src={profileImageUrl || "/default_profile.png"}
                   alt="Profile"
                   className="w-full h-full object-cover"
                   onError={(e) => { e.currentTarget.src = "/default_profile.png"; }}
                 />
-              </Link>
+              </button>
+              <UserProfileMenu
+                isOpen={isProfileMenuOpen}
+                onClose={() => setIsProfileMenuOpen(false)}
+              />
             </div>
           )}
 
@@ -125,7 +132,7 @@ export default function NMapPage() {
           <button
             id="global-menu-toggle"
             onClick={() => setIsNavOpen(!isNavOpen)}
-            className="p-1 rounded-md hover:bg-gray-100 transition-colors"
+            className="w-9 h-9 flex items-center justify-center rounded-full hover:bg-gray-100 transition-colors"
           >
             {isNavOpen ? (
               <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" className="w-8 h-8 text-[#555]">

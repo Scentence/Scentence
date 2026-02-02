@@ -4,6 +4,7 @@ import { FormEvent, useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import { useSession } from "next-auth/react";
 import Sidebar from "@/components/common/sidebar";
+import UserProfileMenu from "@/components/common/UserProfileMenu";
 
 interface ProfileData {
   member_id: string;
@@ -23,8 +24,9 @@ interface ProfileData {
 }
 
 export default function MyPage() {
-  const { data: session } = useSession();
+  const { data: session, update } = useSession();
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
+  const [isProfileMenuOpen, setIsProfileMenuOpen] = useState(false);
   const [memberId, setMemberId] = useState<string | null>(null);
   const [profile, setProfile] = useState<ProfileData | null>(null);
   const [nickname, setNickname] = useState("");
@@ -77,28 +79,9 @@ export default function MyPage() {
     }
   }, [session]);
 
-  useEffect(() => {
-    if (typeof window === "undefined") return;
-    const stored = localStorage.getItem("localAuth");
-    if (!stored) return;
-    try {
-      const parsed = JSON.parse(stored);
-      const roleType = parsed?.roleType || (parsed?.isAdmin ? "ADMIN" : "");
-      if ((roleType || "").toUpperCase() === "ADMIN") {
-        window.location.href = "/admin";
-      }
-    } catch (error) {
-      return;
-    }
-  }, []);
 
-  useEffect(() => {
-    if ((profile?.role_type || "").toUpperCase() === "ADMIN") {
-      if (typeof window !== "undefined") {
-        window.location.href = "/admin";
-      }
-    }
-  }, [profile]);
+
+
 
   useEffect(() => {
     if (!memberId) return;
@@ -230,6 +213,7 @@ export default function MyPage() {
         }
       }
 
+      await update({ name: nickname });
       setProfileMessage("회원정보가 저장되었습니다.");
     } catch (error) {
       setProfileMessage("회원정보 수정에 실패했습니다.");
@@ -340,33 +324,38 @@ export default function MyPage() {
       )}
 
       {/* [STANDARD HEADER] 메인 페이지(app/page.tsx)와 100% 동일한 구조 및 디자인 적용 */}
-      <header className="fixed top-0 left-0 right-0 flex items-center justify-between px-5 py-4 bg-[#FDFBF8] border-b border-[#F0F0F0] z-50">
+      <header className="fixed top-0 left-0 right-0 flex items-center justify-between px-6 md:px-10 py-5 bg-[#FDFBF8] border-b border-[#F0F0F0] z-50">
         {/* 로고 영역: font-bold, text-black, tracking-tight (표준) */}
-        <Link href="/" className="text-xl font-bold text-black tracking-tight">
-          Scentence
+        <Link href="/" className="text-lg font-bold text-black tracking-[0.15em] uppercase">
+          SCENTENCE
         </Link>
 
         {/* 우측 상단 UI: 로그인 상태 및 사이드바 토글 버튼 (표준) */}
         <div className="flex items-center gap-4">
           <div className="flex items-center gap-3">
-            <span className="text-sm font-bold text-gray-800 hidden sm:block">
-              {displayName}님 반가워요!
-            </span>
             {/* 프로필 이미지 Link: 표준 크기(w-9 h-9) 및 스타일 적용 */}
-            <Link href="/mypage" className="block w-9 h-9 rounded-full overflow-hidden border border-gray-100 shadow-sm hover:opacity-80 transition-opacity">
+            <button
+              id="profile-menu-toggle"
+              onClick={() => setIsProfileMenuOpen(!isProfileMenuOpen)}
+              className="block w-9 h-9 rounded-full overflow-hidden border border-gray-100 shadow-sm hover:opacity-80 transition-opacity"
+            >
               <img
                 src={resolvedProfileImageUrl}
                 alt="Profile"
                 className="w-full h-full object-cover"
                 onError={(e) => { e.currentTarget.src = "/default_profile.png"; }}
               />
-            </Link>
+            </button>
+            <UserProfileMenu
+              isOpen={isProfileMenuOpen}
+              onClose={() => setIsProfileMenuOpen(false)}
+            />
           </div>
           {/* 글로벌 내비게이션 토글 버튼 (px-5 py-4 패딩 및 w-8 h-8 규격 준수) */}
           <button
             id="global-menu-toggle"
             onClick={() => setIsSidebarOpen(!isSidebarOpen)}
-            className="p-1 rounded-md hover:bg-gray-100 transition-colors"
+            className="w-9 h-9 flex items-center justify-center rounded-full hover:bg-gray-100 transition-colors"
           >
             {isSidebarOpen ? (
               <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" className="w-8 h-8 text-[#555]">

@@ -1,9 +1,10 @@
 'use client';
 
-import { useState, useRef } from "react";
+import { useState, useRef, useEffect } from "react";
 import Link from "next/link";
 import { useSession } from "next-auth/react";
 import Sidebar from "@/components/common/sidebar";
+import UserProfileMenu from "@/components/common/UserProfileMenu";
 import { motion, useScroll, useTransform, useInView } from "framer-motion";
 
 // [Animation Variants]
@@ -63,6 +64,50 @@ const AnimateOnScroll = ({ children, delay = 0, className = "" }: { children: Re
 export default function AboutPage() {
     const { data: session } = useSession();
     const [isSidebarOpen, setIsSidebarOpen] = useState(false);
+    const [isProfileMenuOpen, setIsProfileMenuOpen] = useState(false);
+    const [localUser, setLocalUser] = useState<any>(null);
+    const [profileImageUrl, setProfileImageUrl] = useState<string | null>(null);
+
+    // API 호출 경로 설정
+    const API_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000";
+
+    useEffect(() => {
+        // 1. 로컬 스토리지 데이터 확인
+        const authData = localStorage.getItem("localAuth");
+        if (authData) {
+            try {
+                const parsed = JSON.parse(authData);
+                setLocalUser(parsed);
+            } catch (e) {
+                console.error("Local auth parse error", e);
+            }
+        }
+
+        // 2. 세션(카카오) 기반 프로필 이미지 가져오기
+        if (session?.user?.id) {
+            fetch(`${API_URL}/users/profile/${session.user.id}`)
+                .then((res) => res.json())
+                .then((data) => {
+                    if (data.profile_image_url) {
+                        setProfileImageUrl(data.profile_image_url);
+                    }
+                })
+                .catch((err) => console.error("Profile image fetch error", err));
+        }
+        // 3. 로컬 사용자 기반 프로필 이미지 가져오기
+        else if (localUser?.memberId) {
+            fetch(`${API_URL}/users/profile/${localUser.memberId}`)
+                .then((res) => res.json())
+                .then((data) => {
+                    if (data.profile_image_url) {
+                        setProfileImageUrl(data.profile_image_url);
+                    }
+                })
+                .catch((err) => console.error("Local profile image fetch error", err));
+        }
+    }, [session, localUser?.memberId]);
+
+    const isLoggedIn = !!(session || localUser);
 
     // [Parallax Scroll Logic]
     const { scrollY } = useScroll();
@@ -80,12 +125,39 @@ export default function AboutPage() {
                 <div className="fixed inset-0 bg-transparent z-40 md:hidden" onClick={() => setIsSidebarOpen(false)} />
             )}
 
-            {/* [HAMBURGER BUTTON ONLY - FIXED TOP RIGHT] */}
-            <div className="fixed top-0 right-0 z-50 p-6">
+            {/* [HEADER UI: Profile + Hamburger] */}
+            <div className="fixed top-0 right-0 z-50 py-5 px-6 md:px-10 flex items-center gap-4">
+                {!isLoggedIn ? (
+                    <div className="flex items-center gap-2 text-sm font-medium text-gray-400">
+                        <Link href="/login" className="hover:text-black transition-colors">Sign in</Link>
+                        <span className="text-gray-300">|</span>
+                        <Link href="/signup" className="hover:text-black transition-colors">Sign up</Link>
+                    </div>
+                ) : (
+                    <div className="flex items-center gap-3">
+                        <button
+                            id="profile-menu-toggle"
+                            onClick={() => setIsProfileMenuOpen(!isProfileMenuOpen)}
+                            className="block w-9 h-9 rounded-full overflow-hidden border border-gray-100 shadow-sm hover:opacity-80 transition-opacity"
+                        >
+                            <img
+                                src={profileImageUrl || "/default_profile.png"}
+                                alt="Profile"
+                                className="w-full h-full object-cover"
+                                onError={(e) => { e.currentTarget.src = "/default_profile.png"; }}
+                            />
+                        </button>
+                        <UserProfileMenu
+                            isOpen={isProfileMenuOpen}
+                            onClose={() => setIsProfileMenuOpen(false)}
+                        />
+                    </div>
+                )}
+
                 <button
                     id="global-menu-toggle"
                     onClick={() => setIsSidebarOpen(!isSidebarOpen)}
-                    className="p-1 rounded-full hover:bg-black/5 transition-colors"
+                    className="w-9 h-9 flex items-center justify-center rounded-full hover:bg-black/5 transition-colors"
                 >
                     {isSidebarOpen ? (
                         <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1} stroke="black" className="w-8 h-8">
