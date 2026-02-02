@@ -14,7 +14,7 @@ import asyncio
 import sys
 from pathlib import Path
 
-import pytest
+import pytest  # type: ignore[import-not-found]
 
 
 BACKEND_DIR = Path(__file__).resolve().parents[1]
@@ -43,7 +43,7 @@ class TestBrandLeakage:
         """
         from agent import graph as graph_mod
         from agent.schemas import InterviewResult, UserPreferences
-        from langchain_core.messages import AIMessage, HumanMessage
+        from langchain_core.messages import AIMessage, HumanMessage  # type: ignore[import-not-found]
         
         # --- Stub tools / DB
         class DummyTool:
@@ -105,7 +105,7 @@ class TestBrandLeakage:
                 # 1차 요청: "딥디크 추천해줘"
                 if self.counter["count"] == 1:
                     return InterviewResult(
-                        user_preferences=UserPreferences(
+                        user_preferences=UserPreferences(  # type: ignore[call-arg]
                             target="일반 사용자",
                             gender="Unisex",
                             brand="딥디크",  # 브랜드 하드 필터 설정
@@ -118,7 +118,7 @@ class TestBrandLeakage:
                 # 2차 요청: "겨울 남자 향수 추천해줘"
                 else:
                     return InterviewResult(
-                        user_preferences=UserPreferences(
+                        user_preferences=UserPreferences(  # type: ignore[call-arg]
                             target="남성",
                             gender="Men",
                             season="겨울",
@@ -166,11 +166,12 @@ class TestBrandLeakage:
         }
         
         first_state = None
-        async for event in graph_mod.app_graph.astream(first_input, config=config):
-            # Get the last state
-            for node_name, node_state in event.items():
-                if isinstance(node_state, dict):
-                    first_state = node_state
+        async for state in graph_mod.app_graph.astream(
+            first_input,
+            config=config,
+            stream_mode="values",
+        ):
+            first_state = state
         
         # 1차 검증: user_preferences에 brand="딥디크" 포함
         assert first_state is not None, "첫 번째 요청이 완료되지 않았습니다"
@@ -190,11 +191,12 @@ class TestBrandLeakage:
         }
         
         second_state = None
-        async for event in graph_mod.app_graph.astream(second_input, config=config):
-            # Get the last state
-            for node_name, node_state in event.items():
-                if isinstance(node_state, dict):
-                    second_state = node_state
+        async for state in graph_mod.app_graph.astream(
+            second_input,
+            config=config,
+            stream_mode="values",
+        ):
+            second_state = state
         
         # 2차 검증: user_preferences에 brand="딥디크"가 없어야 함
         assert second_state is not None, "두 번째 요청이 완료되지 않았습니다"
@@ -232,7 +234,7 @@ class TestBrandLeakage:
         """
         from agent import graph as graph_mod
         from agent.schemas import InterviewResult, UserPreferences
-        from langchain_core.messages import AIMessage, HumanMessage
+        from langchain_core.messages import AIMessage, HumanMessage  # type: ignore[import-not-found]
         
         # --- Stub tools / DB
         class DummyTool:
@@ -289,7 +291,7 @@ class TestBrandLeakage:
                 # 1차: "조말론 같은 향수 추천해줘"
                 if self.counter["count"] == 1:
                     return InterviewResult(
-                        user_preferences=UserPreferences(
+                        user_preferences=UserPreferences(  # type: ignore[call-arg]
                             target="일반 사용자",
                             gender="Unisex",
                             reference_brand="조말론",  # 참고 브랜드 (소프트 필터)
@@ -302,7 +304,7 @@ class TestBrandLeakage:
                 # 2차: "여름 향수 추천해줘"
                 else:
                     return InterviewResult(
-                        user_preferences=UserPreferences(
+                        user_preferences=UserPreferences(  # type: ignore[call-arg]
                             target="일반 사용자",
                             gender="Unisex",
                             season="여름",
@@ -347,11 +349,14 @@ class TestBrandLeakage:
         }
         
         first_state = None
-        async for event in graph_mod.app_graph.astream(first_input, config=config):
-            for node_name, node_state in event.items():
-                if isinstance(node_state, dict):
-                    first_state = node_state
+        async for state in graph_mod.app_graph.astream(
+            first_input,
+            config=config,
+            stream_mode="values",
+        ):
+            first_state = state
         
+        assert first_state is not None, "첫 번째 요청이 완료되지 않았습니다"
         first_prefs = first_state.get("user_preferences", {})
         assert first_prefs.get("reference_brand") == "조말론"
         print(f"\n[1차 요청] reference_brand: {first_prefs.get('reference_brand')}")
@@ -364,11 +369,14 @@ class TestBrandLeakage:
         }
         
         second_state = None
-        async for event in graph_mod.app_graph.astream(second_input, config=config):
-            for node_name, node_state in event.items():
-                if isinstance(node_state, dict):
-                    second_state = node_state
+        async for state in graph_mod.app_graph.astream(
+            second_input,
+            config=config,
+            stream_mode="values",
+        ):
+            second_state = state
         
+        assert second_state is not None, "두 번째 요청이 완료되지 않았습니다"
         second_prefs = second_state.get("user_preferences", {})
         print(f"\n[2차 요청] user_preferences: {second_prefs}")
         
