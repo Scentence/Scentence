@@ -70,6 +70,7 @@ def get_my_perfumes(member_id: int) -> List[Dict[str, Any]]:
             "member_id": p['member_id'],
             "perfume_id": pid,
             "register_status": p['register_status'],
+            "preference": p.get('preference', 'NEUTRAL'),  # [★추가] 개인화용
             "register_dt": str(p['register_dt']) if p['register_dt'] else None,
             "perfume_name": p['perfume_name'],
             "name_en": p['perfume_name'],  # 기본 테이블의 영어 이름

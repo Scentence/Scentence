@@ -1,5 +1,5 @@
 # backend/agent/schemas.py
-from typing import List, Optional, Dict, Any, Literal, Annotated
+from typing import List, Optional, Dict, Literal, Annotated
 from pydantic import BaseModel, Field
 from langchain_core.messages import BaseMessage
 from langgraph.graph.message import add_messages
@@ -12,6 +12,9 @@ class ChatRequest(BaseModel):
     thread_id: Optional[str] = Field(None, description="세션 관리를 위한 스레드 ID")
     member_id: int = Field(0, description="로그인한 사용자 ID")
     user_mode: Optional[str] = Field("BEGINNER", description="사용자 모드 (BEGINNER 또는 EXPERT)")
+    recommended_count: Optional[int] = Field(
+        None, description="추천 개수 (명시 시 파싱보다 우선 적용)"
+    )
 
 
 class AgentState(Dict):
@@ -41,6 +44,14 @@ class AgentState(Dict):
     # [★추가] 세션 레벨 추천 다양성 추적
     recommended_history: Optional[List[int]]
 
+    # [★추가] 추천 개수 요청
+    recommended_count: Optional[int]
+
+    # [★추가] 프레임 컨텍스트/제약 메타데이터
+    frame_id: str | None = None
+    constraint_scope: Literal["FRAME", "SESSION", "PROFILE"] | None = None
+    constraint_source: Literal["explicit_user", "inferred", "system_default"] | None = None
+
 
 # =================================================================
 # 2. 인터뷰 및 라우팅 (Interviewer & Router)
@@ -49,18 +60,24 @@ class UserPreferences(BaseModel):
     """인터뷰어가 사용자 대화에서 추출한 핵심 정보입니다."""
     target: str = Field(description="대상 정보 (예: 20대 여성, 30대 남성 등)")
     gender: str = Field(description="성별 정보 (Women, Men, Unisex)")
-    
+
     reference_brand: Optional[str] = Field(None, description="참고 브랜드 (유사한 향 찾기 - 소프트 필터)")
-    target_brand: Optional[str] = Field(None, description="특정 브랜드 (해당 브랜드만 - 하드 필터)")
+    brand: Optional[str] = Field(None, description="특정 브랜드 (해당 브랜드만 - 하드 필터)")
     perfume: Optional[str] = Field(None, description="특정 향수")
     situation: Optional[str] = Field(None, description="상황 정보")
     season: Optional[str] = Field(None, description="계절 정보")
     like: Optional[str] = Field(None, description="취향 정보")
     style: Optional[str] = Field(None, description="이미지 정보")
-    
+
     # [★수정] Accord(계열)와 Note(원료)를 엄격하게 분리
     accord: Optional[str] = Field(None, description="선호하는 향의 분위기나 계열 (예: Woody, Floral, Citrus, Spicy)")
     note: Optional[str] = Field(None, description="구체적으로 선호하는 향 원료 (예: Rose, Vetiver, Sandalwood, Vanilla)")
+    
+    # [★추가] 추천 개수 (사용자가 명시한 경우)
+    recommended_count: Optional[int] = Field(None, description="사용자가 요청한 추천 향수 개수")
+    
+    # [★추가] 제외 브랜드 (말고/제외/빼고)
+    exclude_brands: Optional[List[str]] = Field(None, description="검색에서 제외할 브랜드 목록 (최대 5개, 정규화된 브랜드명)")
 
 class InterviewResult(BaseModel):
     user_preferences: UserPreferences = Field(description="추출된 사용자 선호 정보")
@@ -88,7 +105,7 @@ class RoutingDecision(BaseModel):
 # =================================================================
 class HardFilters(BaseModel):
     gender: str = Field(description="성별 (Women, Men, Unisex)")
-    target_brand: Optional[str] = Field(None, description="특정 브랜드 (하드 필터)")
+    brand: Optional[str] = Field(None, description="특정 브랜드 (하드 필터)")
     season: Optional[str] = Field(None, description="계절")
     occasion: Optional[str] = Field(None, description="상황")
     accord: Optional[str] = Field(None, description="어코드")

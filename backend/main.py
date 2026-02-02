@@ -11,7 +11,7 @@ from langchain_core.messages import HumanMessage, AIMessage
 
 # 모듈 임포트
 from agent.schemas import ChatRequest
-from agent.graph import app_graph
+from agent.graph import app_graph, parse_recommended_count, normalize_recommended_count
 from agent.database import save_chat_message, get_chat_history, get_user_chat_list
 from routers import users, perfumes, archive # <--- ksu 추가
 
@@ -41,30 +41,68 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
+
+def resolve_recommended_count(user_query: str, explicit_count: int | None) -> int:
+    normalized_explicit = normalize_recommended_count(explicit_count)
+    if normalized_explicit is not None:
+        return normalized_explicit
+    parsed_count = parse_recommended_count(user_query)
+    return parsed_count or 3
+
 async def stream_generator(
-    user_query: str, thread_id: str, member_id: int = 0, user_mode: str = "BEGINNER"
+    user_query: str,
+    thread_id: str,
+    member_id: int = 0,
+    user_mode: str = "BEGINNER",
+    recommended_count: int = 3,
 ) -> Generator[str, None, None]:
 
     save_chat_message(thread_id, member_id, "user", user_query)
     config = {"configurable": {"thread_id": thread_id}}
 
-    db_history = get_chat_history(thread_id)
-    restored_messages = []
+    # [★ 수정] 히스토리 중복 방지 로직
+    # checkpointer에 state가 있는지 확인
+    try:
+        current_state = app_graph.get_state(config)
+        has_checkpointed_state = (
+            current_state
+            and current_state.values
+            and current_state.values.get("messages")
+        )
+    except Exception:
+        has_checkpointed_state = False
 
-    for msg in db_history:
-        if msg["role"] == "user" and msg["text"] == user_query:
-            continue
-        if msg["role"] == "user":
-            restored_messages.append(HumanMessage(content=msg["text"]))
-        else:
-            restored_messages.append(AIMessage(content=msg["text"]))
+    # checkpointer가 비어있으면 (서버 재시작 등) DB에서 복원
+    if not has_checkpointed_state:
+        print(f"   🔄 [History] Checkpointer empty, restoring from DB (thread_id: {thread_id})")
+        db_history = get_chat_history(thread_id)
+        restored_messages = []
+
+        for msg in db_history:
+            if msg["role"] == "user" and msg["text"] == user_query:
+                continue
+            if msg["role"] == "user":
+                restored_messages.append(HumanMessage(content=msg["text"]))
+            else:
+                restored_messages.append(AIMessage(content=msg["text"]))
+
+        # 첫 요청: DB 복원 메시지 + 새 메시지
+        input_messages = restored_messages + [HumanMessage(content=user_query)]
+        print(f"   📊 [History] Restored {len(restored_messages)} messages from DB")
+    else:
+        # checkpointer에 state 있음: 새 메시지만 전달
+        input_messages = [HumanMessage(content=user_query)]
+        existing_count = len(current_state.values.get("messages", []))
+        print(f"   ✅ [History] Using checkpointer ({existing_count} existing messages)")
 
     normalized_mode = normalize_user_mode(user_mode)
-    
+
     inputs = {
-        "messages": restored_messages + [HumanMessage(content=user_query)],
+        "messages": input_messages,
         "member_id": member_id,
         "user_mode": normalized_mode,
+        "user_query": user_query,
+        "recommended_count": recommended_count,
     }
 
     full_ai_response = ""
@@ -195,10 +233,20 @@ async def stream_generator(
         error_msg = json.dumps({"type": "error", "content": str(e)}, ensure_ascii=False)
         yield f"data: {error_msg}\n\n"
 
+
 @app.post("/chat")
 async def chat_stream(request: ChatRequest):
+    recommended_count = resolve_recommended_count(
+        request.user_query, request.recommended_count
+    )
     return StreamingResponse(
-        stream_generator(request.user_query, request.thread_id, request.member_id, request.user_mode),
+        stream_generator(
+            request.user_query,
+            request.thread_id,
+            request.member_id,
+            request.user_mode,
+            recommended_count,
+        ),
         media_type="text/event-stream",
         headers={
             "Cache-Control": "no-cache, no-transform",

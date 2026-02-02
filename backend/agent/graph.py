@@ -4,6 +4,7 @@ import json
 import asyncio
 import itertools
 import random
+import uuid
 from typing import Literal, List, Dict, Any, Optional
 
 from dotenv import load_dotenv
@@ -28,6 +29,7 @@ from .schemas import (
 
 # [Import] Expression Loader for dynamic dictionary injection
 from .expression_loader import ExpressionLoader
+from .brand_exclusion_parser import parse_brand_exclusions, should_clear_brand_fields
 
 from .tools import (
     advanced_perfume_search_tool,
@@ -50,6 +52,9 @@ from .prompts import (
 from .database import save_recommendation_log, fetch_meta_data
 from .denylist import has_forbidden_words, UserFriendlyStrategyLabels
 
+from .followup_classifier import classify_followup
+from .personalization import get_personalization_summary
+
 # [정보 검색 전용 서브 그래프 임포트]
 from .graph_info import info_graph
 
@@ -58,6 +63,31 @@ load_dotenv()
 import logging
 
 logger = logging.getLogger(__name__)
+
+# ==========================================
+# 0. Helper Functions
+# ==========================================
+def parse_recommended_count(query: str) -> int | None:
+    """Parse 'N개' from user query."""
+    if not query:
+        return None
+    import re
+    # Map words to numbers
+    word_map = {"한": 1, "두": 2, "세": 3, "네": 4, "다섯": 5}
+    match_word = re.search(r"(한|두|세|네|다섯)\s*개", query)
+    match_digit = re.search(r"(\d+)\s*개", query)
+    
+    if match_digit:
+        return int(match_digit.group(1))
+    elif match_word:
+        return word_map.get(match_word.group(1))
+    return None
+
+def normalize_recommended_count(count: int) -> int:
+    """Normalize recommendation count to be between 1 and 5."""
+    if count is None:
+        return 3
+    return max(1, min(count, 5))
 
 # ==========================================
 # 1. 모델 설정
@@ -170,7 +200,7 @@ def sanitize_filters(h_filters: dict, s_filters: dict) -> tuple:
 
 
 async def smart_search_with_retry_async(
-    h_filters: dict, s_filters: dict, exclude_ids: list = None, query_text: str = ""
+    h_filters: dict, s_filters: dict, exclude_ids: list = None, query_text: str = "", rank_mode: str = "DEFAULT"
 ):
     sanitized_hard, sanitized_strategy, dropped_items = sanitize_filters(h_filters, s_filters)
     
@@ -183,6 +213,7 @@ async def smart_search_with_retry_async(
             "strategy_filters": sanitized_strategy,
             "exclude_ids": exclude_ids,
             "query_text": query_text,
+            "rank_mode": rank_mode,
         }
     )
     if results:
@@ -197,6 +228,7 @@ async def smart_search_with_retry_async(
                     "strategy_filters": temp_filters,
                     "exclude_ids": exclude_ids,
                     "query_text": query_text,
+                    "rank_mode": rank_mode,
                 }
             )
             if results:
@@ -258,7 +290,9 @@ def supervisor_node(state: AgentState):
 
 def interviewer_node(state: AgentState):
     """[Interviewer]"""
-    current_prefs = state.get("user_preferences", {})
+    current_prefs = state.get("user_preferences") or {}
+    if isinstance(current_prefs, UserPreferences):
+        current_prefs = current_prefs.model_dump(exclude_none=True)
     question_count = state.get("question_count", 0)
     
     # 질문 횟수 증가
@@ -281,6 +315,7 @@ def interviewer_node(state: AgentState):
             "style": current_prefs.get("style", "Daily"),
             "target": current_prefs.get("target", "일반"),
         }
+        fallback_frame_id = state.get("frame_id") or str(uuid.uuid4())
         
         print(
             f"      ⚠️ [Fallback] 질문 상한 도달 또는 거부 감지. 기본값으로 추천 진행: {json.dumps(fallback_prefs, ensure_ascii=False)}",
@@ -294,6 +329,8 @@ def interviewer_node(state: AgentState):
             "active_mode": None,
             "question_count": question_count,
             "fallback_triggered": True,
+            "frame_id": fallback_frame_id,
+            "recommended_history": state.get("recommended_history", []),
         }
 
     # 현재 정보를 문자열로 변환
@@ -314,34 +351,109 @@ def interviewer_node(state: AgentState):
     messages = [SystemMessage(content=formatted_prompt)] + state["messages"]
 
     try:
-        result = SMART_LLM.with_structured_output(InterviewResult).invoke(messages)
-        new_prefs = result.user_preferences.dict(exclude_unset=True)
-        updated_prefs = {
-            **current_prefs,
-            **{k: v for k, v in new_prefs.items() if v is not None},
-        }
+        interview_result = SMART_LLM.with_structured_output(InterviewResult).invoke(messages)
 
-        if result.is_sufficient:
+        current_query = state.get("user_query", "")
+        recent_messages = state.get("messages", [])[-5:]
+        if not current_query and state.get("messages"):
+            last_msg = state["messages"][-1]
+            if isinstance(last_msg, HumanMessage):
+                current_query = last_msg.content
+
+        classification = classify_followup(
+            current_query=current_query,
+            recent_messages=recent_messages,
+            current_constraints=current_prefs,
+        )
+
+        # [★추가] 브랜드 제외 파싱
+        exclude_brands, has_exclusion = parse_brand_exclusions(current_query)
+        if has_exclusion:
             print(
-                f"      ✅ [Handover] 정보 확보 완료! Researcher로 전달: {json.dumps(updated_prefs, ensure_ascii=False)}",
+                f"🚫 [Exclusion] Detected exclude_brands: {exclude_brands}",
+                flush=True,
+            )
+
+        current_frame_id = state.get("frame_id")
+        if classification.intent in ["NEW_RECO", "RESET"]:
+            frame_id = str(uuid.uuid4())
+            new_recommended_history = []
+            print(
+                f"🔄 [Frame] New frame created: {frame_id[:8]}... (intent={classification.intent})",
+                flush=True,
+            )
+            print("🗑️  [History] Recommended history cleared (new frame)", flush=True)
+        else:
+            frame_id = current_frame_id or str(uuid.uuid4())
+            new_recommended_history = None
+            print(
+                f"✅ [Frame] Frame maintained: {frame_id[:8] if frame_id else 'new'}... (intent={classification.intent})",
+                flush=True,
+            )
+
+        merged_prefs: Dict[str, Any] = {}
+        for slot in classification.keep_slots:
+            if current_prefs and slot in current_prefs and current_prefs[slot] is not None:
+                merged_prefs[slot] = current_prefs[slot]
+
+        new_prefs = interview_result.user_preferences
+        for key, value in new_prefs.model_dump(exclude_none=True).items():
+            merged_prefs[key] = value
+
+        # [★추가] 브랜드 제외 처리
+        if has_exclusion:
+            merged_prefs["exclude_brands"] = exclude_brands
+            # 제외 브랜드가 있으면 brand, reference_brand 클리어
+            if should_clear_brand_fields(exclude_brands):
+                merged_prefs["brand"] = None
+                merged_prefs["reference_brand"] = None
+                print(
+                    f"   → brand/reference_brand cleared due to exclusions",
+                    flush=True,
+                )
+
+        for slot in classification.drop_slots:
+            if slot not in merged_prefs:
+                merged_prefs[slot] = None
+
+        print(
+            f"📋 [Merge] Keep: {classification.keep_slots}, Drop: {classification.drop_slots}",
+            flush=True,
+        )
+        print(f"📋 [Merge] Result: {list(merged_prefs.keys())}", flush=True)
+
+        state["user_preferences"] = merged_prefs
+        # [★추가] recommended_count를 state 최상위로 올림 (parallel_reco_node에서 사용)
+        if merged_prefs.get("recommended_count"):
+            state["recommended_count"] = merged_prefs["recommended_count"]
+
+        if interview_result.is_sufficient:
+            print(
+                f"      ✅ [Handover] 정보 확보 완료! Researcher로 전달: {json.dumps(merged_prefs, ensure_ascii=False)}",
                 flush=True,
             )
             return {
                 "next_step": "researcher",
-                "user_preferences": updated_prefs,
+                "user_preferences": merged_prefs,
+                "recommended_count": merged_prefs.get("recommended_count"),  # [★수정] 반환값에 명시적으로 포함
                 "status": "모든 정보가 확인되었습니다. 추천 전략을 수립합니다...",
                 "active_mode": None,
                 "question_count": question_count,
                 "fallback_triggered": False,
+                "frame_id": frame_id,
+                "recommended_history": new_recommended_history if new_recommended_history is not None else state.get("recommended_history", []),
             }
 
         return {
-            "messages": [AIMessage(content=result.response_message)],
-            "user_preferences": updated_prefs,
+            "messages": [AIMessage(content=interview_result.response_message)],
+            "user_preferences": merged_prefs,
+            "recommended_count": merged_prefs.get("recommended_count"),  # [★수정] 반환값에 명시적으로 포함
             "active_mode": "interviewer",
             "next_step": "end",
             "question_count": question_count,
             "fallback_triggered": False,
+            "frame_id": frame_id,
+            "recommended_history": new_recommended_history if new_recommended_history is not None else state.get("recommended_history", []),
         }
     except Exception as e:
         print(f"Interviewer Error: {e}")
@@ -360,11 +472,32 @@ async def parallel_reco_node(state: AgentState):
     user_prefs = state.get("user_preferences", {})
     current_context = json.dumps(user_prefs, ensure_ascii=False)
 
+    # Get personalization summary
+    personalization = get_personalization_summary(member_id) or {}
+    if personalization.get("summary_text"):
+        print(f"🎯 [Personalization] {personalization['summary_text']}", flush=True)
+
+    researcher_prompt = RESEARCHER_SYSTEM_PROMPT
+    if personalization.get("summary_text"):
+        researcher_prompt += (
+            "\n\n## 사용자 취향 정보\n"
+            f"{personalization['summary_text']}\n\n"
+            "이 정보를 참고하되, 현재 요청 조건(브랜드/계절/대상 등)이 최우선입니다."
+        )
+
     plan_llm = SMART_LLM.with_structured_output(SearchStrategyPlan)
     
     # [★추가] 세션 레벨 추천 다양성: 이전 추천 이력 로드
     recommended_history = state.get("recommended_history", [])
-    exclude_ids = set(recommended_history)  # 세션 히스토리 제외
+    exclude_ids = recommended_history.copy()  # 세션 히스토리 제외
+
+    # Add disliked perfumes (BAD preference)
+    for disliked in personalization.get("disliked_perfumes", []):
+        perfume_id = disliked.get("id")
+        if perfume_id:
+            exclude_ids.append(perfume_id)
+
+    exclude_id_set = set(exclude_ids)
     
     seen_ids = set()  # 현재 배치 내 중복 제거
     brand_counts = {}  # 현재 배치 내 브랜드 다양성 추적
@@ -448,10 +581,10 @@ async def parallel_reco_node(state: AgentState):
         # Fallback: Use random safe label from predefined list
         return random.choice(UserFriendlyStrategyLabels.SAFE_LABELS)
 
-    async def prepare_strategy(strategy_name: str, priority: int):
+    async def prepare_strategy(strategy_name: str, priority: int, rank_mode: str):
         """Phase 1: Strategy planning + search + perfume selection (parallel)"""
         plan_messages = [
-            SystemMessage(content=RESEARCHER_SYSTEM_PROMPT),
+            SystemMessage(content=researcher_prompt),
             HumanMessage(
                 content=(
                     f"사용자 요청 데이터: {current_context}\n"
@@ -480,7 +613,7 @@ async def parallel_reco_node(state: AgentState):
 
         try:
             candidates, _match_type = await smart_search_with_retry_async(
-                h_filters, s_filters, exclude_ids=list(exclude_ids), query_text=plan.reason
+                h_filters, s_filters, exclude_ids=exclude_ids, query_text=plan.reason, rank_mode=rank_mode
             )
         except Exception as e:
             return None
@@ -493,7 +626,7 @@ async def parallel_reco_node(state: AgentState):
                 if brand_counts.get(brand, 0) >= 2:
                     continue
                 # 현재 배치 내 중복 확인
-                if candidate["id"] not in seen_ids and candidate["id"] not in exclude_ids:
+                if candidate["id"] not in seen_ids and candidate["id"] not in exclude_id_set:
                     selected_perfume = candidate
                     seen_ids.add(candidate["id"])
                     brand_counts[brand] = brand_counts.get(brand, 0) + 1
@@ -546,13 +679,14 @@ async def parallel_reco_node(state: AgentState):
             "priority": priority,
         }
 
-    async def generate_output(prepared_data: dict):
+    async def generate_output(prepared_data: dict, display_priority: int = None):
         """Phase 2: LLM output generation with streaming (sequential)"""
         if not prepared_data:
             return None
             
         section_data = prepared_data["section_data"]
-        priority = prepared_data["priority"]
+        # Use display_priority if provided (for contiguous numbering), else fallback to original priority
+        priority = display_priority if display_priority is not None else prepared_data["priority"]
         
         user_mode = state.get("user_mode", "BEGINNER")
         
@@ -659,54 +793,75 @@ async def parallel_reco_node(state: AgentState):
 
     # Phase 1: Parallel preparation (strategy planning + search)
     # All 3 strategies run simultaneously - fast!
-    prep_tasks = [
-        asyncio.create_task(prepare_strategy("STRAT_1", 1)),
-        asyncio.create_task(prepare_strategy("STRAT_2", 2)),
-        asyncio.create_task(prepare_strategy("STRAT_3", 3)),
-    ]
+    
+    # [Task D1] 트렌딩 키워드 감지
+    rank_mode = "DEFAULT"
+    user_query = state.get("user_query", "")
+    trending_keywords = ["유행", "인기", "트렌딩", "요즘", "잘나가는", "베스트", "trending", "popular", "hot"]
+    if any(k in user_query for k in trending_keywords):
+        rank_mode = "POPULAR"
+        print(f"🔥 [Ranking] Mode: {rank_mode}", flush=True)
+    
+    # [Task C1] Determine target recommended count (Default: 3)
+    target_count = state.get("recommended_count")
+    if target_count is None:
+        # Try to parse from user_query using helper
+        parsed = parse_recommended_count(state.get("user_query", ""))
+        target_count = parsed if parsed is not None else 3
+    
+    # Cap target_count reasonably (e.g. 1 to 5)
+    target_count = normalize_recommended_count(target_count)
+    
+    print(f"🔢 [Count] Target recommendations: {target_count}", flush=True)
+
+    # [Task C2] Dynamic Strategy Generation Loop
+    prep_tasks = []
+    for i in range(1, target_count + 1):
+        prep_tasks.append(asyncio.create_task(prepare_strategy(f"STRAT_{i}", i, rank_mode)))
 
     # Phase 2: Sequential output generation with streaming
     # Wait for prep in order, then generate output with streaming
-    results = []
-    prepared_data_list = []  # [★추가] 추천 이력 누적용
-    try:
-        data1 = await prep_tasks[0]
-        prepared_data_list.append(data1)
-        result1 = await generate_output(data1) if data1 else None
-        results.append(result1)
-
-        data2 = await prep_tasks[1]
-        prepared_data_list.append(data2)
-        result2 = await generate_output(data2) if data2 else None
-        results.append(result2)
-
-        data3 = await prep_tasks[2]
-        prepared_data_list.append(data3)
-        result3 = await generate_output(data3) if data3 else None
-        results.append(result3)
-    except (Exception, asyncio.CancelledError) as e:
-        return {
-            "messages": [AIMessage(content="조건에 맞는 향수를 찾지 못했습니다. 😢")],
-            "next_step": "end",
-        }
-
-    # Assemble sections in order (1 → 2 → 3)
-    full_text = ""
-    for idx, result_text in enumerate(results, start=1):
-        # Handle exceptions returned by gather(return_exceptions=True)
-        if isinstance(result_text, (Exception, asyncio.CancelledError)):
+    # results = []
+    # prepared_data_list = []  # [★추가] 추천 이력 누적용
+    
+    # 1. Gather all preparation tasks (ignoring exceptions during gather, handling them later)
+    results = await asyncio.gather(*prep_tasks, return_exceptions=True)
+    
+    valid_data_list = []
+    
+    # 2. Filter out failures (None or Exception)
+    for res in results:
+        if isinstance(res, Exception):
+            logger.error(f"Strategy preparation failed: {res}")
             continue
-
-        if not result_text:
+        if res is None:
             continue
-
-        if full_text:
-            full_text = f"{full_text}\n\n{result_text}"
-        else:
-            full_text = result_text
-
-    if not full_text:
-        full_text = "조건에 맞는 향수를 찾지 못했습니다. 😢 대안을 안내해 드릴게요..."
+        valid_data_list.append(res)
+        
+    # 3. Generate output for VALID results only, with CONTIGUOUS numbering
+    final_output_texts = []
+    prepared_data_list = [] # For history tracking
+    
+    for idx, data in enumerate(valid_data_list, start=1):
+        # Pass the new sequential priority (idx) to generate_output
+        # This ensures outputs are labeled ## 1., ## 2., etc. regardless of original priority
+        output_text = await generate_output(data, display_priority=idx)
+        
+        if output_text:
+            final_output_texts.append(output_text)
+            prepared_data_list.append(data)
+            
+    # 4. Assemble full text
+    if final_output_texts:
+        full_text = "\n\n".join(final_output_texts)
+    else:
+        # Dynamic fallback generation
+        fallback_messages = [
+            SystemMessage(content=WRITER_FAILURE_PROMPT),
+            HumanMessage(content=f"사용자 정보: {current_context}")
+        ]
+        fallback_response = await SUPER_SMART_LLM.ainvoke(fallback_messages)
+        full_text = fallback_response.content
 
     # [★추가] 현재 배치에서 추천된 향수 ID 수집 및 세션 히스토리 업데이트
     current_batch_ids = []
@@ -722,6 +877,7 @@ async def parallel_reco_node(state: AgentState):
         "messages": [AIMessage(content=full_text)],
         "next_step": "end",
         "recommended_history": updated_history,
+        "user_preferences": user_prefs,
     }
 
 
