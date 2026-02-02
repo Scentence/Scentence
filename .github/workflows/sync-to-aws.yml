@@ -53,7 +53,8 @@ jobs:
           # 새 브랜치 생성 및 푸시
           git checkout -b $BRANCH_NAME
           git push aws-deploy $BRANCH_NAME
-          
+          gh label create "auto-sync" --repo Scentence/Scentence_aws --color "0E8A16" --description "Auto Sync" || true
+          gh label create "deployment" --repo Scentence/Scentence_aws --color "0075ca" --description "Deployment" || true
           # PR 생성
           gh pr create \
             --repo Scentence/Scentence_aws \
