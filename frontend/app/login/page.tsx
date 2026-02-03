@@ -59,7 +59,7 @@ export default function LoginPage() {
       let nickname = null;
       let roleType = data?.role_type ?? null;
       if (data?.member_id) {
-        const profileResponse = await fetch(`${apiBaseUrl}/users/profile/${data.member_id}`);
+        const profileResponse = await fetch(`/api/users/profile/${data.member_id}`);
         if (profileResponse.ok) {
           const profileData = await profileResponse.json().catch(() => null);
           nickname = profileData?.nickname ?? null;

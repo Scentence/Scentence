@@ -35,7 +35,6 @@ export default function LandingPage() {
 
   useEffect(() => {
     if (typeof window === "undefined") return;
-    const apiBaseUrl = process.env.NEXT_PUBLIC_API_URL || "";
     const memberId = session?.user?.id || localUser?.memberId;
 
     if (!memberId) {
@@ -43,7 +42,7 @@ export default function LandingPage() {
       return;
     }
 
-    fetch(`${apiBaseUrl}/users/profile/${memberId}`)
+    fetch(`/api/users/profile/${memberId}`)
       .then((res) => (res.ok ? res.json() : null))
       .then((data) => {
         // [사용자 정보 업데이트] 가져온 데이터에 닉네임이 있으면 저장하기
@@ -57,12 +56,7 @@ export default function LandingPage() {
         //    (Next.js의 rewrites 설정 덕분에 브라우저가 알아서 현재 서버의 백엔드로 요청을 보냅니다.)
         // 3. 이를 통해 'localhost'가 코드에 박히는 현상을 방지하여 팀원들 PC에서도 사진이 잘 나오게 합니다.
         if (data?.profile_image_url) {
-          const rawUrl = data.profile_image_url;
-          const finalUrl = (rawUrl.startsWith("http") || rawUrl.startsWith("/uploads"))
-            ? rawUrl
-            : `${apiBaseUrl}${rawUrl}`;
-
-          setProfileImageUrl(finalUrl);
+          setProfileImageUrl(data.profile_image_url);
         }
       })
       .catch(() => setProfileImageUrl(null));

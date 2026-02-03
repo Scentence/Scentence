@@ -1,21 +1,23 @@
 import type { NextConfig } from "next";
 
+// Docker Compose 환경을 기본값으로 사용 (서비스명 기반 통신)
+// localhost는 컨테이너 내부에서 자기 자신을 가리키므로 Docker 환경에서 실패
 const backendUrl =
   process.env.BACKEND_INTERNAL_URL ??
   process.env.NEXT_PUBLIC_API_URL ??
-  "http://localhost:8000";
+  "http://backend:8000";  // Docker Compose 서비스명
 
 const rawLayeringApiUrl =
   process.env.LAYERING_API_URL ??
   process.env.NEXT_PUBLIC_LAYERING_API_URL ??
-  "http://localhost:8002";
+  "http://layering:8002";  // Docker Compose 서비스명
 
 const normalizedLayeringApiUrl = rawLayeringApiUrl.replace(/\/+$/, "");
 const layeringApiUrl = normalizedLayeringApiUrl.endsWith("/layering")
   ? normalizedLayeringApiUrl.slice(0, -"/layering".length)
   : normalizedLayeringApiUrl;
 
-const scentmapUrl = process.env.SCENTMAP_INTERNAL_URL ?? "http://localhost:8001";
+const scentmapUrl = process.env.SCENTMAP_INTERNAL_URL ?? "http://scentmap:8001";  // Docker Compose 서비스명
 
 const nextConfig: NextConfig = {
   // [추가] 윈도우 Docker 환경에서 Hot Reload가 안 될 때를 위한 강제 설정

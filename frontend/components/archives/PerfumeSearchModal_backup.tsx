@@ -3,8 +3,6 @@
 
 import { useState } from 'react';
 
-const API_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000";
-
 interface SearchResult {
     perfume_id: number;
     name: string;
@@ -27,7 +25,7 @@ export default function PerfumeSearchModal({ memberId, onClose, onAdd }: Props) 
         if (!query.trim()) return;
         try {
             setLoading(true);
-            const res = await fetch(`${API_URL}/perfumes/search?q=${encodeURIComponent(query)}`);
+            const res = await fetch(`/api/perfumes/search?q=${encodeURIComponent(query)}`);
             if (res.ok) {
                 const data = await res.json();
                 setResults(data);

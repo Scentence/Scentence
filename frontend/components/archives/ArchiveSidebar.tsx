@@ -43,10 +43,7 @@ export default function ArchiveSidebar({ isOpen, onClose }: ArchiveSidebarProps)
             .then((res) => (res.ok ? res.json() : null))
             .then((data) => {
                 if (data?.profile_image_url) {
-                    const url = data.profile_image_url.startsWith("http")
-                        ? data.profile_image_url
-                        : `${apiBaseUrl}${data.profile_image_url}`;
-                    setProfileImageUrl(url);
+                    setProfileImageUrl(data.profile_image_url);
                 } else {
                     setProfileImageUrl(null);
                 }

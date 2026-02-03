@@ -54,7 +54,6 @@ export default function ChatPage() {
     }, []);
 
     useEffect(() => {
-        const apiBaseUrl = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000";
         const currentId = session?.user?.id || localUser?.memberId;
 
         if (!currentId) {
@@ -65,14 +64,11 @@ export default function ChatPage() {
 
         setMemberId(parseInt(currentId, 10));
 
-        fetch(`${apiBaseUrl}/users/profile/${currentId}`)
+        fetch(`/api/users/profile/${currentId}`)
             .then((res) => (res.ok ? res.json() : null))
             .then((data) => {
                 if (data?.profile_image_url) {
-                    const url = data.profile_image_url.startsWith("http")
-                        ? data.profile_image_url
-                        : `${apiBaseUrl}${data.profile_image_url}`;
-                    setProfileImageUrl(url);
+                    setProfileImageUrl(data.profile_image_url);
                 }
             })
             .catch(() => setProfileImageUrl(null));
