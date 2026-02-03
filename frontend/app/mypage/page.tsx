@@ -155,7 +155,7 @@ export default function MyPage() {
     }, 350);
 
     return () => window.clearTimeout(timeoutId);
-  }, [apiBaseUrl, memberId, nickname]);
+  }, [memberId, nickname]);
 
   const nicknameHint = useMemo(() => {
     if (nicknameStatus === "invalid") return "2~12자의 한글/영문/숫자만 가능합니다.";
