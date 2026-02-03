@@ -4,6 +4,8 @@ from typing import Optional
 
 from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
+from dotenv import load_dotenv
+from langsmith import RunTree
 
 try:  # pragma: no cover - fallback for script execution
     from .agent.database import (
@@ -33,7 +35,12 @@ try:  # pragma: no cover - fallback for script execution
         UserQueryRequest,
         UserQueryResponse,
     )
-    from .agent.tools import rank_recommendations
+    from .agent.tools import (
+        _matches_input_name,
+        _should_exclude_candidate,
+        build_input_name_keys,
+        rank_recommendations,
+    )
 except ImportError:  # pragma: no cover
     from agent.database import (
         LayeringDataError,
@@ -62,8 +69,15 @@ except ImportError:  # pragma: no cover
         UserQueryRequest,
         UserQueryResponse,
     )
-    from agent.tools import rank_recommendations
+    from agent.tools import (
+        _matches_input_name,
+        _should_exclude_candidate,
+        build_input_name_keys,
+        rank_recommendations,
+    )
 
+
+load_dotenv()
 
 logging.basicConfig(
     level=logging.INFO,
@@ -76,6 +90,13 @@ DEBUG_ERROR_DETAILS = os.getenv("LAYERING_DEBUG_ERRORS", "").lower() in {
     "1",
     "yes",
 }
+LANGSMITH_TRACING = os.getenv("LANGSMITH_TRACING", "").lower() in {
+    "true",
+    "1",
+    "yes",
+}
+if LANGSMITH_TRACING:
+    os.environ.setdefault("LANGCHAIN_TRACING_V2", "true")
 
 # CORS origins from environment variable
 cors_origins_env = os.getenv("LAYERING_CORS_ORIGINS", "")
@@ -102,6 +123,49 @@ def get_repository() -> PerfumeRepository:
         return repository
     repository = PerfumeRepository()
     return repository
+
+
+def _start_langsmith_run(name: str, inputs: dict, metadata: dict | None = None) -> RunTree | None:
+    if not LANGSMITH_TRACING:
+        return None
+    try:
+        run = RunTree(
+            name=name,
+            run_type="chain",
+            inputs=inputs,
+            extra={"metadata": metadata or {}},
+        )
+        run.post()
+        return run
+    except Exception:
+        return None
+
+
+def _filter_duplicate_recommendations(
+    base_perfume: PerfumeBasic,
+    recommendations: list,
+    repository: PerfumeRepository,
+    input_name_keys: set[str] | None = None,
+) -> tuple[list, int]:
+    filtered = []
+    filtered_out = 0
+    try:
+        base_vector = repository.get_perfume(base_perfume.perfume_id)
+    except KeyError:
+        return recommendations, 0
+    for candidate in recommendations:
+        try:
+            candidate_vector = repository.get_perfume(candidate.perfume_id)
+        except KeyError:
+            continue
+        if input_name_keys and _matches_input_name(candidate_vector, input_name_keys):
+            filtered_out += 1
+            continue
+        if _should_exclude_candidate(base_vector, candidate_vector):
+            filtered_out += 1
+            continue
+        filtered.append(candidate)
+    return filtered, filtered_out
 
 
 def build_error_response(
@@ -146,6 +210,14 @@ def health() -> dict[str, str]:
 
 @app.post("/layering/recommend", response_model=LayeringResponse)
 def layering_recommend(payload: LayeringRequest) -> LayeringResponse:
+    run = _start_langsmith_run(
+        "layering.recommend",
+        inputs={
+            "base_perfume_id": payload.base_perfume_id,
+            "keywords": payload.keywords,
+            "member_id": payload.member_id,
+        },
+    )
     try:
         logger.info(
             "Layering recommend request received (member_id=%s, save_recommendations=%s, save_my_perfume=%s)",
@@ -162,6 +234,20 @@ def layering_recommend(payload: LayeringRequest) -> LayeringResponse:
             payload.keywords,
             repo,
         )
+        recommendations, filtered_out = _filter_duplicate_recommendations(
+            PerfumeBasic(
+                perfume_id=base_perfume.perfume_id,
+                perfume_name=base_perfume.perfume_name,
+                perfume_brand=base_perfume.perfume_brand,
+                image_url=base_perfume.image_url,
+                concentration=base_perfume.concentration,
+            ),
+            recommendations,
+            repo,
+            input_name_keys=None,
+        )
+        if filtered_out:
+            total_available = max(0, total_available - filtered_out)
         save_results = []
         if payload.member_id and payload.save_recommendations:
             # 추천 결과 저장 요청이 있을 때만 recom_db에 기록
@@ -191,6 +277,8 @@ def layering_recommend(payload: LayeringRequest) -> LayeringResponse:
             retriable=exc.retriable,
             details=exc.details,
         )
+        if run is not None:
+            run.end(error=str(error_payload.model_dump(exclude_none=True)))
         raise HTTPException(
             status_code=503,
             detail=error_payload.model_dump(exclude_none=True),
@@ -203,6 +291,8 @@ def layering_recommend(payload: LayeringRequest) -> LayeringResponse:
             retriable=False,
             details=str(exc),
         )
+        if run is not None:
+            run.end(error=str(error_payload.model_dump(exclude_none=True)))
         raise HTTPException(
             status_code=404,
             detail=error_payload.model_dump(exclude_none=True),
@@ -216,6 +306,8 @@ def layering_recommend(payload: LayeringRequest) -> LayeringResponse:
             retriable=False,
             details=str(exc),
         )
+        if run is not None:
+            run.end(error=str(error_payload.model_dump(exclude_none=True)))
         raise HTTPException(
             status_code=500,
             detail=error_payload.model_dump(exclude_none=True),
@@ -225,6 +317,18 @@ def layering_recommend(payload: LayeringRequest) -> LayeringResponse:
     if total_available < 3:
         note = (
             f"Only {total_available} layering option(s) available after feasibility checks."
+        )
+    if filtered_out:
+        duplicate_note = "같은 이름의 향수는 추천에서 제외했어요."
+        note = f"{note} {duplicate_note}" if note else duplicate_note
+
+    if run is not None:
+        run.end(
+            outputs={
+                "recommendation_ids": [item.perfume_id for item in recommendations],
+                "total_available": total_available,
+                "filtered_out": filtered_out,
+            }
         )
 
     return LayeringResponse(
@@ -246,6 +350,14 @@ def layering_recommend(payload: LayeringRequest) -> LayeringResponse:
 
 @app.post("/layering/analyze", response_model=UserQueryResponse)
 def layering_analyze(payload: UserQueryRequest) -> UserQueryResponse:
+    run = _start_langsmith_run(
+        "layering.analyze",
+        inputs={
+            "user_text": payload.user_text,
+            "member_id": payload.member_id,
+            "context_recommended_perfume_id": payload.context_recommended_perfume_id,
+        },
+    )
     try:
         logger.info(
             "Layering analyze request received (member_id=%s, save_recommendations=%s, save_my_perfume=%s)",
@@ -289,6 +401,10 @@ def layering_analyze(payload: UserQueryRequest) -> UserQueryResponse:
             preferences,
             context_recommended_perfume_id=payload.context_recommended_perfume_id,
         )
+        input_name_keys = build_input_name_keys(
+            payload.user_text,
+            analysis.detected_perfumes,
+        )
         recommendation = None
         note = None
         base_perfume_id = None
@@ -324,7 +440,12 @@ def layering_analyze(payload: UserQueryRequest) -> UserQueryResponse:
                 base_perfume_id = analysis.detected_pair.base_perfume_id
         elif analysis.detected_perfumes:
             base_perfume_id = analysis.detected_perfumes[0].perfume_id
-            recommendations, _ = rank_recommendations(base_perfume_id, keywords, repo)
+            recommendations, _ = rank_recommendations(
+                base_perfume_id,
+                keywords,
+                repo,
+                input_name_keys=input_name_keys,
+            )
             if recommendations:
                 recommendation = recommendations[0]
             else:
@@ -333,6 +454,25 @@ def layering_analyze(payload: UserQueryRequest) -> UserQueryResponse:
             note = "No perfume names detected from the query."
             clarification_prompt = "레이어링할 향수 이름을 알려주세요. 예: CK One, Wood Sage & Sea Salt"
             clarification_options = suggest_perfume_options(payload.user_text, repo)
+
+        duplicate_filtered = False
+        if recommendation:
+            try:
+                base_vector = repo.get_perfume(base_perfume_id) if base_perfume_id else None
+                candidate_vector = repo.get_perfume(recommendation.perfume_id)
+            except KeyError:
+                base_vector = None
+                candidate_vector = None
+            if candidate_vector:
+                if input_name_keys and _matches_input_name(candidate_vector, input_name_keys):
+                    recommendation = None
+                    duplicate_filtered = True
+                elif base_vector and _should_exclude_candidate(base_vector, candidate_vector):
+                    recommendation = None
+                    duplicate_filtered = True
+            if duplicate_filtered:
+                duplicate_note = "같은 이름의 향수는 추천에서 제외했어요."
+                note = f"{note} {duplicate_note}" if note else duplicate_note
 
         if payload.member_id and payload.save_recommendations and recommendation:
             # 추천 결과 저장 요청이 있을 때만 recom_db에 기록
@@ -371,6 +511,14 @@ def layering_analyze(payload: UserQueryRequest) -> UserQueryResponse:
                 )
             except KeyError:
                 base_perfume = None
+        if run is not None:
+            run.end(
+                outputs={
+                    "base_perfume_id": base_perfume_id,
+                    "recommendation_id": recommendation.perfume_id if recommendation else None,
+                    "duplicate_filtered": duplicate_filtered,
+                }
+            )
     except LayeringDataError as exc:
         logger.exception("Layering data error during analysis")
         error_payload = build_error_response(
@@ -380,6 +528,8 @@ def layering_analyze(payload: UserQueryRequest) -> UserQueryResponse:
             retriable=exc.retriable,
             details=exc.details,
         )
+        if run is not None:
+            run.end(error=str(error_payload.model_dump(exclude_none=True)))
         raise HTTPException(
             status_code=503,
             detail=error_payload.model_dump(exclude_none=True),
@@ -392,6 +542,8 @@ def layering_analyze(payload: UserQueryRequest) -> UserQueryResponse:
             retriable=False,
             details=str(exc),
         )
+        if run is not None:
+            run.end(error=str(error_payload.model_dump(exclude_none=True)))
         raise HTTPException(
             status_code=404,
             detail=error_payload.model_dump(exclude_none=True),
@@ -405,6 +557,8 @@ def layering_analyze(payload: UserQueryRequest) -> UserQueryResponse:
             retriable=False,
             details=str(exc),
         )
+        if run is not None:
+            run.end(error=str(error_payload.model_dump(exclude_none=True)))
         raise HTTPException(
             status_code=500,
             detail=error_payload.model_dump(exclude_none=True),
