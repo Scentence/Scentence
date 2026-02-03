@@ -254,12 +254,28 @@ async def call_info_graph_wrapper(state: AgentState):
 
     try:
         result = await info_graph.ainvoke(subgraph_input)
-        return {"messages": result.get("messages", [])}
+        
+        # [Wave 2-4] Map info_status to chat_outcome_status
+        info_status = result.get("info_status", "OK")
+        
+        return {
+            "messages": result.get("messages", []),
+            "chat_outcome_status": info_status,  # OK/NO_RESULTS/ERROR 직접 매핑
+            "chat_outcome_reason_code": f"info_{info_status.lower()}",
+            "chat_outcome_reason_detail": f"Info graph completed with status: {info_status}",
+        }
 
     except Exception as e:
         import traceback
         traceback.print_exc()
-        return {"messages": [AIMessage(content="정보 검색 중 오류가 발생했습니다.")]}
+        
+        # [Wave 2-4] Set ERROR status on exception
+        return {
+            "messages": [AIMessage(content="정보 검색 중 오류가 발생했습니다.")],
+            "chat_outcome_status": "ERROR",
+            "chat_outcome_reason_code": "info_exception",
+            "chat_outcome_reason_detail": f"Info graph exception: {str(e)[:100]}",
+        }
 
 
 # ==========================================
@@ -610,7 +626,13 @@ async def parallel_reco_node(state: AgentState):
                 plan_messages, config={"tags": ["internal_helper"]}
             )
         except Exception as e:
-            return None
+            return {
+                "error": True,
+                "error_type": "llm_error",
+                "error_detail": str(e),
+                "section_data": None,
+                "priority": priority,
+            }
 
         user_label = await generate_user_label(user_prefs, plan.reason, plan.strategy_name)
 
@@ -626,7 +648,13 @@ async def parallel_reco_node(state: AgentState):
                 h_filters, s_filters, exclude_ids=exclude_ids, query_text=plan.reason, rank_mode=rank_mode
             )
         except Exception as e:
-            return None
+            return {
+                "error": True,
+                "error_type": "tool_error",
+                "error_detail": str(e),
+                "section_data": None,
+                "priority": priority,
+            }
 
         selected_perfume = None
         async with seen_ids_lock:
@@ -647,7 +675,13 @@ async def parallel_reco_node(state: AgentState):
                     break
 
         if not selected_perfume:
-            return None
+            return {
+                "error": True,
+                "error_type": "no_candidates",
+                "error_detail": "No candidates selected",
+                "section_data": None,
+                "priority": priority,
+            }
 
         save_recommendation_log(
             member_id=member_id, perfumes=[selected_perfume], reason=plan.reason
@@ -843,12 +877,14 @@ async def parallel_reco_node(state: AgentState):
     
     valid_data_list = []
     
-    # 2. Filter out failures (None or Exception)
+    # 2. Filter out failures (None, Exception, or error dict)
     for res in results:
         if isinstance(res, Exception):
             logger.error(f"Strategy preparation failed: {res}")
             continue
         if res is None:
+            continue
+        if isinstance(res, dict) and res.get("error"):
             continue
         valid_data_list.append(res)
         
@@ -877,6 +913,40 @@ async def parallel_reco_node(state: AgentState):
         fallback_response = await SUPER_SMART_LLM.ainvoke(fallback_messages)
         full_text = fallback_response.content
 
+    # [★추가] 결과 상태 분류 (Wave 2-2)
+    errors_encountered = []
+    for res in results:
+        if isinstance(res, Exception):
+            errors_encountered.append({"type": "exception", "detail": str(res)})
+        elif isinstance(res, dict) and res.get("error"):
+            errors_encountered.append({
+                "type": res.get("error_type"),
+                "detail": res.get("error_detail"),
+            })
+
+    if len(final_output_texts) >= 1:
+        chat_outcome_status = "OK"
+        if len(final_output_texts) < target_count:
+            chat_outcome_reason_code = "partial_results"
+            chat_outcome_reason_detail = (
+                f"Generated {len(final_output_texts)}/{target_count} sections"
+            )
+        else:
+            chat_outcome_reason_code = "success"
+            chat_outcome_reason_detail = (
+                f"Generated {len(final_output_texts)}/{target_count} sections"
+            )
+    elif errors_encountered:
+        chat_outcome_status = "ERROR"
+        chat_outcome_reason_code = errors_encountered[0]["type"]
+        chat_outcome_reason_detail = (
+            f"{len(errors_encountered)} errors: {errors_encountered[0]['detail'][:100]}"
+        )
+    else:
+        chat_outcome_status = "NO_RESULTS"
+        chat_outcome_reason_code = "no_candidates"
+        chat_outcome_reason_detail = "All strategies failed to find suitable perfumes"
+
     # [★추가] 현재 배치에서 추천된 향수 ID 수집 및 세션 히스토리 업데이트
     current_batch_ids = []
     for prepared_data in prepared_data_list:
@@ -892,7 +962,68 @@ async def parallel_reco_node(state: AgentState):
         "next_step": "end",
         "recommended_history": updated_history,
         "user_preferences": user_prefs,
+        "chat_outcome_status": chat_outcome_status,
+        "chat_outcome_reason_code": chat_outcome_reason_code,
+        "chat_outcome_reason_detail": chat_outcome_reason_detail,
     }
+
+
+def parallel_reco_result_router(state: AgentState):
+    """
+    chat_outcome_status 값에 따라 다음 노드로 라우팅합니다.
+    
+    Returns:
+        다음 노드 이름 ('parallel_reco_ok_writer' | 'parallel_reco_no_results' | 'parallel_reco_error')
+    """
+    status = state.get("chat_outcome_status", "OK")
+    
+    print(f"\n🔀 [Reco Router] Status: {status}", flush=True)
+    
+    if status == "NO_RESULTS":
+        return "parallel_reco_no_results"
+    elif status == "ERROR":
+        return "parallel_reco_error"
+    else:
+        return "parallel_reco_ok_writer"
+
+
+async def parallel_reco_ok_writer(state: AgentState):
+    """
+    OK 상태일 때 - 이미 parallel_reco_node에서 메시지 생성 완료.
+    추가 처리 없이 그대로 반환.
+    """
+    print(f"\n✅ [Reco OK Writer] 정상 추천 완료", flush=True)
+    return {}
+
+
+async def parallel_reco_no_results(state: AgentState):
+    """
+    NO_RESULTS 상태일 때 - WRITER_FAILURE_PROMPT 사용하여 대안 제시.
+    """
+    print(f"\n⚠️ [Reco No Results] 검색 결과 없음 처리", flush=True)
+    
+    user_prefs = state.get("user_preferences", {})
+    current_context = json.dumps(user_prefs, ensure_ascii=False)
+    
+    fallback_messages = [
+        SystemMessage(content=WRITER_FAILURE_PROMPT),
+        HumanMessage(content=f"사용자 정보: {current_context}")
+    ]
+    
+    fallback_response = await SUPER_SMART_LLM.ainvoke(fallback_messages)
+    
+    return {"messages": [AIMessage(content=fallback_response.content)]}
+
+
+async def parallel_reco_error(state: AgentState):
+    """
+    ERROR 상태일 때 - 고정 문구 출력 (내부 오류 노출 금지).
+    """
+    print(f"\n❌ [Reco Error] 기술적 오류 처리", flush=True)
+    
+    error_msg = "죄송합니다. 현재 알 수 없는 오류가 발생하였습니다. 잠시 후 다시 시도해 주세요. 🙏"
+    
+    return {"messages": [AIMessage(content=error_msg)]}
 
 
 # ==========================================
@@ -905,6 +1036,12 @@ workflow.add_node("interviewer", interviewer_node)
 # workflow.add_node("researcher", researcher_node)  # Replaced by parallel_reco
 # workflow.add_node("writer", writer_node)  # Replaced by parallel_reco
 workflow.add_node("parallel_reco", parallel_reco_node)
+
+# [Wave 2-3] Add status-based routing nodes
+workflow.add_node("parallel_reco_result_router", parallel_reco_result_router)
+workflow.add_node("parallel_reco_ok_writer", parallel_reco_ok_writer)
+workflow.add_node("parallel_reco_no_results", parallel_reco_no_results)
+workflow.add_node("parallel_reco_error", parallel_reco_error)
 workflow.add_node("info_retrieval_subgraph", call_info_graph_wrapper)
 
 workflow.add_edge(START, "supervisor")
@@ -927,7 +1064,24 @@ workflow.add_conditional_edges(
 
 # workflow.add_edge("researcher", "writer")  # Old flow - replaced
 # workflow.add_edge("writer", END)  # Old flow - replaced
-workflow.add_edge("parallel_reco", END)
+
+# [Wave 2-3] Route parallel_reco → router → status-specific nodes
+workflow.add_edge("parallel_reco", "parallel_reco_result_router")
+
+workflow.add_conditional_edges(
+    "parallel_reco_result_router",
+    lambda x: parallel_reco_result_router(x),
+    {
+        "parallel_reco_ok_writer": "parallel_reco_ok_writer",
+        "parallel_reco_no_results": "parallel_reco_no_results",
+        "parallel_reco_error": "parallel_reco_error",
+    },
+)
+
+# [Wave 2-3] All status nodes → END
+workflow.add_edge("parallel_reco_ok_writer", END)
+workflow.add_edge("parallel_reco_no_results", END)
+workflow.add_edge("parallel_reco_error", END)
 workflow.add_edge("info_retrieval_subgraph", END)
 
 checkpointer = MemorySaver()

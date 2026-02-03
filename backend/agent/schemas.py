@@ -52,6 +52,11 @@ class AgentState(Dict):
     constraint_scope: Literal["FRAME", "SESSION", "PROFILE"] | None = None
     constraint_source: Literal["explicit_user", "inferred", "system_default"] | None = None
 
+    # [★Wave 2] 상태 분류 필드 (OK/NO_RESULTS/ERROR 통합 관리)
+    chat_outcome_status: Optional[Literal["OK","NO_RESULTS","ERROR"]]
+    chat_outcome_reason_code: Optional[str]  # 예: "partial_results", "tool_error", "no_candidates"
+    chat_outcome_reason_detail: Optional[str]  # 사용자 노출 금지, 로그/테스트용
+
 
 # =================================================================
 # 2. 인터뷰 및 라우팅 (Interviewer & Router)
