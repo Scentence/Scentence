@@ -1,5 +1,5 @@
 # backend/agent/schemas.py
-from typing import List, Optional, Dict, Literal, Annotated
+from typing import List, Optional, Dict, Literal, Annotated, Any
 from pydantic import BaseModel, Field
 from langchain_core.messages import BaseMessage
 from langgraph.graph.message import add_messages
@@ -169,3 +169,115 @@ class StrategyResult(BaseModel):
 
 class ResearcherOutput(BaseModel):
     results: List[StrategyResult] = Field(description="최종 결과 리스트")
+
+
+# =================================================================
+# 5. 정보 검색 전용 스키마 (Info Graph)
+# =================================================================
+class InfoState(Dict):
+    user_query: str
+    info_type: Literal["perfume", "note", "accord", "brand", "similarity", "unknown"]
+    target_name: str
+    target_id: Optional[int]
+
+    search_result: Optional[Dict]
+    final_answer: Optional[str]
+    fail_msg: Optional[str]
+    user_mode: Optional[str]
+    info_status: Optional[Literal["OK", "NO_RESULTS", "ERROR"]]
+    messages: List[Any]
+    info_payload: Optional[Any] = None
+
+
+class InfoRoutingDecision(BaseModel):
+    """사용자 질문이 무엇에 관한 것인지 분류"""
+
+    info_type: Literal["perfume", "note", "accord", "brand", "similarity"] = Field(
+        description="질문의 대상 카테고리 (향수, 노트, 어코드, 브랜드, 유사추천)"
+    )
+    target_name: str = Field(
+        description="질문의 핵심 대상 이름 (예: '조말론 블랙베리', '우디', '샤넬')"
+    )
+    intent: str = Field(
+        description="사용자가 궁금해하는 구체적인 내용 (예: '지속력이 궁금해', '비슷한거 추천해줘')"
+    )
+
+
+# =================================================================
+# 6. 도구 입력/분석 스키마 (Tools)
+# =================================================================
+class LookupNoteInput(BaseModel):
+    """노트(향료) 명칭 조회를 위한 입력 스키마"""
+
+    keyword: str = Field(
+        description="조회하거나 교정할 향기 키워드 (예: 'Rose', '숲의 향')"
+    )
+
+
+class AdvancedSearchInput(BaseModel):
+    """
+    [고도화된 향수 검색]
+    1차로 메타 데이터 필터를 통해 후보군을 넓게 확보한 뒤,
+    'query_text'(전략 의도)와 리뷰 데이터를 비교해 정밀하게 리랭킹(Reranking)합니다.
+    """
+
+    hard_filters: Dict[str, Any] = Field(
+        description="타협 불가능한 필수 조건 (gender, brand 등). DB 컬럼과 일치해야 함."
+    )
+    strategy_filters: Dict[str, List[str]] = Field(
+        description="이미지 전략에 따른 유연 조건 (season, accord, note, occasion 등)"
+    )
+    exclude_ids: Optional[List[int]] = Field(
+        default=None, description="이미 추천되어 결과에서 제외할 향수 ID 리스트"
+    )
+    exclude_brands: Optional[List[str]] = Field(
+        default=None, description="검색에서 제외할 브랜드 목록 (정규화된 브랜드명, 최대 5개)"
+    )
+    query_text: str = Field(
+        description="리랭킹을 위한 전략 의도(Reason) 또는 검색 키워드. (예: '비 오는 날 숲속의 차분한 느낌')"
+    )
+    rank_mode: str = Field(
+        default="DEFAULT",
+        description="랭킹 모드: 'DEFAULT' (의미 기반) 또는 'POPULAR' (인기순)",
+    )
+
+
+class NoteSearchInput(BaseModel):
+    """노트(원료) 검색 도구 입력 스키마"""
+
+    keywords: List[str] = Field(
+        description="검색할 노트(원료) 이름 리스트 (예: ['Rose', 'Vetiver', 'Tonka Bean'])"
+    )
+
+
+class AccordSearchInput(BaseModel):
+    """어코드(향조/분위기) 검색 도구 입력 스키마"""
+
+    keywords: List[str] = Field(
+        description="검색할 어코드(향조) 이름 리스트 (예: ['Woody', 'Citrus', 'Powdery'])"
+    )
+
+
+class PerfumeIdSearchInput(BaseModel):
+    """향수 ID 기반 검색 도구 입력 스키마"""
+
+    perfume_id: int = Field(
+        description="조회할 향수의 perfume_id (예: 12345)"
+    )
+
+
+class IngredientAnalysisResult(BaseModel):
+    """사용자 질문을 분석하여 노트와 어코드를 분류한 결과"""
+
+    notes: List[str] = Field(
+        default=[],
+        description="질문에서 식별된 노트(구체적 원료) 리스트 (예: Rose, Musk)",
+    )
+    accords: List[str] = Field(
+        default=[],
+        description="질문에서 식별된 어코드(향의 분위기/계열) 리스트 (예: Woody, Floral)",
+    )
+    is_ambiguous: bool = Field(
+        default=False,
+        description="사용자 질문이 향수와 관련 없거나 모호한 경우 True",
+    )

@@ -8,20 +8,19 @@ from langchain_core.messages import SystemMessage, HumanMessage, AIMessage
 from langgraph.graph import StateGraph, START, END
 
 # [1] 스키마 임포트
-from .schemas_info import InfoState, InfoRoutingDecision
-from .tools_schemas_info import IngredientAnalysisResult
+from .schemas import InfoState, InfoRoutingDecision, IngredientAnalysisResult
 
 # [2] 도구 임포트
-from .tools_info import (
+from .tools import (
     lookup_perfume_info_tool,
     lookup_perfume_by_id_tool,
     lookup_note_info_tool,
     lookup_accord_info_tool,
+    lookup_similar_perfumes_tool,
 )
-from .tools_similarity import lookup_similar_perfumes_tool
 
 # [3] 프롬프트 임포트
-from .prompts_info import (
+from .prompts import (
     INFO_SUPERVISOR_PROMPT,
     PERFUME_DESCRIBER_PROMPT_BEGINNER,
     PERFUME_DESCRIBER_PROMPT_EXPERT,
@@ -41,87 +40,15 @@ ROUTER_LLM = ChatOpenAI(model="gpt-4o", temperature=0, streaming=False)
 
 
 # ==========================================
-# 4. Utility Functions for Ordinal/Pronoun Resolution
+# 4. Utility Functions (moved to utils.py)
 # ==========================================
 
-import re
-from typing import List, Dict, Optional
-
-
-def extract_save_refs(messages: List) -> List[Dict[str, any]]:
-    """
-    Extract SAVE tags from most recent AIMessage containing recommendations.
-    Returns list of {id: int, name: str} in order of appearance.
-    """
-    save_pattern = re.compile(r'\[\[SAVE:(\d+):([^\]]+)\]\]')
-    
-    for msg in reversed(messages):
-        if isinstance(msg, AIMessage) and msg.content:
-            matches = save_pattern.findall(msg.content)
-            if matches:
-                return [{"id": int(m[0]), "name": m[1]} for m in matches]
-    
-    return []
-
-
-def parse_ordinal(user_query: str) -> Optional[int]:
-    """
-    Parse ordinal numbers from Korean text (supports 1-10).
-    Returns 1-based index (1, 2, 3, ...) or None if not found.
-    """
-    query_lower = user_query.lower()
-    
-    numeric_match = re.search(r'(\d+)\s*(번째|번)\b', query_lower)
-    if numeric_match:
-        return int(numeric_match.group(1))
-    
-    korean_ordinals = {
-        '첫': 1, '첫번째': 1, '1번째': 1, '1번': 1,
-        '두': 2, '두번째': 2, '둘째': 2, '2번째': 2, '2번': 2,
-        '세': 3, '세번째': 3, '셋째': 3, '3번째': 3, '3번': 3,
-        '네': 4, '네번째': 4, '넷째': 4, '4번째': 4, '4번': 4,
-        '다섯': 5, '다섯번째': 5, '다섯째': 5, '5번째': 5, '5번': 5,
-        '여섯': 6, '여섯번째': 6, '여섯째': 6, '6번째': 6, '6번': 6,
-        '일곱': 7, '일곱번째': 7, '일곱째': 7, '7번째': 7, '7번': 7,
-        '여덟': 8, '여덟번째': 8, '여덟째': 8, '8번째': 8, '8번': 8,
-        '아홉': 9, '아홉번째': 9, '아홉째': 9, '9번째': 9, '9번': 9,
-        '열': 10, '열번째': 10, '열째': 10, '10번째': 10, '10번': 10,
-    }
-    
-    for pattern, num in korean_ordinals.items():
-        if pattern in query_lower:
-            return num
-    
-    return None
-
-
-def resolve_target_from_ordinal_or_pronoun(
-    user_query: str,
-    router_target_name: str,
-    save_refs: List[Dict[str, any]]
-) -> Optional[Dict[str, any]]:
-    """
-    Resolve target perfume from ordinal numbers or pronouns.
-    Returns {id: int, name: str} or None if resolution fails.
-    """
-    pronouns = ['이거', '그거', '이 향수', '저거']
-    generic_terms = ['추천해줘', '비슷한거']
-    
-    ordinal = parse_ordinal(user_query)
-    is_pronoun = any(p in user_query for p in pronouns)
-    is_generic = router_target_name in generic_terms or any(g in router_target_name for g in generic_terms)
-    
-    if ordinal:
-        if 1 <= ordinal <= len(save_refs):
-            return save_refs[ordinal - 1]
-        else:
-            return None
-    
-    if is_pronoun or is_generic:
-        if save_refs:
-            return save_refs[-1]
-    
-    return None
+from .utils import (
+    extract_save_refs,
+    parse_ordinal,
+    resolve_target_from_ordinal_or_pronoun,
+    classify_info_status,
+)
 
 
 # ==========================================
@@ -157,36 +84,6 @@ async def stream_fixed_message(text: str) -> AIMessage:
     return response
 
 
-# ==========================================
-# 5-1. Result Status Classification (Wave 1)
-# ==========================================
-
-def classify_info_status(result: str) -> Literal['OK', 'NO_RESULTS', 'ERROR']:
-    """
-    검색 결과 문자열을 분석하여 상태를 분류합니다.
-    
-    분기 기준:
-    - ERROR: 기술적 오류 (DB 에러, 예외 등)
-    - NO_RESULTS: 데이터 부재 (빈 결과, 검색 실패)
-    - OK: 정상 데이터 존재
-    
-    Args:
-        result: 검색 결과 문자열
-        
-    Returns:
-        'ERROR' | 'NO_RESULTS' | 'OK'
-    """
-    if any(keyword in result for keyword in ["DB 에러", "Error"]):
-        return 'ERROR'
-    
-    if (
-        not result
-        or result in ["{}", "[]", ""]
-        or any(keyword in result for keyword in ["찾을 수 없습니다", "검색 실패", "결과가 없습니다"])
-    ):
-        return 'NO_RESULTS'
-    
-    return 'OK'
 
 
 # ==========================================
@@ -271,36 +168,60 @@ def info_supervisor_node(state: InfoState):
         return {"info_type": "unknown", "target_name": "unknown"}
 
 
-async def perfume_describer_node(state: InfoState):
-    """[Perfume Expert] 상세 정보"""
+async def perfume_search_node(state: InfoState):
+    """[Search] 향수 상세 정보 조회"""
+    print(f"\n   🔍 [Perfume Search] 검색 시작", flush=True)
+
     target = state["target_name"]
     target_id = state.get("target_id")
 
-    user_mode = state.get("user_mode", "BEGINNER")
     try:
         if target_id:
-            search_result_json = await lookup_perfume_by_id_tool.ainvoke({"perfume_id": target_id})
+            search_result = await lookup_perfume_by_id_tool.ainvoke({"perfume_id": target_id})
         else:
-            search_result_json = await lookup_perfume_info_tool.ainvoke(target)
+            search_result = await lookup_perfume_info_tool.ainvoke(target)
 
-        # [Wave 2] 검색 결과 상태 분류
-        status = classify_info_status(search_result_json)
-        
+        # [Wave 2] 검색 결과 상태 분류 (객체 기반)
+        status = classify_info_status(search_result)
+
         if status != "OK":
             # Retry with name if we have both ID and name
             if target_id and target:
-                search_result_json = await lookup_perfume_info_tool.ainvoke(target)
-                status = classify_info_status(search_result_json)
-            
-            # Still not OK after retry
-            if status != "OK":
-                return {"info_status": status}
+                search_result = await lookup_perfume_info_tool.ainvoke(target)
+                status = classify_info_status(search_result)
 
+        if status != "OK":
+            return {"info_status": status}
+
+        # 검색 성공 - info_payload에 JSON 문자열로 저장
+        return {
+            "info_payload": json.dumps(search_result, ensure_ascii=False),
+            "info_status": "OK"
+        }
+
+    except Exception as e:
+        print(f"      ❌ Perfume Search 에러: {e}", flush=True)
+        return {"info_status": "ERROR"}
+
+
+async def perfume_describer_node(state: InfoState):
+    """[Writer] 향수 상세 정보 출력 (DB/도구 호출 금지)"""
+    print(f"\n   ✍️ [Perfume Describer - Writer] 출력 생성 중", flush=True)
+
+    target = state["target_name"]
+    user_mode = state.get("user_mode", "BEGINNER")
+    search_result_json = state.get("info_payload", "")
+
+    if not search_result_json:
+        print("      ⚠️ [Perfume Describer] info_payload 없음", flush=True)
+        return {"info_status": "ERROR"}
+
+    try:
         if user_mode == "EXPERT":
-            print("      😎 [Mode] 전문가용 분석 프롬프트 적용")
+            print("      😎 [Mode] 전문가용 분석 프롬프트 적용", flush=True)
             selected_prompt = PERFUME_DESCRIBER_PROMPT_EXPERT
         else:
-            print("      🐥 [Mode] 비기너용 도슨트 프롬프트 적용")
+            print("      🐥 [Mode] 비기너용 도슨트 프롬프트 적용", flush=True)
             selected_prompt = PERFUME_DESCRIBER_PROMPT_BEGINNER
 
         # [★ Dynamic Expression Injection]
@@ -309,14 +230,14 @@ async def perfume_describer_node(state: InfoState):
             perfume_data = json.loads(search_result_json)
             perfume_name = perfume_data.get("name", "Unknown")
             brand = perfume_data.get("brand", "Unknown")
-            
+
             loader = ExpressionLoader()
             expression_guide = []
             injected_count = 0
-            
+
             all_notes = []
             all_accords = []
-            
+
             # Extract notes
             for note_type in ["top_notes", "middle_notes", "base_notes"]:
                 note_str = perfume_data.get(note_type, "")
@@ -328,7 +249,7 @@ async def perfume_describer_node(state: InfoState):
                         if desc:
                             expression_guide.append(f"- {note}: {desc}")
                             injected_count += 1
-            
+
             # Extract accords
             accord_str = perfume_data.get("accords", "")
             if accord_str:
@@ -339,9 +260,9 @@ async def perfume_describer_node(state: InfoState):
                     if desc:
                         expression_guide.append(f"- {accord}: {desc}")
                         injected_count += 1
-            
+
             expression_text = "\n".join(expression_guide) if expression_guide else ""
-            
+
         except Exception as e:
             expression_text = ""
 
@@ -363,16 +284,15 @@ async def perfume_describer_node(state: InfoState):
         return {"info_status": "ERROR"}
 
 
-async def ingredient_specialist_node(state: InfoState):
-    """[Ingredient Expert] 성분 분석"""
+async def ingredient_search_node(state: InfoState):
+    """[Search] 노트/어코드 검색"""
+    print(f"\n   🔍 [Ingredient Search] 검색 시작", flush=True)
+
     try:
         user_query = state.get("user_query", "")
         target_name = state.get("target_name", "")
-        print(
-            f"\n   ▶️ [Info Subgraph] Ingredient Specialist: '{user_query}'", flush=True
-        )
 
-        # 1. 쿼리 분석 로직 (원래 로직 유지)
+        # 1. 쿼리 분석
         analysis_prompt = f"""
         You are a query analyzer. Separate 'Notes' and 'Accords'.
         Query: "{user_query}"
@@ -392,7 +312,7 @@ async def ingredient_specialist_node(state: InfoState):
             print(f"      ⚠️ 분석 실패: {e}", flush=True)
             analysis = IngredientAnalysisResult(notes=[target_name], accords=[])
 
-        # 2. 병렬 도구 호출 (원래 로직 유지)
+        # 2. 병렬 도구 호출
         tasks = []
         tasks.append(
             lookup_note_info_tool.ainvoke({"keywords": analysis.notes})
@@ -408,12 +328,13 @@ async def ingredient_specialist_node(state: InfoState):
         results = await asyncio.gather(*tasks)
         note_result, accord_result = results[0], results[1]
 
-        # 3. 상세 로깅 함수 및 실행 (원래 로직 유지)
-        def print_result_log(category: str, result_str: str):
-            if not result_str:
+        # 3. 상세 로깅
+        def print_result_log(category: str, result_obj: Any):
+            if not result_obj:
                 return
             try:
-                data = json.loads(result_str)
+                # 객체를 직접 처리
+                data = result_obj if isinstance(result_obj, dict) else {}
                 if not data:
                     print(f"      🔍 [{category}]: 결과 없음 (Empty)", flush=True)
                     return
@@ -431,55 +352,89 @@ async def ingredient_specialist_node(state: InfoState):
         print_result_log("Note DB", note_result)
         print_result_log("Accord DB", accord_result)
 
-        # [Wave 2] 검색 결과 상태 분류
+        # 4. 검색 결과 상태 분류 (객체 기반)
         note_status = classify_info_status(note_result)
         accord_status = classify_info_status(accord_result)
-        
+
         # 둘 다 NO_RESULTS 또는 ERROR면 실패
         if note_status != "OK" and accord_status != "OK":
-            # 둘 중 하나라도 ERROR면 ERROR, 아니면 NO_RESULTS
             if note_status == "ERROR" or accord_status == "ERROR":
                 return {"info_status": "ERROR"}
             else:
                 return {"info_status": "NO_RESULTS"}
 
-        # 4. LLM 기반 답변 생성 (데이터가 있을 때만 실행)
-        # [★ Dynamic Expression Injection]
+        # 5. 검색 성공 - info_payload에 결과 저장 (JSON 직렬화)
+        payload = {
+            "analysis": {
+                "notes": analysis.notes,
+                "accords": analysis.accords,
+            },
+            "note_result": note_result,  # 이미 객체 (dict 또는 list)
+            "accord_result": accord_result,  # 이미 객체 (dict 또는 list)
+        }
+
+        return {
+            "info_payload": json.dumps(payload, ensure_ascii=False),
+            "info_status": "OK",
+        }
+
+    except Exception as e:
+        print(f"      ❌ Ingredient Search 에러: {e}", flush=True)
+        return {"info_status": "ERROR"}
+
+
+async def ingredient_specialist_node(state: InfoState):
+    """[Writer] 노트/어코드 설명 출력 (DB/도구 호출 금지)"""
+    print(f"\n   ✍️ [Ingredient Specialist - Writer] 출력 생성 중", flush=True)
+
+    try:
+        info_payload_str = state.get("info_payload", "")
+        if not info_payload_str:
+            print("      ⚠️ [Ingredient Specialist] info_payload 없음", flush=True)
+            return {"info_status": "ERROR"}
+
+        # info_payload 파싱
+        payload = json.loads(info_payload_str)
+        analysis_notes = payload["analysis"]["notes"]
+        analysis_accords = payload["analysis"]["accords"]
+        note_result = payload["note_result"]
+        accord_result = payload["accord_result"]
+
+        # Dynamic Expression Injection
         loader = ExpressionLoader()
         expression_guide = []
-        injected_count = 0
-        
-        # Add note descriptions
-        for note in analysis.notes[:10]:
+
+        for note in analysis_notes[:10]:
             desc = loader.get_note_desc(note)
             if desc:
                 expression_guide.append(f"- {note}: {desc}")
-                injected_count += 1
-        
-        # Add accord descriptions
-        for accord in analysis.accords[:10]:
+
+        for accord in analysis_accords[:10]:
             desc = loader.get_accord_desc(accord)
             if desc:
                 expression_guide.append(f"- {accord}: {desc}")
-                injected_count += 1
-        
+
         expression_text = "\n".join(expression_guide) if expression_guide else ""
-        
+
         context_parts = [
-            f"[User Interest]: Notes: {analysis.notes}, Accords: {analysis.accords}",
+            f"[User Interest]: Notes: {analysis_notes}, Accords: {analysis_accords}",
         ]
-        
+
         if expression_text:
             context_parts.append(f"\n[감각 표현 참고]:\n{expression_text}")
-        
+
+        # 객체를 JSON 문자열로 변환하여 LLM에 전달
+        note_result_str = json.dumps(note_result, ensure_ascii=False) if isinstance(note_result, dict) else str(note_result)
+        accord_result_str = json.dumps(accord_result, ensure_ascii=False) if isinstance(accord_result, dict) else str(accord_result)
+
         context_parts.append(f"""
         [Search Results]:
         --- Note Data ---
-        {note_result}
+        {note_result_str}
         --- Accord Data ---
-        {accord_result}
+        {accord_result_str}
         """)
-        
+
         combined_context = "\n".join(context_parts)
 
         messages = [
@@ -495,26 +450,51 @@ async def ingredient_specialist_node(state: InfoState):
         return {"info_status": "ERROR"}
 
 
-async def similarity_curator_node(state: InfoState):
-    """[Similarity Expert] 유사 추천"""
+async def similarity_search_node(state: InfoState):
+    """[Search] 유사 향수 검색"""
+    print(f"\n   🔍 [Similarity Search] 검색 시작", flush=True)
 
-    user_mode = state.get("user_mode", "BEGINNER")
     try:
         target = state["target_name"]
 
-        # 1. 도구 호출 (기존 로직 유지)
-        search_result_json = await lookup_similar_perfumes_tool.ainvoke(target)
+        # 도구 호출 (객체 반환)
+        search_result = await lookup_similar_perfumes_tool.ainvoke(target)
 
-        # [Wave 2] 검색 결과 상태 분류
-        status = classify_info_status(search_result_json)
-        
+        # 검색 결과 상태 분류 (객체 기반)
+        status = classify_info_status(search_result)
+
         if status != "OK":
             return {"info_status": status}
+
+        # 검색 성공 - info_payload에 JSON 문자열로 저장
+        return {
+            "info_payload": json.dumps(search_result, ensure_ascii=False),
+            "info_status": "OK",
+        }
+
+    except Exception as e:
+        print(f"      ❌ Similarity Search 에러: {e}", flush=True)
+        return {"info_status": "ERROR"}
+
+
+async def similarity_curator_node(state: InfoState):
+    """[Writer] 유사 향수 추천 출력 (DB/도구 호출 금지)"""
+    print(f"\n   ✍️ [Similarity Curator - Writer] 출력 생성 중", flush=True)
+
+    try:
+        target = state["target_name"]
+        user_mode = state.get("user_mode", "BEGINNER")
+        search_result_json = state.get("info_payload", "")
+
+        if not search_result_json:
+            print("      ⚠️ [Similarity Curator] info_payload 없음", flush=True)
+            return {"info_status": "ERROR"}
+
         if user_mode == "EXPERT":
-            print("      😎 [Mode] 전문가용 큐레이터 프롬프트 적용")
+            print("      😎 [Mode] 전문가용 큐레이터 프롬프트 적용", flush=True)
             selected_prompt = SIMILARITY_CURATOR_PROMPT_EXPERT
         else:
-            print("      🐥 [Mode] 비기너용 도슨트 프롬프트 적용")
+            print("      🐥 [Mode] 비기너용 도슨트 프롬프트 적용", flush=True)
             selected_prompt = SIMILARITY_CURATOR_PROMPT_BEGINNER
 
         messages = [
@@ -622,71 +602,85 @@ async def info_writer_node(state: InfoState):
 
 
 # ==========================================
-# 7. Graph Build (Info Subgraph)
+# 7. Graph Build (Info Subgraph) - Search/Writer 분리
 # ==========================================
 info_workflow = StateGraph(InfoState)
 
+# [Router]
 info_workflow.add_node("info_supervisor", info_supervisor_node)
+
+# [Search Nodes]
+info_workflow.add_node("perfume_search", perfume_search_node)
+info_workflow.add_node("ingredient_search", ingredient_search_node)
+info_workflow.add_node("similarity_search", similarity_search_node)
+
+# [Writer Nodes]
 info_workflow.add_node("perfume_describer", perfume_describer_node)
 info_workflow.add_node("ingredient_specialist", ingredient_specialist_node)
 info_workflow.add_node("similarity_curator", similarity_curator_node)
+
+# [Status Handler Nodes]
+info_workflow.add_node("info_no_results", info_no_results_node)
+info_workflow.add_node("info_error", info_error_node)
+info_workflow.add_node("info_writer", info_writer_node)
 info_workflow.add_node("fallback_handler", fallback_handler_node)
 
+# [Routing] START → Supervisor
 info_workflow.add_edge(START, "info_supervisor")
 
+# [Routing] Supervisor → Search Nodes
 info_workflow.add_conditional_edges(
     "info_supervisor",
     lambda x: x["info_type"],
     {
-        "perfume": "perfume_describer",
-        "brand": "perfume_describer",
-        "note": "ingredient_specialist",
-        "accord": "ingredient_specialist",
-        "ingredient": "ingredient_specialist",
-        "similarity": "similarity_curator",
+        "perfume": "perfume_search",
+        "brand": "perfume_search",
+        "note": "ingredient_search",
+        "accord": "ingredient_search",
+        "ingredient": "ingredient_search",
+        "similarity": "similarity_search",
         "unknown": "fallback_handler",
     },
 )
 
-# [Wave 2] 상태별 handler 노드 추가
-info_workflow.add_node("info_no_results", info_no_results_node)
-info_workflow.add_node("info_error", info_error_node)
-info_workflow.add_node("info_writer", info_writer_node)
-
-# [Wave 2 - Pattern A] 각 specialist에서 status 기반으로 직접 분기
+# [Routing] Search Nodes → Writer Nodes (status 기반)
 info_workflow.add_conditional_edges(
-    "perfume_describer",
+    "perfume_search",
     info_result_router_node,
     {
-        "info_writer": "info_writer",
+        "info_writer": "perfume_describer",  # OK면 Writer로
         "info_no_results": "info_no_results",
         "info_error": "info_error",
     },
 )
 
 info_workflow.add_conditional_edges(
-    "ingredient_specialist",
+    "ingredient_search",
     info_result_router_node,
     {
-        "info_writer": "info_writer",
+        "info_writer": "ingredient_specialist",  # OK면 Writer로
         "info_no_results": "info_no_results",
         "info_error": "info_error",
     },
 )
 
 info_workflow.add_conditional_edges(
-    "similarity_curator",
+    "similarity_search",
     info_result_router_node,
     {
-        "info_writer": "info_writer",
+        "info_writer": "similarity_curator",  # OK면 Writer로
         "info_no_results": "info_no_results",
         "info_error": "info_error",
     },
 )
 
+# [Routing] Writer Nodes → info_writer (passthrough)
+info_workflow.add_edge("perfume_describer", "info_writer")
+info_workflow.add_edge("ingredient_specialist", "info_writer")
+info_workflow.add_edge("similarity_curator", "info_writer")
+
+# [Routing] Status Handler Nodes → END
 info_workflow.add_edge("fallback_handler", END)
-
-# [Wave 2] 상태별 노드 → END
 info_workflow.add_edge("info_writer", END)
 info_workflow.add_edge("info_no_results", END)
 info_workflow.add_edge("info_error", END)

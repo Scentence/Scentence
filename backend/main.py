@@ -11,7 +11,8 @@ from langchain_core.messages import HumanMessage, AIMessage
 
 # 모듈 임포트
 from agent.schemas import ChatRequest
-from agent.graph import app_graph, parse_recommended_count, normalize_recommended_count
+from agent.graph import app_graph
+from agent.utils import parse_recommended_count, normalize_recommended_count
 from agent.database import save_chat_message, get_chat_history, get_user_chat_list
 from routers import users, perfumes, archive # <--- ksu 추가
 

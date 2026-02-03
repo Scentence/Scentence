@@ -8,16 +8,80 @@ tb_member_my_perfume_t 기반 사용자 취향을 분석하여
 from typing import List, Dict, Any, Optional
 from collections import defaultdict
 from .archive_db import get_my_perfumes, get_perfume_notes_and_accords
-from .personalization_weights import (
-    calculate_personalization_score,
-    QUERY_LIMIT,
-    MAX_LIKED_PERFUMES,
-    MAX_DISLIKED_PERFUMES,
-)
+
+# =================================================================
+# 개인화 신호 가중치 설정
+# =================================================================
+
+# 1. 선호도 가중치 (preference)
+PREFERENCE_WEIGHTS = {
+    "GOOD": 2.0,      # 좋아하는 향수 (양수)
+    "NEUTRAL": 0.0,   # 중립 (영향 없음)
+    "BAD": -3.0,      # 싫어하는 향수 (음수, 더 강한 패널티)
+}
+
+# 기본값 (DB에 없는 값이 들어올 경우)
+DEFAULT_PREFERENCE_WEIGHT = 0.0
+
+
+# 2. 등록 상태 가중치 (register_status)
+# 최종 점수 = PREFERENCE_WEIGHT × REGISTER_STATUS_MULTIPLIER
+REGISTER_STATUS_MULTIPLIERS = {
+    "HAVE": 1.0,         # 현재 소유 중 (최대 신뢰도)
+    "HAD": 0.5,          # 과거 소유 (중간 신뢰도)
+    "RECOMMENDED": 0.7,  # 추천받았던 향수 (중상 신뢰도)
+}
+
+# 기본값
+DEFAULT_REGISTER_STATUS_MULTIPLIER = 0.3
+
+
+# 3. 최근성 가중치 (recency)
+RECENT_COUNT = 10          # 최신 10개
+RECENT_MULTIPLIER = 1.2    # 최신 향수는 20% 가중치 증가
+OLD_MULTIPLIER = 1.0       # 기본 가중치
+
+
+# 4. 집계 설정
+MAX_LIKED_PERFUMES = 5     # 좋아하는 향수 Top 5
+MAX_DISLIKED_PERFUMES = 5  # 싫어하는 향수 Top 5
+QUERY_LIMIT = 20           # 최근 20개 향수만 조회 (성능)
+
 
 # [★추가] Notes/Accords 개인화 설정
 TOP_N_NOTES_ACCORDS = 3  # 프롬프트에 노출할 최대 개수
 MIN_SUPPORT_COUNT = 2    # 최소 N개 향수에서 등장해야 신뢰할 수 있음
+
+
+def calculate_personalization_score(
+    preference: str,
+    register_status: str,
+    recency_rank: int,
+) -> float:
+    """
+    개인화 점수 계산
+
+    Args:
+        preference: GOOD/NEUTRAL/BAD
+        register_status: HAVE/HAD/RECOMMENDED
+        recency_rank: 0부터 시작 (0이 가장 최근)
+
+    Returns:
+        float: 개인화 점수 (양수=선호, 음수=비선호)
+    """
+    # 1. 선호도 점수
+    pref_weight = PREFERENCE_WEIGHTS.get(preference, DEFAULT_PREFERENCE_WEIGHT)
+
+    # 2. 등록 상태 배수
+    status_mult = REGISTER_STATUS_MULTIPLIERS.get(
+        register_status, DEFAULT_REGISTER_STATUS_MULTIPLIER
+    )
+
+    # 3. 최근성 배수
+    recency_mult = RECENT_MULTIPLIER if recency_rank < RECENT_COUNT else OLD_MULTIPLIER
+
+    # 최종 점수
+    return pref_weight * status_mult * recency_mult
 
 
 def get_personalization_summary(member_id: int) -> Dict[str, Any]:
@@ -120,10 +184,11 @@ def get_personalization_summary(member_id: int) -> Dict[str, Any]:
 
     # 한 줄 요약 생성
     summary_text = _generate_summary_text(
-        liked_brands, disliked_brands, 
-        liked, disliked,
-        liked_notes, disliked_notes,
-        liked_accords, disliked_accords
+        liked_brands,
+        disliked_brands,
+        liked_notes=liked_notes,
+        liked_accords=liked_accords,
+        disliked_accords=disliked_accords,
     )
 
     return {
@@ -160,7 +225,6 @@ def _extract_top_n_with_support(
     scores: Dict[str, float],
     positive: bool = True,
     top_n: int = TOP_N_NOTES_ACCORDS,
-    min_support: int = MIN_SUPPORT_COUNT,
 ) -> List[str]:
     """
     신뢰도 가드 적용하여 Top-N 추출
@@ -169,7 +233,6 @@ def _extract_top_n_with_support(
         scores: 항목별 점수 dict
         positive: True면 양수(선호), False면 음수(기피)
         top_n: 최대 개수
-        min_support: 최소 지원수 (현재는 점수 절대값으로 대체)
     
     Returns:
         Top-N 항목 리스트
@@ -181,18 +244,15 @@ def _extract_top_n_with_support(
         filtered = {k: v for k, v in scores.items() if v < 0}
         sorted_items = sorted(filtered.items(), key=lambda x: x[1])
     
-    return [k for k, v in sorted_items[:top_n]]
+    return [k for k, _ in sorted_items[:top_n]]
 
 
 def _generate_summary_text(
     liked_brands: Dict[str, float],
     disliked_brands: Dict[str, float],
-    liked_perfumes: List[Dict],
-    disliked_perfumes: List[Dict],
-    liked_notes: List[str] = None,
-    disliked_notes: List[str] = None,
-    liked_accords: List[str] = None,
-    disliked_accords: List[str] = None,
+    liked_notes: Optional[List[str]] = None,
+    liked_accords: Optional[List[str]] = None,
+    disliked_accords: Optional[List[str]] = None,
 ) -> str:
     """
     프롬프트 주입용 한 줄 요약 생성
