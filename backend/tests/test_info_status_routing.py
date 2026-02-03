@@ -71,14 +71,21 @@ class TestInfoGraphCompilation:
         """그래프가 정상적으로 컴파일되는지 확인"""
         from agent.graph_info import info_graph
         assert info_graph is not None
-        assert len(info_graph.nodes) == 10  # 기존 6 + 신규 4
-    
+        # Pattern A: router 노드 제거로 노드 수가 변경됨. 대신 핵심 노드 존재를 검증
+        assert len(info_graph.nodes) >= 9  # 최소 필수 노드 수
+
     def test_new_nodes_exist(self):
-        """신규 노드가 그래프에 존재하는지 확인"""
+        """핵심 노드가 그래프에 존재하는지 확인"""
         from agent.graph_info import info_graph
         node_names = list(info_graph.nodes.keys())
-        
-        assert "info_result_router" in node_names
+
+        # Pattern A: info_result_router 노드는 제거됨
+        # 핵심 노드만 검증
+        assert "info_supervisor" in node_names
+        assert "perfume_describer" in node_names
+        assert "ingredient_specialist" in node_names
+        assert "similarity_curator" in node_names
+        assert "fallback_handler" in node_names
         assert "info_no_results" in node_names
         assert "info_error" in node_names
         assert "info_writer" in node_names

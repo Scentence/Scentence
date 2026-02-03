@@ -648,28 +648,43 @@ info_workflow.add_conditional_edges(
     },
 )
 
-# [Wave 2] 새 노드 추가
-info_workflow.add_node("info_result_router", info_result_router_node)
+# [Wave 2] 상태별 handler 노드 추가
 info_workflow.add_node("info_no_results", info_no_results_node)
 info_workflow.add_node("info_error", info_error_node)
 info_workflow.add_node("info_writer", info_writer_node)
 
-# [Wave 2] 기존 노드들 → router로 연결
-info_workflow.add_edge("perfume_describer", "info_result_router")
-info_workflow.add_edge("ingredient_specialist", "info_result_router")
-info_workflow.add_edge("similarity_curator", "info_result_router")
-info_workflow.add_edge("fallback_handler", END)
-
-# [Wave 2] router → 상태별 노드로 분기
+# [Wave 2 - Pattern A] 각 specialist에서 status 기반으로 직접 분기
 info_workflow.add_conditional_edges(
-    "info_result_router",
-    lambda x: x,
+    "perfume_describer",
+    info_result_router_node,
     {
         "info_writer": "info_writer",
         "info_no_results": "info_no_results",
         "info_error": "info_error",
     },
 )
+
+info_workflow.add_conditional_edges(
+    "ingredient_specialist",
+    info_result_router_node,
+    {
+        "info_writer": "info_writer",
+        "info_no_results": "info_no_results",
+        "info_error": "info_error",
+    },
+)
+
+info_workflow.add_conditional_edges(
+    "similarity_curator",
+    info_result_router_node,
+    {
+        "info_writer": "info_writer",
+        "info_no_results": "info_no_results",
+        "info_error": "info_error",
+    },
+)
+
+info_workflow.add_edge("fallback_handler", END)
 
 # [Wave 2] 상태별 노드 → END
 info_workflow.add_edge("info_writer", END)

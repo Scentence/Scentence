@@ -1037,8 +1037,7 @@ workflow.add_node("interviewer", interviewer_node)
 # workflow.add_node("writer", writer_node)  # Replaced by parallel_reco
 workflow.add_node("parallel_reco", parallel_reco_node)
 
-# [Wave 2-3] Add status-based routing nodes
-workflow.add_node("parallel_reco_result_router", parallel_reco_result_router)
+# [Wave 2-3] Add status-based handler nodes
 workflow.add_node("parallel_reco_ok_writer", parallel_reco_ok_writer)
 workflow.add_node("parallel_reco_no_results", parallel_reco_no_results)
 workflow.add_node("parallel_reco_error", parallel_reco_error)
@@ -1065,12 +1064,10 @@ workflow.add_conditional_edges(
 # workflow.add_edge("researcher", "writer")  # Old flow - replaced
 # workflow.add_edge("writer", END)  # Old flow - replaced
 
-# [Wave 2-3] Route parallel_reco → router → status-specific nodes
-workflow.add_edge("parallel_reco", "parallel_reco_result_router")
-
+# [Wave 2-3 - Pattern A] parallel_reco → status 기반 직접 분기
 workflow.add_conditional_edges(
-    "parallel_reco_result_router",
-    lambda x: parallel_reco_result_router(x),
+    "parallel_reco",
+    parallel_reco_result_router,
     {
         "parallel_reco_ok_writer": "parallel_reco_ok_writer",
         "parallel_reco_no_results": "parallel_reco_no_results",
