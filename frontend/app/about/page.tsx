@@ -68,9 +68,6 @@ export default function AboutPage() {
     const [localUser, setLocalUser] = useState<any>(null);
     const [profileImageUrl, setProfileImageUrl] = useState<string | null>(null);
 
-    // API 호출 경로 설정
-    const API_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000";
-
     useEffect(() => {
         // 1. 로컬 스토리지 데이터 확인
         const authData = localStorage.getItem("localAuth");
@@ -85,7 +82,7 @@ export default function AboutPage() {
 
         // 2. 세션(카카오) 기반 프로필 이미지 가져오기
         if (session?.user?.id) {
-            fetch(`${API_URL}/users/profile/${session.user.id}`)
+            fetch(`/api/users/profile/${session.user.id}`)
                 .then((res) => res.json())
                 .then((data) => {
                     if (data.profile_image_url) {
@@ -96,7 +93,7 @@ export default function AboutPage() {
         }
         // 3. 로컬 사용자 기반 프로필 이미지 가져오기
         else if (localUser?.memberId) {
-            fetch(`${API_URL}/users/profile/${localUser.memberId}`)
+            fetch(`/api/users/profile/${localUser.memberId}`)
                 .then((res) => res.json())
                 .then((data) => {
                     if (data.profile_image_url) {

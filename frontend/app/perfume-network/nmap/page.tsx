@@ -22,9 +22,6 @@ export default function NMapPage() {
   const [profileImageUrl, setProfileImageUrl] = useState<string | null>(null);
   const [isMounted, setIsMounted] = useState(false);
 
-  // API 호출 경로 설정
-  const API_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000";
-
   useEffect(() => {
     setIsMounted(true);
   }, []);
@@ -66,7 +63,7 @@ export default function NMapPage() {
 
     const memberId = session?.user?.id || (localUser?.memberId);
     if (memberId) {
-      fetch(`${API_URL}/users/profile/${memberId}`)
+      fetch(`/api/users/profile/${memberId}`)
         .then((res) => res.json())
         .then((data) => {
           if (data.profile_image_url) {

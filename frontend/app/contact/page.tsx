@@ -23,17 +23,13 @@ export default function ContactPage() {
         }
 
         const memberId = session?.user?.id || (localUser?.memberId);
-        const apiBaseUrl = process.env.NEXT_PUBLIC_API_URL || "";
 
         if (memberId) {
-            fetch(`${apiBaseUrl}/users/profile/${memberId}`)
+            fetch(`/api/users/profile/${memberId}`)
                 .then((res) => res.json())
                 .then((data) => {
                     if (data.profile_image_url) {
-                        const url = data.profile_image_url.startsWith("http")
-                            ? data.profile_image_url
-                            : `${apiBaseUrl}${data.profile_image_url}`;
-                        setProfileImageUrl(url);
+                        setProfileImageUrl(data.profile_image_url);
                     }
                 })
                 .catch((err) => console.error(err));

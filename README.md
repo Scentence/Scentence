@@ -71,7 +71,7 @@ NEXT_PUBLIC_ADMIN_EMAILS=admin@example.com,admin2@example.com
 
 # 백엔드 URL 설정
 BACKEND_INTERNAL_URL=http://backend:8000
-NEXT_PUBLIC_API_URL=http://localhost:3000
+# NEXT_PUBLIC_API_URL은 더 이상 필요하지 않습니다 (API rewrites 사용)
 ```
 
 ### 선택 환경변수 (Defaults 존재)

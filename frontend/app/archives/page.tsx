@@ -100,7 +100,6 @@ export default function ArchivesPage() {
     }, [session]);
 
     useEffect(() => {
-        const apiBaseUrl = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000";
         const currentId = session?.user?.id || localUser?.memberId;
 
         if (!currentId) {
@@ -108,18 +107,13 @@ export default function ArchivesPage() {
             return;
         }
 
-        fetch(`${apiBaseUrl}/users/profile/${currentId}`)
+        fetch(`/api/users/profile/${currentId}`)
             .then((res) => (res.ok ? res.json() : null))
             .then((data) => {
                 if (data?.profile_image_url) {
                     // [이미지 경로 함정 방지 로직]
-                    // 전체 경로(http)나 프록시 경로(/uploads)는 그대로 사용하고,
-                    // 그 외의 경우에만 도메인을 결합하여 사진 깨짐을 방지합니다.
-                    const rawUrl = data.profile_image_url;
-                    const finalUrl = (rawUrl.startsWith("http") || rawUrl.startsWith("/uploads"))
-                        ? rawUrl
-                        : `${apiBaseUrl}${rawUrl}`;
-                    setProfileImageUrl(finalUrl);
+                    // 전체 경로(http)나 프록시 경로(/uploads)는 그대로 사용합니다.
+                    setProfileImageUrl(data.profile_image_url);
                 }
             })
             .catch(() => setProfileImageUrl(null));
