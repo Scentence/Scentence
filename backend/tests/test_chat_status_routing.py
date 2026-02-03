@@ -8,7 +8,7 @@ import pytest
 import sys
 sys.path.insert(0, '/app')
 
-from agent.graph import parallel_reco_result_router
+from agent.graph import parallel_reco_result_router, app_graph
 
 
 class TestInvariant1StatusClassification:
@@ -93,7 +93,7 @@ class TestInvariant4StatusRoutesToDifferentPaths:
 
 class TestRouterFunction:
     """Test the routing function itself"""
-    
+
     def test_router_returns_correct_node_names(self):
         """Verify router returns valid node names"""
         valid_nodes = {
@@ -101,18 +101,18 @@ class TestRouterFunction:
             "parallel_reco_no_results",
             "parallel_reco_error",
         }
-        
+
         for status in ["OK", "NO_RESULTS", "ERROR"]:
             state = {"chat_outcome_status": status}
             result = parallel_reco_result_router(state)
             assert result in valid_nodes, f"Status {status} routed to invalid node: {result}"
-    
+
     def test_default_status_routes_to_ok(self):
         """If status is missing, default to OK (safe fallback)"""
         state = {}
         result = parallel_reco_result_router(state)
         assert result == "parallel_reco_ok_writer"
-    
+
     def test_router_with_extra_state_fields(self):
         """Router should work even with extra state fields"""
         state = {
@@ -123,3 +123,28 @@ class TestRouterFunction:
         }
         result = parallel_reco_result_router(state)
         assert result == "parallel_reco_no_results"
+
+
+class TestRecoGraphTopology:
+    """Pattern A topology tests - router node should be removed"""
+
+    def test_router_not_in_graph_nodes(self):
+        """
+        Pattern A: parallel_reco_result_router should NOT be a node.
+        It's used as a conditional edge function, not a node.
+        """
+        node_names = list(app_graph.nodes.keys())
+        assert "parallel_reco_result_router" not in node_names
+
+    def test_status_specific_nodes_exist(self):
+        """Pattern A: Status-specific handler nodes must exist"""
+        node_names = list(app_graph.nodes.keys())
+
+        assert "parallel_reco_ok_writer" in node_names
+        assert "parallel_reco_no_results" in node_names
+        assert "parallel_reco_error" in node_names
+
+    def test_parallel_reco_node_exists(self):
+        """The main parallel_reco node must exist"""
+        node_names = list(app_graph.nodes.keys())
+        assert "parallel_reco" in node_names

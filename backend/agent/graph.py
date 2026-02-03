@@ -1,17 +1,19 @@
 # backend/agent/graph.py
-import os
 import json
 import asyncio
-import itertools
 import random
 import uuid
-from typing import Literal, List, Dict, Any, Optional
+from typing import List, Dict, Any, Optional, Set
 
 from dotenv import load_dotenv
-from langchain_openai import ChatOpenAI
-from langchain_core.messages import SystemMessage, AIMessage, HumanMessage
-from langgraph.graph import StateGraph, START, END
-from langgraph.checkpoint.memory import MemorySaver
+from langchain_openai import ChatOpenAI  # type: ignore[reportMissingImports]
+from langchain_core.messages import (  # type: ignore[reportMissingImports]
+    SystemMessage,
+    AIMessage,
+    HumanMessage,
+)
+from langgraph.graph import StateGraph, START, END  # type: ignore[reportMissingImports]
+from langgraph.checkpoint.memory import MemorySaver  # type: ignore[reportMissingImports]
 
 # [Import] 로컬 모듈
 from .schemas import (
@@ -19,9 +21,8 @@ from .schemas import (
     UserPreferences,
     InterviewResult,
     RoutingDecision,
-    ResearchActionPlan,
+    ValidationResult,
     SearchStrategyPlan,
-    ResearcherOutput,
     StrategyResult,
     PerfumeDetail,
     PerfumeNotes,
@@ -35,19 +36,17 @@ from .tools import (
     advanced_perfume_search_tool,
     lookup_note_by_string_tool,
     lookup_note_by_vector_tool,
+    smart_perfume_search,
 )
 
 from .prompts import (
+    PRE_VALIDATOR_PROMPT,
     SUPERVISOR_PROMPT,
     INTERVIEWER_PROMPT,
     RESEARCHER_SYSTEM_PROMPT,
     WRITER_FAILURE_PROMPT,
-    WRITER_CHAT_PROMPT,
-    WRITER_RECOMMENDATION_PROMPT,
-    WRITER_RECOMMENDATION_PROMPT_EXPERT,
     WRITER_RECOMMENDATION_PROMPT_SINGLE,
     WRITER_RECOMMENDATION_PROMPT_EXPERT_SINGLE,
-    NOTE_SELECTION_PROMPT,
 )
 from .database import save_recommendation_log, fetch_meta_data
 from .denylist import has_forbidden_words, UserFriendlyStrategyLabels
@@ -65,30 +64,18 @@ import logging
 
 logger = logging.getLogger(__name__)
 
-# ==========================================
-# 0. Helper Functions
-# ==========================================
-def parse_recommended_count(query: str) -> int | None:
-    """Parse 'N개' from user query."""
-    if not query:
-        return None
-    import re
-    # Map words to numbers
-    word_map = {"한": 1, "두": 2, "세": 3, "네": 4, "다섯": 5}
-    match_word = re.search(r"(한|두|세|네|다섯)\s*개", query)
-    match_digit = re.search(r"(\d+)\s*개", query)
-    
-    if match_digit:
-        return int(match_digit.group(1))
-    elif match_word:
-        return word_map.get(match_word.group(1))
-    return None
+# NOTE: Imported for monkeypatching in tests.
+_MONKEYPATCH_TOOLS = (lookup_note_by_string_tool, lookup_note_by_vector_tool)
 
-def normalize_recommended_count(count: int) -> int:
-    """Normalize recommendation count to be between 1 and 5."""
-    if count is None:
-        return 3
-    return max(1, min(count, 5))
+# ==========================================
+# 0. Helper Functions (moved to utils.py)
+# ==========================================
+from .utils import (
+    parse_recommended_count,
+    normalize_recommended_count,
+    extract_save_refs,
+    sanitize_filters,
+)
 
 # ==========================================
 # 1. 모델 설정
@@ -107,134 +94,21 @@ def log_filters(h_filters: dict, s_filters: dict):
     pass
 
 
-def sanitize_filters(h_filters: dict, s_filters: dict) -> tuple:
-    """
-    Sanitize filters by dropping unknown keys and invalid values.
-    
-    Args:
-        h_filters: Hard filters (gender, etc.)
-        s_filters: Strategy filters (accord, occasion, note, season)
-    
-    Returns:
-        Tuple of (sanitized_hard_filters, sanitized_strategy_filters, dropped_items)
-    """
-    meta = fetch_meta_data()
-    
-    allowed_genders = {g.strip() for g in meta.get("genders", "").split(",") if g.strip()}
-    allowed_seasons = {s.strip() for s in meta.get("seasons", "").split(",") if s.strip()}
-    allowed_occasions = {o.strip() for o in meta.get("occasions", "").split(",") if o.strip()}
-    allowed_accords = {a.strip() for a in meta.get("accords", "").split(",") if a.strip()}
-    
-    allowed_strategy_keys = {"accord", "occasion", "note", "season"}
-    
-    dropped_items = {
-        "hard_filters": {},
-        "strategy_filters": {}
-    }
-    
-    sanitized_hard = {}
-    for key, value in h_filters.items():
-        if key == "gender":
-            if isinstance(value, list):
-                valid_values = [v for v in value if v in allowed_genders]
-                invalid_values = [v for v in value if v not in allowed_genders]
-                if invalid_values:
-                    dropped_items["hard_filters"][key] = invalid_values
-                if valid_values:
-                    sanitized_hard[key] = valid_values
-            elif value in allowed_genders:
-                sanitized_hard[key] = value
-            else:
-                dropped_items["hard_filters"][key] = value
-        else:
-            sanitized_hard[key] = value
-    
-    sanitized_strategy = {}
-    for key, value in s_filters.items():
-        if key not in allowed_strategy_keys:
-            dropped_items["strategy_filters"][key] = value
-            continue
-        
-        if key == "note":
-            sanitized_strategy[key] = value
-        elif key == "season":
-            if isinstance(value, list):
-                valid_values = [v for v in value if v in allowed_seasons]
-                invalid_values = [v for v in value if v not in allowed_seasons]
-                if invalid_values:
-                    dropped_items["strategy_filters"][f"{key}_invalid_values"] = invalid_values
-                if valid_values:
-                    sanitized_strategy[key] = valid_values
-            elif value in allowed_seasons:
-                sanitized_strategy[key] = value
-            else:
-                dropped_items["strategy_filters"][key] = value
-        elif key == "occasion":
-            if isinstance(value, list):
-                valid_values = [v for v in value if v in allowed_occasions]
-                invalid_values = [v for v in value if v not in allowed_occasions]
-                if invalid_values:
-                    dropped_items["strategy_filters"][f"{key}_invalid_values"] = invalid_values
-                if valid_values:
-                    sanitized_strategy[key] = valid_values
-            elif value in allowed_occasions:
-                sanitized_strategy[key] = value
-            else:
-                dropped_items["strategy_filters"][key] = value
-        elif key == "accord":
-            if isinstance(value, list):
-                valid_values = [v for v in value if v in allowed_accords]
-                invalid_values = [v for v in value if v not in allowed_accords]
-                if invalid_values:
-                    dropped_items["strategy_filters"][f"{key}_invalid_values"] = invalid_values
-                if valid_values:
-                    sanitized_strategy[key] = valid_values
-            elif value in allowed_accords:
-                sanitized_strategy[key] = value
-            else:
-                dropped_items["strategy_filters"][key] = value
-    
-    if dropped_items["hard_filters"] or dropped_items["strategy_filters"]:
-        logger.warning(f"Dropped filters: {dropped_items}")
-    
-    return sanitized_hard, sanitized_strategy, dropped_items
-
-
 async def smart_search_with_retry_async(
-    h_filters: dict, s_filters: dict, exclude_ids: list = None, query_text: str = "", rank_mode: str = "DEFAULT"
+    h_filters: dict,
+    s_filters: dict,
+    exclude_ids: Optional[List[int]] = None,
+    query_text: str = "",
+    rank_mode: str = "DEFAULT",
 ):
-    sanitized_hard, sanitized_strategy, dropped_items = sanitize_filters(h_filters, s_filters)
-    
-    priority_order = ["note", "accord", "occasion"]
-    active_keys = [k for k in priority_order if k in sanitized_strategy and sanitized_strategy[k]]
-
-    results = await advanced_perfume_search_tool.ainvoke(
-        {
-            "hard_filters": sanitized_hard,
-            "strategy_filters": sanitized_strategy,
-            "exclude_ids": exclude_ids,
-            "query_text": query_text,
-            "rank_mode": rank_mode,
-        }
+    _ = advanced_perfume_search_tool  # Keep reference for monkeypatches/tests
+    return await smart_perfume_search(
+        h_filters=h_filters,
+        s_filters=s_filters,
+        exclude_ids=exclude_ids,
+        query_text=query_text,
+        rank_mode=rank_mode,
     )
-    if results:
-        return results, "Perfect Match"
-
-    for r in range(len(active_keys) - 1, 0, -1):
-        for combo_keys in itertools.combinations(active_keys, r):
-            temp_filters = {k: sanitized_strategy[k] for k in combo_keys}
-            results = await advanced_perfume_search_tool.ainvoke(
-                {
-                    "hard_filters": sanitized_hard,
-                    "strategy_filters": temp_filters,
-                    "exclude_ids": exclude_ids,
-                    "query_text": query_text,
-                    "rank_mode": rank_mode,
-                }
-            )
-            if results:
-                return results, f"Relaxed (Level {len(active_keys)-r})"
-    return [], "No Results"
 
 
 async def call_info_graph_wrapper(state: AgentState):
@@ -283,6 +157,35 @@ async def call_info_graph_wrapper(state: AgentState):
 # ==========================================
 
 
+def pre_validator_node(state: AgentState):
+    """
+    [Pre-Validator] 요청 실현 가능성 사전 검증.
+    DB에 없는 속성 요청을 조기 차단합니다.
+    """
+    print("\n" + "=" * 60, flush=True)
+    print("🔍 [Pre-Validator] 요청 가능 여부 검증 중...", flush=True)
+
+    messages = [SystemMessage(content=PRE_VALIDATOR_PROMPT)] + state["messages"]
+
+    try:
+        result = SMART_LLM.with_structured_output(ValidationResult).invoke(messages)
+
+        if result.is_unsupported:
+            print(f"   ❌ 지원 불가: {result.unsupported_category} - {result.reason}", flush=True)
+            return {
+                "validation_result": "unsupported",
+                "unsupported_category": result.unsupported_category,
+                "unsupported_reason": result.reason
+            }
+        else:
+            print(f"   ✅ 지원 가능 - {result.reason}", flush=True)
+            return {"validation_result": "supported"}
+
+    except Exception as e:
+        print(f"   ⚠️ 검증 실패(Error): {e} -> 기본값 지원 가능으로 처리", flush=True)
+        return {"validation_result": "supported"}
+
+
 def supervisor_node(state: AgentState):
     """[Main Router]"""
     print("\n" + "=" * 60, flush=True)
@@ -328,7 +231,9 @@ def interviewer_node(state: AgentState):
         fallback_prefs = {
             **current_prefs,
             "gender": current_prefs.get("gender", "Unisex"),
-            "season": current_prefs.get("season", "All"),
+            # season, occasion은 None으로 두어 필터링 안 함 (모든 계절/상황 포함)
+            "season": current_prefs.get("season"),
+            "occasion": current_prefs.get("occasion"),
             "style": current_prefs.get("style", "Daily"),
             "target": current_prefs.get("target", "일반"),
         }
@@ -484,136 +389,206 @@ def interviewer_node(state: AgentState):
 # ==========================================
 
 
-async def parallel_reco_node(state: AgentState):
-    member_id = state.get("member_id", 0)
-    user_prefs = state.get("user_preferences", {})
-    current_context = json.dumps(user_prefs, ensure_ascii=False)
+def _normalize_section_boundary(previous_text: str, next_text: str) -> str:
+    if not previous_text or not next_text:
+        return next_text
+    if not next_text.lstrip().startswith("##"):
+        return next_text
+    prev_trimmed = previous_text.rstrip()
+    if prev_trimmed.endswith("---") and not previous_text.endswith("\n"):
+        if not next_text.startswith("\n"):
+            return f"\n{next_text}"
+    return next_text
 
-    # [★추가] Infer use case (SELF vs GIFT)
-    use_case = infer_use_case(user_prefs)
-    
-    # [★수정] Personalization gate: only apply for SELF use case with logged-in member
-    personalization = {}
-    if use_case == 'SELF' and member_id > 0:
-        personalization = get_personalization_summary(member_id) or {}
-        if personalization.get("summary_text"):
-            print(f"🎯 [Personalization] {personalization['summary_text']}", flush=True)
-    else:
-        if use_case == 'GIFT':
-            print(f"🎁 [GIFT Mode] Personalization disabled for gift recommendations", flush=True)
 
-    researcher_prompt = RESEARCHER_SYSTEM_PROMPT
-    if personalization.get("summary_text"):
-        researcher_prompt += (
-            "\n\n## 사용자 취향 정보\n"
-            f"{personalization['summary_text']}\n\n"
-            "이 정보를 참고하되, 현재 요청 조건(브랜드/계절/대상 등)이 최우선입니다."
+def _merge_unique_ids(*iterables: List[int]) -> List[int]:
+    merged: List[int] = []
+    seen: Set[int] = set()
+    for iterable in iterables:
+        if not iterable:
+            continue
+        for value in iterable:
+            if value is None:
+                continue
+            if value in seen:
+                continue
+            seen.add(value)
+            merged.append(value)
+    return merged
+
+
+def _extract_saved_ids(messages: List[Any]) -> List[int]:
+    save_refs = extract_save_refs(messages or [])
+    saved_ids: List[int] = []
+    for ref in save_refs:
+        value = ref.get("id")
+        if isinstance(value, int):
+            saved_ids.append(value)
+    return saved_ids
+
+
+class RecoSearcher:
+    def __init__(
+        self,
+        *,
+        member_id: int,
+        user_prefs: Dict[str, Any],
+        researcher_prompt: str,
+        plan_llm: Any,
+        session_exclude_ids: Set[int],
+        selection_lock: asyncio.Lock,
+        batch_selected_ids: Set[int],
+        brand_counts: Dict[str, int],
+        search_fn: Any,
+    ) -> None:
+        self.member_id = member_id
+        self.user_prefs = user_prefs
+        self.current_context = json.dumps(user_prefs, ensure_ascii=False)
+        self.researcher_prompt = researcher_prompt
+        self.plan_llm = plan_llm
+        self.session_exclude_ids = session_exclude_ids
+        self.selection_lock = selection_lock
+        self.batch_selected_ids = batch_selected_ids
+        self.brand_counts = brand_counts
+        self.search_fn = search_fn
+        self.user_requested_brand = bool(
+            user_prefs.get("brand") or user_prefs.get("reference_brand")
         )
 
-    plan_llm = SMART_LLM.with_structured_output(SearchStrategyPlan)
-    
-    # [★추가] 세션 레벨 추천 다양성: 이전 추천 이력 로드
-    recommended_history = state.get("recommended_history", [])
-    exclude_ids = recommended_history.copy()  # 세션 히스토리 제외 (SELF/GIFT 공통)
-
-    # [★수정] Add disliked perfumes only for SELF use case
-    if use_case == 'SELF':
-        for disliked in personalization.get("disliked_perfumes", []):
-            perfume_id = disliked.get("id")
-            if perfume_id:
-                exclude_ids.append(perfume_id)
-
-    exclude_id_set = set(exclude_ids)
-    
-    seen_ids = set()  # 현재 배치 내 중복 제거
-    brand_counts = {}  # 현재 배치 내 브랜드 다양성 추적
-    seen_ids_lock = asyncio.Lock()
-
-    def _normalize_section_boundary(previous_text: str, next_text: str) -> str:
-        if not previous_text or not next_text:
-            return next_text
-        if not next_text.lstrip().startswith("##"):
-            return next_text
-        prev_trimmed = previous_text.rstrip()
-        if prev_trimmed.endswith("---") and not previous_text.endswith("\n"):
-            if not next_text.startswith("\n"):
-                return f"\n{next_text}"
-        return next_text
-
-    async def generate_user_label(user_prefs: dict, plan_reason: str, plan_strategy_name: str) -> str:
+    async def generate_user_label(self, plan_reason: str) -> str:
         """
         Generate user-friendly strategy label using LLM with denylist validation.
-        
+
         Args:
-            user_prefs: User preferences dictionary
             plan_reason: Strategy reason/intent
             plan_strategy_name: Internal strategy name (for context only)
-        
+
         Returns:
             User-friendly label string
         """
-        user_prefs_str = json.dumps(user_prefs, ensure_ascii=False)
-        
-        # First attempt: Generate user-friendly label
+        user_prefs_str = json.dumps(self.user_prefs, ensure_ascii=False)
+
         label_messages = [
-            SystemMessage(content="당신은 향수 추천 전략을 사용자 친화적인 한 문장으로 표현하는 전문가입니다."),
+            SystemMessage(
+                content="당신은 향수 추천 전략을 사용자 친화적인 한 문장으로 표현하는 전문가입니다."
+            ),
             HumanMessage(
                 content=(
                     f"사용자 정보: {user_prefs_str}\n"
                     f"전략 의도: {plan_reason}\n\n"
-                    f"위 정보를 바탕으로, 사용자에게 보여줄 전략명을 작성하세요.\n\n"
-                    f"요구사항:\n"
-                    f"- 한 문장으로 작성 (예: \"강인하고 자신감 있는 첫인상\", \"우아하고 세련된 분위기\")\n"
-                    f"- 첫인상/무드 중심 표현 사용\n"
-                    f"- 다음 단어는 절대 사용 금지: 전략, 전략적, 이미지 강조, 이미지 보완, 이미지 반전\n\n"
-                    f"전략명:"
+                    "위 정보를 바탕으로, 사용자에게 보여줄 전략명을 작성하세요.\n\n"
+                    "요구사항:\n"
+                    "- 한 문장으로 작성 (예: \"강인하고 자신감 있는 첫인상\", \"우아하고 세련된 분위기\")\n"
+                    "- 첫인상/무드 중심 표현 사용\n"
+                    "- 다음 단어는 절대 사용 금지: 전략, 전략적, 이미지 강조, 이미지 보완, 이미지 반전\n\n"
+                    "전략명:"
                 )
             ),
         ]
-        
+
         try:
-            response = await SMART_LLM.ainvoke(label_messages, config={"tags": ["internal_helper"]})
+            response = await SMART_LLM.ainvoke(
+                label_messages, config={"tags": ["internal_helper"]}
+            )
             user_label = response.content.strip()
-            
-            # Validate with denylist
+
             if not has_forbidden_words(user_label):
                 return user_label
-            
-            # First attempt failed validation - retry once with stronger warning
+
             retry_messages = [
-                SystemMessage(content="당신은 향수 추천 전략을 사용자 친화적인 한 문장으로 표현하는 전문가입니다."),
+                SystemMessage(
+                    content="당신은 향수 추천 전략을 사용자 친화적인 한 문장으로 표현하는 전문가입니다."
+                ),
                 HumanMessage(
                     content=(
-                        f"이전 응답에 금지어가 포함되어 있습니다.\n\n"
-                        f"다시 한번 작성하세요. 절대 사용하면 안 되는 단어: 전략, 전략적, 이미지 강조, 이미지 보완, 이미지 반전\n\n"
+                        "이전 응답에 금지어가 포함되어 있습니다.\n\n"
+                        "다시 한번 작성하세요. 절대 사용하면 안 되는 단어: 전략, 전략적, 이미지 강조, 이미지 보완, 이미지 반전\n\n"
                         f"사용자 정보: {user_prefs_str}\n"
                         f"전략 의도: {plan_reason}\n\n"
-                        f"전략명:"
+                        "전략명:"
                     )
                 ),
             ]
-            
-            retry_response = await SMART_LLM.ainvoke(retry_messages, config={"tags": ["internal_helper"]})
+
+            retry_response = await SMART_LLM.ainvoke(
+                retry_messages, config={"tags": ["internal_helper"]}
+            )
             user_label = retry_response.content.strip()
-            
-            # Check retry result
+
             if not has_forbidden_words(user_label):
                 return user_label
-            
         except Exception as e:
-            # Log error but continue with fallback
             print(f"[WARNING] User label generation failed: {e}", flush=True)
-        
-        # Fallback: Use random safe label from predefined list
+
         return random.choice(UserFriendlyStrategyLabels.SAFE_LABELS)
 
-    async def prepare_strategy(strategy_name: str, priority: int, rank_mode: str):
-        """Phase 1: Strategy planning + search + perfume selection (parallel)"""
+    async def _snapshot_exclude_ids(self) -> List[int]:
+        async with self.selection_lock:
+            batch_ids = set(self.batch_selected_ids)
+        return list(self.session_exclude_ids | batch_ids)
+
+    async def _select_candidate(
+        self, candidates: List[Dict[str, Any]]
+    ) -> Optional[Dict[str, Any]]:
+        async with self.selection_lock:
+            for candidate in candidates:
+                candidate_id = candidate.get("id")
+                if candidate_id is None:
+                    continue
+                try:
+                    perfume_id = int(candidate_id)
+                except (TypeError, ValueError):
+                    continue
+                brand = candidate.get("brand", "")
+                if perfume_id in self.session_exclude_ids:
+                    continue
+                if perfume_id in self.batch_selected_ids:
+                    continue
+                if not self.user_requested_brand:
+                    if self.brand_counts.get(brand, 0) >= 2:
+                        continue
+                self.batch_selected_ids.add(perfume_id)
+                self.brand_counts[brand] = self.brand_counts.get(brand, 0) + 1
+                candidate = dict(candidate)
+                candidate["id"] = perfume_id
+                return candidate
+        return None
+
+    async def _run_search(
+        self,
+        h_filters: Dict[str, Any],
+        s_filters: Dict[str, Any],
+        *,
+        exclude_ids: List[int],
+        query_text: str,
+        rank_mode: str,
+    ) -> Any:
+        try:
+            return await self.search_fn(
+                h_filters,
+                s_filters,
+                exclude_ids=exclude_ids,
+                query_text=query_text,
+                rank_mode=rank_mode,
+            )
+        except TypeError as e:
+            if "rank_mode" not in str(e):
+                raise
+            return await self.search_fn(
+                h_filters,
+                s_filters,
+                exclude_ids=exclude_ids,
+                query_text=query_text,
+            )
+
+    async def prepare_strategy(
+        self, strategy_name: str, priority: int, rank_mode: str
+    ) -> Dict[str, Any]:
         plan_messages = [
-            SystemMessage(content=researcher_prompt),
+            SystemMessage(content=self.researcher_prompt),
             HumanMessage(
                 content=(
-                    f"사용자 요청 데이터: {current_context}\n"
+                    f"사용자 요청 데이터: {self.current_context}\n"
                     f"전략 이름: {strategy_name}\n"
                     f"우선순위: {priority}\n"
                     "위 데이터를 바탕으로 전략을 수립해 주세요."
@@ -622,7 +597,7 @@ async def parallel_reco_node(state: AgentState):
         ]
 
         try:
-            plan = await plan_llm.ainvoke(
+            plan = await self.plan_llm.ainvoke(
                 plan_messages, config={"tags": ["internal_helper"]}
             )
         except Exception as e:
@@ -634,7 +609,7 @@ async def parallel_reco_node(state: AgentState):
                 "priority": priority,
             }
 
-        user_label = await generate_user_label(user_prefs, plan.reason, plan.strategy_name)
+        user_label = await self.generate_user_label(plan.reason)
 
         try:
             h_filters = plan.hard_filters.model_dump(exclude_none=True)
@@ -644,8 +619,13 @@ async def parallel_reco_node(state: AgentState):
             s_filters = {}
 
         try:
-            candidates, _match_type = await smart_search_with_retry_async(
-                h_filters, s_filters, exclude_ids=exclude_ids, query_text=plan.reason, rank_mode=rank_mode
+            exclude_ids = await self._snapshot_exclude_ids()
+            candidates, _match_type = await self._run_search(
+                h_filters,
+                s_filters,
+                exclude_ids=exclude_ids,
+                query_text=plan.reason,
+                rank_mode=rank_mode,
             )
         except Exception as e:
             return {
@@ -656,23 +636,36 @@ async def parallel_reco_node(state: AgentState):
                 "priority": priority,
             }
 
-        selected_perfume = None
-        async with seen_ids_lock:
-            # [★수정] 사용자가 특정 브랜드를 명시한 경우 브랜드 다양성 제한 해제
-            user_requested_brand = user_prefs.get("brand") or user_prefs.get("reference_brand")
-            
-            for candidate in candidates:
-                brand = candidate.get("brand", "")
-                # [★추가] 브랜드 다양성: 사용자가 브랜드를 지정하지 않았을 때만 동일 브랜드 최대 2개 제한
-                if not user_requested_brand:
-                    if brand_counts.get(brand, 0) >= 2:
-                        continue
-                # 현재 배치 내 중복 확인
-                if candidate["id"] not in seen_ids and candidate["id"] not in exclude_id_set:
-                    selected_perfume = candidate
-                    seen_ids.add(candidate["id"])
-                    brand_counts[brand] = brand_counts.get(brand, 0) + 1
-                    break
+        if not candidates:
+            return {
+                "error": True,
+                "error_type": "no_results",
+                "error_detail": "No candidates returned",
+                "section_data": None,
+                "priority": priority,
+            }
+
+        selected_perfume = await self._select_candidate(candidates)
+
+        if not selected_perfume:
+            try:
+                exclude_ids = await self._snapshot_exclude_ids()
+                candidates, _match_type = await self._run_search(
+                    h_filters,
+                    s_filters,
+                    exclude_ids=exclude_ids,
+                    query_text=plan.reason,
+                    rank_mode=rank_mode,
+                )
+            except Exception as e:
+                return {
+                    "error": True,
+                    "error_type": "tool_error",
+                    "error_detail": str(e),
+                    "section_data": None,
+                    "priority": priority,
+                }
+            selected_perfume = await self._select_candidate(candidates)
 
         if not selected_perfume:
             return {
@@ -684,8 +677,24 @@ async def parallel_reco_node(state: AgentState):
             }
 
         save_recommendation_log(
-            member_id=member_id, perfumes=[selected_perfume], reason=plan.reason
+            member_id=self.member_id,
+            perfumes=[selected_perfume],
+            reason=plan.reason,
         )
+
+        perfume_id = int(selected_perfume["id"])
+        perfume_name = selected_perfume.get("name") or selected_perfume.get(
+            "perfume_name"
+        )
+        perfume_brand = selected_perfume.get("brand") or selected_perfume.get(
+            "perfume_brand"
+        )
+        perfume_name = str(perfume_name) if perfume_name is not None else "Unknown"
+        perfume_brand = str(perfume_brand) if perfume_brand is not None else "Unknown"
+
+        accords_text = selected_perfume.get("accords") or ""
+        best_review = selected_perfume.get("best_review") or ""
+        accord_value = f"{accords_text}\n[Best Review]: {best_review}".strip()
 
         strategy_result = StrategyResult(
             strategy_name=plan.strategy_name,
@@ -693,10 +702,10 @@ async def parallel_reco_node(state: AgentState):
             strategy_reason=plan.reason,
             perfumes=[
                 PerfumeDetail(
-                    id=selected_perfume.get("id"),
-                    perfume_name=selected_perfume.get("name"),
-                    perfume_brand=selected_perfume.get("brand"),
-                    accord=f"{selected_perfume.get('accords')}\n[Best Review]: {selected_perfume.get('best_review')}",
+                    id=perfume_id,
+                    perfume_name=perfume_name,
+                    perfume_brand=perfume_brand,
+                    accord=accord_value,
                     notes=PerfumeNotes(
                         top=selected_perfume.get("top_notes") or "N/A",
                         middle=selected_perfume.get("middle_notes") or "N/A",
@@ -704,14 +713,14 @@ async def parallel_reco_node(state: AgentState):
                     ),
                     image_url=selected_perfume.get("image_url"),
                     gender=selected_perfume.get("gender", "Unisex"),
-                    season="All",
-                    occasion="Any",
+                    season=selected_perfume.get("seasons") or "All",
+                    occasion=selected_perfume.get("occasions") or "Any",
                 )
             ],
         )
 
         section_data = {
-            "user_preferences": user_prefs,
+            "user_preferences": self.user_prefs,
             "strategy": {
                 "internal_id": plan.strategy_name,
                 "user_label": user_label,
@@ -721,101 +730,116 @@ async def parallel_reco_node(state: AgentState):
             },
             "perfume": strategy_result.perfumes[0].dict(),
         }
-        
+
         return {
             "section_data": section_data,
             "priority": priority,
+            "perfume_id": perfume_id,
         }
 
-    async def generate_output(prepared_data: dict, display_priority: int = None):
-        """Phase 2: LLM output generation with streaming (sequential)"""
-        if not prepared_data:
-            return None
-            
-        section_data = prepared_data["section_data"]
-        # Use display_priority if provided (for contiguous numbering), else fallback to original priority
-        priority = display_priority if display_priority is not None else prepared_data["priority"]
-        
-        user_mode = state.get("user_mode", "BEGINNER")
-        
-        # [★ Dynamic Expression Injection]
-        # Extract notes and accords from perfume data
+
+class RecoWriter:
+    def __init__(self, state: AgentState) -> None:
+        self.state = state
+        self.user_mode = state.get("user_mode", "BEGINNER")
+
+    def _build_expression_text(self, section_data: Dict[str, Any]) -> str:
         perfume_data = section_data.get("perfume", {})
-        perfume_name = perfume_data.get("name", "Unknown")
-        brand = perfume_data.get("brand", "Unknown")
         notes_data = perfume_data.get("notes", {})
         accord_str = perfume_data.get("accord", "")
-        
-        # Collect all notes
-        all_notes = []
+
+        all_notes: List[str] = []
         for note_type in ["top", "middle", "base"]:
             note_str = notes_data.get(note_type, "")
             if note_str and note_str != "N/A":
                 all_notes.extend([n.strip() for n in note_str.split(",")])
-        
-        # Extract accords (before [Best Review])
-        accords = []
+
+        accords: List[str] = []
         if accord_str:
             accord_part = accord_str.split("[Best Review]")[0].strip()
             accords = [a.strip() for a in accord_part.split(",") if a.strip()]
-        
-        # Load expression loader
+
         loader = ExpressionLoader()
-        
-        # Build expression guide
-        expression_guide = []
-        injected_count = 0
-        
+
+        expression_guide: List[str] = []
+
         if all_notes:
             expression_guide.append("### 노트 표현 가이드")
-            for note in all_notes[:10]:  # Limit to 10 to avoid prompt bloat
+            for note in all_notes[:10]:
                 desc = loader.get_note_desc(note)
                 if desc:
                     expression_guide.append(f"- {note}: {desc}")
-                    injected_count += 1
-        
+
         if accords:
             expression_guide.append("\n### 어코드 표현 가이드")
             for accord in accords[:10]:
                 desc = loader.get_accord_desc(accord)
                 if desc:
                     expression_guide.append(f"- {accord}: {desc}")
-                    injected_count += 1
-        
-        expression_text = "\n".join(expression_guide) if expression_guide else ""
-        
+
+        return "\n".join(expression_guide) if expression_guide else ""
+
+    async def generate_section(
+        self,
+        prepared_data: Dict[str, Any],
+        display_priority: int,
+        *,
+        is_first: bool,
+        is_last: bool,
+    ) -> Optional[str]:
+        if not prepared_data:
+            return None
+
+        section_data = prepared_data.get("section_data")
+        if not section_data:
+            return None
+
+        expression_text = self._build_expression_text(section_data)
+
         data_ctx = json.dumps(section_data, ensure_ascii=False, indent=2)
 
-        if user_mode == "EXPERT":
+        if self.user_mode == "EXPERT":
             section_system = WRITER_RECOMMENDATION_PROMPT_EXPERT_SINGLE
         else:
             section_system = WRITER_RECOMMENDATION_PROMPT_SINGLE
 
-        # Inject expression guide into prompt
         content_parts = [
-            f"[섹션 번호]: {priority}",
-            f"[도입부 포함]: {'예' if priority == 1 else '아니오'}",
-            f"[출력 규칙]: 도입부 포함이 '아니오'이면 첫 줄을 반드시 '## {priority}.'로 시작하고 도입부 문장을 쓰지 마세요.",
+            f"[섹션 번호]: {display_priority}",
+            f"[도입부 포함]: {'예' if is_first else '아니오'}",
+            f"[마지막 섹션 여부]: {'예' if is_last else '아니오'}",
+            (
+                f"[출력 규칙]: 도입부 포함이 '아니오'이면 첫 줄을 반드시 '## {display_priority}.'로 시작하고 도입부 문장을 쓰지 마세요."
+            ),
         ]
-        
+
+        if is_last:
+            content_parts.append(
+                "[마지막 섹션 규칙]: 마지막 섹션에는 전체 추천을 마무리하는 1~2문장의 짧은 코멘트를 추가하세요. "
+                "이 코멘트는 SAVE 태그 직전에 위치해야 하며, SAVE 태그는 섹션의 마지막 줄로 유지하세요."
+            )
+
         if expression_text:
             content_parts.append(f"\n[감각 표현 참고]:\n{expression_text}")
-        
+
         content_parts.append(f"\n[참고 데이터]:\n{data_ctx}")
-        
-        messages = [SystemMessage(content=section_system)] + state["messages"] + [
-            HumanMessage(content="\n".join(content_parts))
-        ]
+
+        messages = [SystemMessage(content=section_system)] + self.state.get(
+            "messages", []
+        ) + [HumanMessage(content="\n".join(content_parts))]
 
         try:
             result_text = ""
-            async for chunk in SUPER_SMART_LLM.astream(messages):
-                if chunk.content:
-                    result_text += chunk.content
-            
+            if hasattr(SUPER_SMART_LLM, "astream"):
+                async for chunk in SUPER_SMART_LLM.astream(messages):
+                    if chunk.content:
+                        result_text += chunk.content
+            else:
+                response = await SUPER_SMART_LLM.ainvoke(messages)
+                result_text = response.content or ""
+
             if result_text:
                 header_index = result_text.find("##")
-                if priority != 1 and header_index > 0:
+                if display_priority != 1 and header_index > 0:
                     result_text = result_text[header_index:]
                 if result_text.startswith("##"):
                     lines = result_text.splitlines()
@@ -830,111 +854,201 @@ async def parallel_reco_node(state: AgentState):
                         idx += 1
                     rest = after[idx:]
                     lines[0] = (
-                        f"## {priority}. {rest}" if rest else f"## {priority}."
+                        f"## {display_priority}. {rest}"
+                        if rest
+                        else f"## {display_priority}."
                     )
                     result_text = "\n".join(lines)
             if result_text and not result_text.rstrip().endswith("---"):
                 result_text = f"{result_text.rstrip()}\n---"
             return result_text
         except Exception as e:
+            logger.error(f"Writer error: {e}")
             return None
 
-    # Phase 1: Parallel preparation (strategy planning + search)
-    # All 3 strategies run simultaneously - fast!
-    
-    # [Task D1] 트렌딩 키워드 감지
+
+async def parallel_reco_node(state: AgentState):
+    member_id = state.get("member_id", 0)
+    user_prefs = state.get("user_preferences", {})
+    current_context = json.dumps(user_prefs, ensure_ascii=False)
+
+    use_case = infer_use_case(user_prefs)
+
+    personalization = {}
+    if use_case == "SELF" and member_id > 0:
+        personalization = get_personalization_summary(member_id) or {}
+        if personalization.get("summary_text"):
+            print(f"🎯 [Personalization] {personalization['summary_text']}", flush=True)
+    else:
+        if use_case == "GIFT":
+            print(
+                "🎁 [GIFT Mode] Personalization disabled for gift recommendations",
+                flush=True,
+            )
+
+    researcher_prompt = RESEARCHER_SYSTEM_PROMPT
+    if personalization.get("summary_text"):
+        researcher_prompt += (
+            "\n\n## 사용자 취향 정보\n"
+            f"{personalization['summary_text']}\n\n"
+            "이 정보를 참고하되, 현재 요청 조건(브랜드/계절/대상 등)이 최우선입니다."
+        )
+
+    plan_llm = SMART_LLM.with_structured_output(SearchStrategyPlan)
+
+    recommended_history = state.get("recommended_history") or []
+    saved_ids = _extract_saved_ids(state.get("messages", []))
+    if not recommended_history and saved_ids:
+        recommended_history = saved_ids
+    merged_history = _merge_unique_ids(recommended_history, saved_ids)
+
+    session_exclude_ids: Set[int] = set(merged_history)
+
+    if use_case == "SELF":
+        for disliked in personalization.get("disliked_perfumes", []):
+            perfume_id = disliked.get("id")
+            if perfume_id:
+                session_exclude_ids.add(perfume_id)
+
+    selection_lock = asyncio.Lock()
+    batch_selected_ids: Set[int] = set()
+    brand_counts: Dict[str, int] = {}
+
     rank_mode = "DEFAULT"
     user_query = state.get("user_query", "")
-    trending_keywords = ["유행", "인기", "트렌딩", "요즘", "잘나가는", "베스트", "trending", "popular", "hot"]
+    trending_keywords = [
+        "유행",
+        "인기",
+        "트렌딩",
+        "요즘",
+        "잘나가는",
+        "베스트",
+        "trending",
+        "popular",
+        "hot",
+    ]
     if any(k in user_query for k in trending_keywords):
         rank_mode = "POPULAR"
         print(f"🔥 [Ranking] Mode: {rank_mode}", flush=True)
-    
-    # [Task C1] Determine target recommended count (Default: 3)
+
     target_count = state.get("recommended_count")
     if target_count is None:
-        # Try to parse from user_query using helper
         parsed = parse_recommended_count(state.get("user_query", ""))
         target_count = parsed if parsed is not None else 3
-    
-    # Cap target_count reasonably (e.g. 1 to 5)
+
     target_count = normalize_recommended_count(target_count)
-    
+
     print(f"🔢 [Count] Target recommendations: {target_count}", flush=True)
 
-    # [Task C2] Dynamic Strategy Generation Loop
-    prep_tasks = []
-    for i in range(1, target_count + 1):
-        prep_tasks.append(asyncio.create_task(prepare_strategy(f"STRAT_{i}", i, rank_mode)))
+    searcher = RecoSearcher(
+        member_id=member_id,
+        user_prefs=user_prefs,
+        researcher_prompt=researcher_prompt,
+        plan_llm=plan_llm,
+        session_exclude_ids=session_exclude_ids,
+        selection_lock=selection_lock,
+        batch_selected_ids=batch_selected_ids,
+        brand_counts=brand_counts,
+        search_fn=smart_search_with_retry_async,
+    )
+    writer = RecoWriter(state)
 
-    # Phase 2: Sequential output generation with streaming
-    # Wait for prep in order, then generate output with streaming
-    # results = []
-    # prepared_data_list = []  # [★추가] 추천 이력 누적용
-    
-    # 1. Gather all preparation tasks (ignoring exceptions during gather, handling them later)
-    results = await asyncio.gather(*prep_tasks, return_exceptions=True)
-    
-    valid_data_list = []
-    
-    # 2. Filter out failures (None, Exception, or error dict)
-    for res in results:
-        if isinstance(res, Exception):
-            logger.error(f"Strategy preparation failed: {res}")
+    prep_tasks = [
+        asyncio.create_task(searcher.prepare_strategy(f"STRAT_{i}", i, rank_mode))
+        for i in range(1, target_count + 1)
+    ]
+
+    errors_encountered: List[Dict[str, str]] = []
+    pending_result: Optional[Dict[str, Any]] = None
+    output_texts: List[str] = []
+    prepared_data_list: List[Dict[str, Any]] = []
+
+    for future in asyncio.as_completed(prep_tasks):
+        try:
+            result = await future
+        except Exception as e:
+            errors_encountered.append({"type": "exception", "detail": str(e)})
             continue
-        if res is None:
+
+        if not result:
+            errors_encountered.append(
+                {"type": "unknown", "detail": "Strategy returned empty result"}
+            )
             continue
-        if isinstance(res, dict) and res.get("error"):
+
+        if result.get("error"):
+            error_type = result.get("error_type", "unknown")
+            error_detail = result.get("error_detail", "")
+            if error_type not in {"no_results", "no_candidates"}:
+                errors_encountered.append(
+                    {"type": error_type, "detail": error_detail}
+                )
             continue
-        valid_data_list.append(res)
-        
-    # 3. Generate output for VALID results only, with CONTIGUOUS numbering
-    final_output_texts = []
-    prepared_data_list = [] # For history tracking
-    
-    for idx, data in enumerate(valid_data_list, start=1):
-        # Pass the new sequential priority (idx) to generate_output
-        # This ensures outputs are labeled ## 1., ## 2., etc. regardless of original priority
-        output_text = await generate_output(data, display_priority=idx)
-        
+
+        if pending_result:
+            section_number = len(output_texts) + 1
+            output_text = await writer.generate_section(
+                pending_result,
+                section_number,
+                is_first=section_number == 1,
+                is_last=False,
+            )
+            if output_text:
+                output_texts.append(output_text)
+                prepared_data_list.append(pending_result)
+            else:
+                errors_encountered.append(
+                    {
+                        "type": "writer_error",
+                        "detail": "Writer failed to produce output",
+                    }
+                )
+
+        pending_result = result
+
+    if pending_result:
+        section_number = len(output_texts) + 1
+        output_text = await writer.generate_section(
+            pending_result,
+            section_number,
+            is_first=section_number == 1,
+            is_last=True,
+        )
         if output_text:
-            final_output_texts.append(output_text)
-            prepared_data_list.append(data)
-            
-    # 4. Assemble full text
-    if final_output_texts:
-        full_text = "\n\n".join(final_output_texts)
+            output_texts.append(output_text)
+            prepared_data_list.append(pending_result)
+        else:
+            errors_encountered.append(
+                {
+                    "type": "writer_error",
+                    "detail": "Writer failed to produce output",
+                }
+            )
+
+    if output_texts:
+        full_text = output_texts[0]
+        for next_text in output_texts[1:]:
+            next_text = _normalize_section_boundary(full_text, next_text)
+            full_text = f"{full_text}\n\n{next_text}"
     else:
-        # Dynamic fallback generation
         fallback_messages = [
             SystemMessage(content=WRITER_FAILURE_PROMPT),
-            HumanMessage(content=f"사용자 정보: {current_context}")
+            HumanMessage(content=f"사용자 정보: {current_context}"),
         ]
         fallback_response = await SUPER_SMART_LLM.ainvoke(fallback_messages)
         full_text = fallback_response.content
 
-    # [★추가] 결과 상태 분류 (Wave 2-2)
-    errors_encountered = []
-    for res in results:
-        if isinstance(res, Exception):
-            errors_encountered.append({"type": "exception", "detail": str(res)})
-        elif isinstance(res, dict) and res.get("error"):
-            errors_encountered.append({
-                "type": res.get("error_type"),
-                "detail": res.get("error_detail"),
-            })
-
-    if len(final_output_texts) >= 1:
+    if len(output_texts) >= 1:
         chat_outcome_status = "OK"
-        if len(final_output_texts) < target_count:
+        if len(output_texts) < target_count:
             chat_outcome_reason_code = "partial_results"
             chat_outcome_reason_detail = (
-                f"Generated {len(final_output_texts)}/{target_count} sections"
+                f"Generated {len(output_texts)}/{target_count} sections"
             )
         else:
             chat_outcome_reason_code = "success"
             chat_outcome_reason_detail = (
-                f"Generated {len(final_output_texts)}/{target_count} sections"
+                f"Generated {len(output_texts)}/{target_count} sections"
             )
     elif errors_encountered:
         chat_outcome_status = "ERROR"
@@ -947,15 +1061,13 @@ async def parallel_reco_node(state: AgentState):
         chat_outcome_reason_code = "no_candidates"
         chat_outcome_reason_detail = "All strategies failed to find suitable perfumes"
 
-    # [★추가] 현재 배치에서 추천된 향수 ID 수집 및 세션 히스토리 업데이트
-    current_batch_ids = []
+    current_batch_ids: List[int] = []
     for prepared_data in prepared_data_list:
-        if prepared_data and prepared_data.get("section_data"):
-            perfume_id = prepared_data["section_data"].get("perfume", {}).get("id")
-            if perfume_id:
-                current_batch_ids.append(perfume_id)
-    
-    updated_history = recommended_history + current_batch_ids
+        perfume_id = prepared_data.get("perfume_id")
+        if perfume_id:
+            current_batch_ids.append(perfume_id)
+
+    updated_history = _merge_unique_ids(merged_history, current_batch_ids)
 
     return {
         "messages": [AIMessage(content=full_text)],
@@ -987,7 +1099,7 @@ def parallel_reco_result_router(state: AgentState):
         return "parallel_reco_ok_writer"
 
 
-async def parallel_reco_ok_writer(state: AgentState):
+async def parallel_reco_ok_writer(_state: AgentState):
     """
     OK 상태일 때 - 이미 parallel_reco_node에서 메시지 생성 완료.
     추가 처리 없이 그대로 반환.
@@ -1015,15 +1127,61 @@ async def parallel_reco_no_results(state: AgentState):
     return {"messages": [AIMessage(content=fallback_response.content)]}
 
 
-async def parallel_reco_error(state: AgentState):
+async def parallel_reco_error(_state: AgentState):
     """
     ERROR 상태일 때 - 고정 문구 출력 (내부 오류 노출 금지).
     """
     print(f"\n❌ [Reco Error] 기술적 오류 처리", flush=True)
-    
+
     error_msg = "죄송합니다. 현재 알 수 없는 오류가 발생하였습니다. 잠시 후 다시 시도해 주세요. 🙏"
-    
+
     return {"messages": [AIMessage(content=error_msg)]}
+
+
+async def out_of_scope_handler(_state: AgentState):
+    """
+    향수와 관련 없는 질문 처리 - 고정 메시지 반환 (LLM 호출 없음).
+    """
+    print(f"\n🚫 [Out of Scope] 향수 관련 없는 질문 처리", flush=True)
+
+    fixed_msg = "죄송하지만 저는 향수 큐레이션 챗봇이기 때문에 향수 추천이나 정보제공 이외의 답변을 드리기는 어렵습니다."
+
+    return {
+        "messages": [AIMessage(content=fixed_msg)],
+        "chat_outcome_status": "OUT_OF_SCOPE"
+    }
+
+
+async def unsupported_request_handler(_state: AgentState):
+    """
+    DB에 없는 속성 요청 처리 - 카테고리별 커스터마이징된 고정 메시지 반환.
+    """
+    print(f"\n⚠️ [Unsupported Request] DB 미지원 속성 요청 처리", flush=True)
+
+    category = _state.get("unsupported_category", "")
+
+    # 카테고리별 메시지
+    category_messages = {
+        "제형": "죄송하지만 저희는 향수의 제형(오일/워터/고체 등) 정보를 보유하고 있지 않아 해당 기준으로 추천이 어렵습니다.",
+        "성능": "죄송하지만 발향력, 지속력 등 성능 정보는 보유하고 있지 않아 해당 기준으로 추천이 어렵습니다.",
+        "가격": "죄송하지만 가격 정보를 보유하고 있지 않아 가격 기반 추천이 어렵습니다.",
+        "레이어링": "죄송하지만 레이어링이나 조합 추천은 현재 지원하지 않습니다. 개별 향수 추천은 가능합니다!",
+        "구매정보": "죄송하지만 구매처나 매장 정보는 제공하지 않습니다.",
+        "물리적": "죄송하지만 용량, 크기 등 물리적 정보는 보유하고 있지 않습니다.",
+    }
+
+    specific_msg = category_messages.get(category, "죄송하지만 해당 요청은 현재 지원하지 않습니다.")
+
+    guidance = "\n\n💡 대신 이런 방식으로 질문해주시면 도움드릴 수 있습니다:\n" \
+               "- 분위기나 느낌 (사랑스러운, 시원한, 우아한 등)\n" \
+               "- 계절이나 상황 (여름용, 데일리, 데이트용 등)\n" \
+               "- 어코드나 노트 (플로랄, 우디, 시트러스 등)\n" \
+               "- 특정 향수 정보나 유사 향수 추천"
+
+    return {
+        "messages": [AIMessage(content=specific_msg + guidance)],
+        "chat_outcome_status": "UNSUPPORTED_REQUEST"
+    }
 
 
 # ==========================================
@@ -1031,20 +1189,32 @@ async def parallel_reco_error(state: AgentState):
 # ==========================================
 workflow = StateGraph(AgentState)
 
+workflow.add_node("pre_validator", pre_validator_node)
 workflow.add_node("supervisor", supervisor_node)
 workflow.add_node("interviewer", interviewer_node)
 # workflow.add_node("researcher", researcher_node)  # Replaced by parallel_reco
 # workflow.add_node("writer", writer_node)  # Replaced by parallel_reco
 workflow.add_node("parallel_reco", parallel_reco_node)
 
-# [Wave 2-3] Add status-based routing nodes
-workflow.add_node("parallel_reco_result_router", parallel_reco_result_router)
+# [Wave 2-3] Add status-based handler nodes
 workflow.add_node("parallel_reco_ok_writer", parallel_reco_ok_writer)
 workflow.add_node("parallel_reco_no_results", parallel_reco_no_results)
 workflow.add_node("parallel_reco_error", parallel_reco_error)
+workflow.add_node("out_of_scope_handler", out_of_scope_handler)
+workflow.add_node("unsupported_request_handler", unsupported_request_handler)
 workflow.add_node("info_retrieval_subgraph", call_info_graph_wrapper)
 
-workflow.add_edge(START, "supervisor")
+workflow.add_edge(START, "pre_validator")
+
+# Pre-validator routing
+workflow.add_conditional_edges(
+    "pre_validator",
+    lambda x: x.get("validation_result", "supported"),
+    {
+        "supported": "supervisor",
+        "unsupported": "unsupported_request_handler"
+    }
+)
 
 workflow.add_conditional_edges(
     "supervisor",
@@ -1052,7 +1222,7 @@ workflow.add_conditional_edges(
     {
         "interviewer": "interviewer",
         "info_retrieval": "info_retrieval_subgraph",
-        "writer": "parallel_reco",  # Replaced writer with parallel_reco
+        "writer": "out_of_scope_handler",  # Out-of-scope questions (non-perfume related)
     },
 )
 
@@ -1065,12 +1235,10 @@ workflow.add_conditional_edges(
 # workflow.add_edge("researcher", "writer")  # Old flow - replaced
 # workflow.add_edge("writer", END)  # Old flow - replaced
 
-# [Wave 2-3] Route parallel_reco → router → status-specific nodes
-workflow.add_edge("parallel_reco", "parallel_reco_result_router")
-
+# [Wave 2-3 - Pattern A] parallel_reco → status 기반 직접 분기
 workflow.add_conditional_edges(
-    "parallel_reco_result_router",
-    lambda x: parallel_reco_result_router(x),
+    "parallel_reco",
+    parallel_reco_result_router,
     {
         "parallel_reco_ok_writer": "parallel_reco_ok_writer",
         "parallel_reco_no_results": "parallel_reco_no_results",
@@ -1082,6 +1250,8 @@ workflow.add_conditional_edges(
 workflow.add_edge("parallel_reco_ok_writer", END)
 workflow.add_edge("parallel_reco_no_results", END)
 workflow.add_edge("parallel_reco_error", END)
+workflow.add_edge("out_of_scope_handler", END)
+workflow.add_edge("unsupported_request_handler", END)
 workflow.add_edge("info_retrieval_subgraph", END)
 
 checkpointer = MemorySaver()
