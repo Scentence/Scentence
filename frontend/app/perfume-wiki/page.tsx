@@ -10,8 +10,7 @@ import { useSession } from "next-auth/react";
 import SeriesGrid from "@/components/perfume-wiki/SeriesGrid";
 import perfumeWikiData from "./_data/perfumeWiki.json";
 import type { PerfumeWikiData } from "./types";
-import Sidebar from "@/components/common/sidebar";
-import UserProfileMenu from "@/components/common/UserProfileMenu";
+import PageLayout from "@/components/common/PageLayout";
 
 const data = perfumeWikiData as PerfumeWikiData;
 
@@ -36,129 +35,16 @@ const seriesList = data.seasons.flatMap((season, index) => {
 
 export default function PerfumeWikiPage() {
   const { data: session } = useSession();
-  const [isNavOpen, setIsNavOpen] = useState(false);
-  const [isProfileMenuOpen, setIsProfileMenuOpen] = useState(false);
-  const [localUser, setLocalUser] = useState<any>(null);
-  const [profileImageUrl, setProfileImageUrl] = useState<string | null>(null);
+
 
   // [기존 코드 주석 처리] 환경 변수에 의존하던 방식
   // const API_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000";
 
-  useEffect(() => {
-    // 1. 로컬 스토리지 데이터 확인
-    const authData = localStorage.getItem("localAuth");
-    if (authData) {
-      try {
-        const parsed = JSON.parse(authData);
-        setLocalUser(parsed);
-      } catch (e) {
-        // console.error("Local auth parse error", e);
-      }
-    }
+  // Removed redundant profile fetching logic
 
-    // [수정] 프로필 이미지 가져오기 로직 표준화 (/api 사용)
-    const currentId = session?.user?.id || localUser?.memberId;
-
-    if (currentId) {
-      fetch(`/api/users/profile/${currentId}`)
-        .then((res) => (res.ok ? res.json() : null))
-        .then((data) => {
-          if (data?.profile_image_url) {
-            const rawUrl = data.profile_image_url;
-            // [표준화] 이미지 경로 결정 로직 (메인, 채팅 페이지와 동일)
-            const url = (rawUrl.startsWith("http") || rawUrl.startsWith("/uploads"))
-              ? rawUrl
-              : `/api${rawUrl}`;
-            setProfileImageUrl(url);
-          }
-        })
-        .catch(() => setProfileImageUrl(null));
-    }
-  }, [session, localUser?.memberId]);
-
-  const isLoggedIn = !!(session || localUser);
 
   return (
-    <div className="min-h-screen bg-[#FDFBF8] text-[#2B2B2B] font-sans">
-      <Sidebar
-        isOpen={isNavOpen}
-        onClose={() => setIsNavOpen(false)}
-        context="home"
-      />
-      {isNavOpen && (
-        <div
-          className="fixed inset-0 bg-transparent z-40"
-          onClick={() => setIsNavOpen(false)}
-        />
-      )}
-
-      <header className="fixed top-0 left-0 right-0 z-30 flex items-center justify-between px-6 md:px-10 py-5 bg-[#FDFBF8] border-b border-[#F0F0F0]">
-        <div className="flex items-center gap-4">
-          <Link
-            href="/"
-            className="text-lg font-bold text-black tracking-[0.15em] uppercase hover:opacity-70 transition"
-          >
-            SCENTENCE
-          </Link>
-          <span className="text-xs font-semibold text-[#8C6A1D] tracking-[0.3em] uppercase border-l border-gray-300 pl-4 hidden sm:block">
-            Perfume Wiki
-          </span>
-        </div>
-
-        {/* 우측 상단 UI */}
-        <div className="flex items-center gap-4">
-          {!isLoggedIn ? (
-            <div className="flex items-center gap-2 text-sm font-medium text-gray-400">
-              <Link href="/login" className="hover:text-black transition-colors">Sign in</Link>
-              <span className="text-gray-300">|</span>
-              <Link href="/signup" className="hover:text-black transition-colors">Sign up</Link>
-            </div>
-          ) : (
-            <div className="flex items-center gap-3">
-              <button
-                id="profile-menu-toggle"
-                onClick={() => setIsProfileMenuOpen(!isProfileMenuOpen)}
-                className="block w-9 h-9 rounded-full overflow-hidden border border-gray-100 shadow-sm hover:opacity-80 transition-opacity"
-              >
-                <img
-                  src={profileImageUrl || "/default_profile.png"}
-                  alt="Profile"
-                  className="w-full h-full object-cover"
-                  onError={(e) => {
-                    const target = e.currentTarget;
-                    // [추가] 이미지 로드 실패 시 세션 이미지가 있으면 시도, 없으면 기본 이미지
-                    if (session?.user?.image && target.src !== session.user.image) {
-                      target.src = session.user.image;
-                    } else {
-                      target.src = "/default_profile.png";
-                    }
-                  }}
-                />
-              </button>
-              <UserProfileMenu
-                isOpen={isProfileMenuOpen}
-                onClose={() => setIsProfileMenuOpen(false)}
-              />
-            </div>
-          )}
-
-          <button
-            id="global-menu-toggle"
-            onClick={() => setIsNavOpen(!isNavOpen)}
-            className="w-9 h-9 flex items-center justify-center rounded-full hover:bg-gray-100 transition-colors"
-          >
-            {isNavOpen ? (
-              <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" className="w-8 h-8 text-[#555]">
-                <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
-              </svg>
-            ) : (
-              <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" className="w-8 h-8 text-[#555]">
-                <path strokeLinecap="round" strokeLinejoin="round" d="M3.75 9h16.5m-16.5 6.75h16.5" />
-              </svg>
-            )}
-          </button>
-        </div>
-      </header>
+    <PageLayout subTitle="Perfume Wiki">
 
       <main className="pt-[120px] pb-24 px-6 md:px-10 max-w-6xl mx-auto space-y-16">
         <section className="space-y-3">
@@ -172,6 +58,6 @@ export default function PerfumeWikiPage() {
 
         <SeriesGrid series={seriesList} />
       </main>
-    </div>
+    </PageLayout>
   );
 }

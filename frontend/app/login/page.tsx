@@ -2,10 +2,9 @@
 
 import { FormEvent, useState } from "react";
 import Link from "next/link";
-import Sidebar from "@/components/common/sidebar";
+import PageLayout from "@/components/common/PageLayout";
 
 export default function LoginPage() {
-  const [isSidebarOpen, setIsSidebarOpen] = useState(false);
   const [loginId, setLoginId] = useState("");
   const [password, setPassword] = useState("");
   const [submitMessage, setSubmitMessage] = useState<string | null>(null);
@@ -89,43 +88,7 @@ export default function LoginPage() {
   };
 
   return (
-    <div className="h-screen bg-[#FDFBF8] text-black font-sans overflow-hidden flex flex-col">
-      <Sidebar
-        isOpen={isSidebarOpen}
-        onClose={() => setIsSidebarOpen(false)}
-        context="home"
-      />
-
-      {isSidebarOpen && (
-        <div
-          className="fixed inset-0 bg-transparent z-40 md:hidden"
-          onClick={() => setIsSidebarOpen(false)}
-        />
-      )}
-
-      {/* [STANDARD HEADER] 표준 디자인 */}
-      <header className="fixed top-0 left-0 right-0 flex items-center justify-between px-6 md:px-10 py-5 bg-[#FDFBF8]/95 backdrop-blur-sm border-b border-[#F0F0F0] z-50 transition-all">
-        <Link href="/" className="text-lg font-bold text-black tracking-[0.15em] uppercase hover:opacity-70 transition">
-          SCENTENCE
-        </Link>
-
-        {/* 우측 상단 UI */}
-        <div className="flex items-center gap-4">
-          <div className="flex items-center gap-2 text-sm font-medium text-gray-400">
-            <Link href="/login" className="text-black pointer-events-none">Sign in</Link>
-            <span className="text-gray-300">|</span>
-            <Link href="/signup" className="hover:text-black transition-colors">Sign up</Link>
-          </div>
-          <button
-            onClick={() => setIsSidebarOpen(true)}
-            className="w-9 h-9 flex items-center justify-center rounded-full hover:bg-gray-100 transition-colors"
-          >
-            <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" className="w-6 h-6 text-[#333]">
-              <path strokeLinecap="round" strokeLinejoin="round" d="M3.75 9h16.5m-16.5 6.75h16.5" />
-            </svg>
-          </button>
-        </div>
-      </header>
+    <PageLayout className="h-screen bg-[#FDFBF8] text-black font-sans overflow-hidden flex flex-col">
 
       {/* [MAIN CONTENT] Split View (Gallery Look) */}
       <main className="flex-1 flex w-full h-full pt-[76px]">
@@ -243,6 +206,6 @@ export default function LoginPage() {
           </div>
         </section>
       </main>
-    </div>
+    </PageLayout>
   );
 }

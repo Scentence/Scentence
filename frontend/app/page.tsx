@@ -6,20 +6,13 @@ import Link from "next/link";
 import { useSession } from "next-auth/react"; // [Login Check]
 import MaximumCounter from "@/components/perfume-wiki/MaximumCounter"; // (만약 사용하는 경우 유지, 없으면 삭제 가능하지만 기존 import 유지)
 import Sidebar from "@/components/common/sidebar";
-import UserProfileMenu from "@/components/common/UserProfileMenu";
+import Header from "@/components/common/Header";
 
 export default function LandingPage() {
   const router = useRouter();
   const { data: session } = useSession(); // [Login Check]
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
-  const [isProfileMenuOpen, setIsProfileMenuOpen] = useState(false);
-
-  // [Profile Logic] 로그인 사용자 정보 확인
   const [localUser, setLocalUser] = useState<{ memberId?: string | null; email?: string | null; nickname?: string | null; roleType?: string | null; isAdmin?: boolean } | null>(null);
-  const [profileImageUrl, setProfileImageUrl] = useState<string | null>(null);
-
-  // 최신 닉네임을 저장할 State 추가
-  const [profileNickname, setProfileNickname] = useState<string | null>(null);
 
   useEffect(() => {
     if (typeof window === "undefined") return;
@@ -32,59 +25,6 @@ export default function LandingPage() {
       }
     }
   }, []);
-
-  useEffect(() => {
-    if (typeof window === "undefined") return;
-
-    // [기존 코드 주석 처리] 환경 변수(apiBaseUrl)에 의존하던 방식
-    // const apiBaseUrl = process.env.NEXT_PUBLIC_API_URL || "";
-
-    const memberId = session?.user?.id || localUser?.memberId;
-
-    if (!memberId) {
-      setProfileImageUrl(null);
-      return;
-    }
-
-    /**
-     * [수정 이유: 팀 협업 및 배포 환경 대응]
-     * 기존 fetch(`${apiBaseUrl}/...`) 방식은 각 팀원의 환경 변수 설정에 따라 
-     * 통신 성공 여부가 갈리는 문제가 있었습니다. (특히 메인 페이지에서 가시화됨)
-     * 
-     * [해결책: /api 프록시 표준화]
-     * next.config.ts의 rewrites 설정을 활용하여 모든 백엔드 요청을 '/api'로 통일합니다.
-     * 이렇게 하면 로컬 포트가 8000이든 8001이든, 혹은 AWS 배포 환경이든 
-     * 코드 수정 없이 자동으로 올바른 백엔드 서버를 찾아갑니다.
-     */
-    fetch(`/api/users/profile/${memberId}`)
-      .then((res) => (res.ok ? res.json() : null))
-      .then((data) => {
-        if (data?.nickname) {
-          setProfileNickname(data.nickname);
-        }
-
-        if (data?.profile_image_url) {
-          const rawUrl = data.profile_image_url;
-
-          /**
-           * [이미지 주소 처리 표준화]
-           * 1. 외부 주소(http)나 프록시 주소(/uploads)는 그대로 유지
-           * 2. 그 외 백엔드 상대 경로에는 '/api'를 붙여 프록시를 타게 함
-           * (기존 apiBaseUrl 상수 대신 '/api'를 사용하여 환경 의존성 제거)
-           */
-          const finalUrl = (rawUrl.startsWith("http") || rawUrl.startsWith("/uploads"))
-            ? rawUrl
-            : `/api${rawUrl}`; // `${apiBaseUrl}${rawUrl}` 대신 사용
-
-          setProfileImageUrl(finalUrl);
-        }
-      })
-      .catch(() => setProfileImageUrl(null));
-  }, [localUser, session]);
-
-  // [Display Name Logic]
-  const displayName = profileNickname || session?.user?.name || localUser?.nickname || localUser?.email?.split('@')[0] || "Guest";
-  const isLoggedIn = Boolean(session || localUser);
 
   const handleNewChat = () => {
     router.push("/chat");
@@ -116,77 +56,11 @@ export default function LandingPage() {
         */}
 
 
-        <header className="fixed top-0 left-0 right-0 z-30 flex items-center justify-between px-6 md:px-10 py-5 bg-[#FDFBF8] border-b border-[#F0F0F0]">
-          {/* 로고 영역: Wiki와 동일하게 div로 감싸 구조 통일 */}
-          <div className="flex items-center gap-4">
-            <Link href="/" className="text-lg font-bold text-black tracking-[0.15em] uppercase hover:opacity-70 transition">
-              SCENTENCE
-            </Link>
-          </div>
-
-          {/* 우측 상단 UI: Perfume Wiki와 동일하게 통일 (Welcome Msg 제거하여 위치 통일) */}
-          <div className="flex items-center gap-4">
-            {!isLoggedIn ? (
-              <div className="flex items-center gap-2 text-sm font-medium text-gray-400">
-                <Link href="/login" className="hover:text-black transition-colors">Sign in</Link>
-                <span className="text-gray-300">|</span>
-                <Link href="/signup" className="hover:text-black transition-colors">Sign up</Link>
-              </div>
-            ) : (
-              <div className="flex items-center gap-3">
-                <span className="hidden md:inline-block text-sm font-medium text-gray-600 mr-2">
-                  <strong className="font-bold text-gray-900">{displayName}</strong>님 반가워요!
-                </span>
-                <button
-                  id="profile-menu-toggle"
-                  onClick={() => setIsProfileMenuOpen(!isProfileMenuOpen)}
-                  className="w-9 h-9 flex items-center justify-center rounded-full p-0.5 transform-gpu bg-gradient-to-br from-white/20 to-transparent border border-white/40 shadow-[inset_0_1px_1px_rgba(255,255,255,0.9),inset_0_15px_30px_rgba(255,255,255,0.15),inset_0_-2px_10px_rgba(0,0,0,0.05),0_20px_40px_-10px_rgba(0,0,0,0.2)] will-change-transform transition-all hover:scale-105 active:scale-95 overflow-hidden"
-                >
-                  {/* 
-                    [수정됨: 이미지 소스 우선순위 로직 강화]
-                    1순위: DB에서 가져온 프로필 이미지 (profileImageUrl)
-                    2순위: 카카오 로그인 세션 이미지 (session?.user?.image) - DB fetch 실패/누락 시 폴백
-                    3순위: 기본 이미지 (/default_profile.png)
-                  */}
-                  <img
-                    src={profileImageUrl || session?.user?.image || "/default_profile.png"}
-                    alt="Profile"
-                    className="w-full h-full object-cover rounded-full"
-                    onError={(e) => {
-                      // 이미지 로드 실패 시 세션 이미지가 있으면 시도, 없으면 기본 이미지
-                      const target = e.currentTarget;
-                      if (session?.user?.image && target.src !== session.user.image) {
-                        target.src = session.user.image;
-                      } else {
-                        target.src = "/default_profile.png";
-                      }
-                    }}
-                  />
-                </button>
-                <UserProfileMenu
-                  isOpen={isProfileMenuOpen}
-                  onClose={() => setIsProfileMenuOpen(false)}
-                />
-              </div>
-            )}
-
-            <button
-              id="global-menu-toggle"
-              onClick={() => setIsSidebarOpen(!isSidebarOpen)}
-              className="w-9 h-9 flex items-center justify-center rounded-full p-0.5 transform-gpu bg-gradient-to-br from-white/20 to-transparent border border-white/40 shadow-[inset_0_1px_1px_rgba(255,255,255,0.9),inset_0_15px_30px_rgba(255,255,255,0.15),inset_0_-2px_10px_rgba(0,0,0,0.05),0_20px_40px_-10px_rgba(0,0,0,0.2)] will-change-transform transition-all hover:scale-105 active:scale-95"
-            >
-              {isSidebarOpen ? (
-                <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor" className="w-full h-full text-[#333] p-1">
-                  <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
-                </svg>
-              ) : (
-                <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor" className="w-full h-full text-[#333] p-1">
-                  <path strokeLinecap="round" strokeLinejoin="round" d="M4 6h16M4 12h16M4 18h16" />
-                </svg>
-              )}
-            </button>
-          </div>
-        </header>
+        <Header
+          onToggleSidebar={() => setIsSidebarOpen(!isSidebarOpen)}
+          isSidebarOpen={isSidebarOpen}
+          showGreeting={true}
+        />
 
         <div className="px-5 space-y-8 mt-6 w-full max-w-3xl mx-auto">
           {/* 3. HERO CAROUSEL */}

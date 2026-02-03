@@ -3,8 +3,7 @@
 import { FormEvent, useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import { useSession } from "next-auth/react";
-import Sidebar from "@/components/common/sidebar";
-import UserProfileMenu from "@/components/common/UserProfileMenu";
+import PageLayout from "@/components/common/PageLayout";
 import ImageCropperModal from './ImageCropperModal';
 
 interface ProfileData {
@@ -26,8 +25,7 @@ interface ProfileData {
 
 export default function MyPage() {
   const { data: session, update } = useSession();
-  const [isSidebarOpen, setIsSidebarOpen] = useState(false);
-  const [isProfileMenuOpen, setIsProfileMenuOpen] = useState(false);
+
   const [memberId, setMemberId] = useState<string | null>(null);
   const [profile, setProfile] = useState<ProfileData | null>(null);
   const [nickname, setNickname] = useState("");
@@ -318,131 +316,32 @@ export default function MyPage() {
 
   if (!memberId) {
     return (
-      <div className="min-h-screen bg-[#FDFBF8] text-black flex flex-col">
-        <Sidebar
-          isOpen={isSidebarOpen}
-          onClose={() => setIsSidebarOpen(false)}
-          context="home"
-        />
-
-        {/* [STANDARD HEADER] 메인 페이지(app/page.tsx)와 100% 동일한 구조 및 디자인 적용 */}
-        <header className="fixed top-0 left-0 right-0 flex items-center justify-between px-5 py-4 bg-[#FDFBF8] border-b border-[#F0F0F0] z-50">
-          {/* 로고 영역: font-bold, text-black, tracking-tight (표준) */}
-          <Link href="/" className="text-xl font-bold text-black tracking-tight">
-            Scentence
-          </Link>
-
-          {/* 우측 상단 UI: 로그인 상태 및 사이드바 토글 버튼 (표준) */}
-          <div className="flex items-center gap-4">
-            {/* 비로그인 상태 UI (메인과 동일) */}
-            <div className="flex items-center gap-2 text-sm font-medium text-gray-400">
-              <Link href="/login" className="hover:text-black transition-colors">Sign in</Link>
-              <span className="text-gray-300">|</span>
-              <Link href="/signup" className="hover:text-black transition-colors">Sign up</Link>
-            </div>
-            {/* 마이페이지에서도 전역 내비게이션 사용을 위해 Sidebar 토글 버튼 유지 */}
-            <button
-              id="global-menu-toggle"
-              onClick={() => setIsSidebarOpen(!isSidebarOpen)}
-              className="w-9 h-9 flex items-center justify-center rounded-full p-0.5 transform-gpu bg-gradient-to-br from-white/20 to-transparent border border-white/40 shadow-[inset_0_1px_1px_rgba(255,255,255,0.9),inset_0_15px_30px_rgba(255,255,255,0.15),inset_0_-2px_10px_rgba(0,0,0,0.05),0_20px_40px_-10px_rgba(0,0,0,0.2)] will-change-transform transition-all hover:scale-105 active:scale-95"
-            >
-              {isSidebarOpen ? (
-                <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor" className="w-full h-full text-[#333]">
-                  <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
-                </svg>
-              ) : (
-                <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor" className="w-full h-full text-[#333]">
-                  <path strokeLinecap="round" strokeLinejoin="round" d="M3 9h18M3 15h18" />
-                </svg>
-              )}
-            </button>
-          </div>
-        </header>
-
+      <PageLayout className="min-h-screen bg-[#FDFBF8] text-black flex flex-col">
         <main className="flex-1 px-5 py-8 w-full max-w-md mx-auto pt-[120px]">
           <h2 className="text-2xl font-bold mb-3">마이페이지</h2>
           <p className="text-sm text-[#666]">로그인이 필요합니다.</p>
         </main>
-      </div>
+      </PageLayout>
     );
   }
 
   return (
-    <div className="min-h-screen bg-[#FDFBF8] text-black flex flex-col font-sans">
-      <Sidebar
-        isOpen={isSidebarOpen}
-        onClose={() => setIsSidebarOpen(false)}
-        context="home"
-      />
-
-      {isSidebarOpen && (
-        <div
-          className="fixed inset-0 bg-transparent z-40 md:hidden"
-          onClick={() => setIsSidebarOpen(false)}
-        />
-      )}
-
-      {/* [STANDARD HEADER] 메인 페이지(app/page.tsx)와 100% 동일한 구조 및 디자인 적용 */}
-      <header className="fixed top-0 left-0 right-0 flex items-center justify-between px-6 md:px-10 py-5 bg-[#FDFBF8] border-b border-[#F0F0F0] z-50">
-        {/* 로고 영역: font-bold, text-black, tracking-tight (표준) */}
-        <Link href="/" className="text-lg font-bold text-black tracking-[0.15em] uppercase">
-          SCENTENCE
-        </Link>
-
-        {/* 우측 상단 UI: 로그인 상태 및 사이드바 토글 버튼 (표준) */}
-        <div className="flex items-center gap-4">
-          <div className="flex items-center gap-3">
-            {/* 프로필 이미지 Link: 표준 크기(w-9 h-9) 및 스타일 적용 */}
-            <button
-              id="profile-menu-toggle"
-              onClick={() => setIsProfileMenuOpen(!isProfileMenuOpen)}
-              className="w-9 h-9 flex items-center justify-center rounded-full p-0.5 transform-gpu bg-gradient-to-br from-white/20 to-transparent border border-white/40 shadow-[inset_0_1px_1px_rgba(255,255,255,0.9),inset_0_15px_30px_rgba(255,255,255,0.15),inset_0_-2px_10px_rgba(0,0,0,0.05),0_20px_40px_-10px_rgba(0,0,0,0.2)] will-change-transform transition-all hover:scale-105 active:scale-95 overflow-hidden"
-            >
-              <img
-                src={resolvedProfileImageUrl}
-                alt="Profile"
-                className="w-full h-full object-cover rounded-full"
-                onError={(e) => { e.currentTarget.src = "/default_profile.png"; }}
-              />
-            </button>
-            <UserProfileMenu
-              isOpen={isProfileMenuOpen}
-              onClose={() => setIsProfileMenuOpen(false)}
-            />
-          </div>
-          {/* 글로벌 내비게이션 토글 버튼 (px-5 py-4 패딩 및 w-8 h-8 규격 준수) */}
-          <button
-            id="global-menu-toggle"
-            onClick={() => setIsSidebarOpen(!isSidebarOpen)}
-            className="w-9 h-9 flex items-center justify-center rounded-full p-0.5 transform-gpu bg-gradient-to-br from-white/20 to-transparent border border-white/40 shadow-[inset_0_1px_1px_rgba(255,255,255,0.9),inset_0_15px_30px_rgba(255,255,255,0.15),inset_0_-2px_10px_rgba(0,0,0,0.05),0_20px_40px_-10px_rgba(0,0,0,0.2)] will-change-transform transition-all hover:scale-105 active:scale-95"
-          >
-            {isSidebarOpen ? (
-              <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor" className="w-full h-full text-[#333]">
-                <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
-              </svg>
-            ) : (
-              <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor" className="w-full h-full text-[#333]">
-                <path strokeLinecap="round" strokeLinejoin="round" d="M3 9h18M3 15h18" />
-              </svg>
-            )}
-          </button>
-        </div>
-      </header>
+    <PageLayout subTitle="MY PAGE" className="min-h-screen bg-[#FDFBF8] text-black flex flex-col font-sans">
 
       <main className="flex-1 px-5 py-8 w-full max-w-2xl mx-auto pt-[120px] space-y-10">
         <div>
-          <h2 className="text-3xl font-bold tracking-tight">마이페이지</h2>
-          <p className="text-sm text-[#666] mt-2">회원정보를 관리할 수 있어요.</p>
+          <h2 className="text-2xl md:text-3xl font-bold tracking-tight">마이페이지</h2>
+          <p className="text-sm text-[#666] mt-1.5 md:mt-2">회원정보를 관리할 수 있어요.</p>
           {loadMessage && (
             <p className="text-sm text-red-600 mt-2">{loadMessage}</p>
           )}
         </div>
 
-        <form className="space-y-6 rounded-2xl border border-gray-100 bg-white p-8 shadow-sm" onSubmit={handleProfileSubmit}>
-          <h3 className="text-xl font-bold">프로필</h3>
+        <form className="space-y-6 rounded-2xl border border-gray-100 bg-white p-5 md:p-8 shadow-sm" onSubmit={handleProfileSubmit}>
+          <h3 className="text-lg md:text-xl font-bold">프로필</h3>
 
-          <div className="flex items-center gap-8 py-2">
-            <div className="w-28 h-28 rounded-full bg-gray-50 overflow-hidden border border-gray-100 shadow-inner">
+          <div className="flex flex-col md:flex-row items-center gap-6 md:gap-8 py-2">
+            <div className="w-32 h-32 md:w-36 md:h-36 rounded-full bg-gray-50 overflow-hidden border border-gray-100 shadow-inner shrink-0">
               <img
                 src={resolvedProfileImageUrl}
                 alt="프로필"
@@ -458,7 +357,7 @@ export default function MyPage() {
                 }}
               />
             </div>
-            <div className="flex-1 space-y-3">
+            <div className="flex flex-col items-center md:items-start space-y-3">
               <input
                 id="profileImage"
                 name="profileImage"
@@ -715,10 +614,10 @@ export default function MyPage() {
           </form>
         )}
 
-        <section className="space-y-4 rounded-2xl border border-red-100 bg-red-50/50 p-8">
+        <section className="space-y-4 rounded-2xl border border-red-100 bg-red-50/50 p-5 md:p-8">
           <div>
             <h3 className="text-lg font-bold text-red-600">회원탈퇴</h3>
-            <p className="text-sm text-red-400 mt-1">탈퇴 요청 시 계정은 탈퇴 요청 상태로 전환됩니다.</p>
+            <p className="text-[11px] md:text-sm text-red-400 mt-1">탈퇴 요청 시 계정은 탈퇴 요청 상태로 전환됩니다.</p>
           </div>
 
           <button
@@ -761,6 +660,6 @@ export default function MyPage() {
           onCropComplete={handleCropComplete}
         />
       )}
-    </div>
+    </PageLayout>
   );
 }

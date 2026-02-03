@@ -17,20 +17,20 @@ function MenuItem({ href, icon: Icon, title, desc, onClick, className = "" }: an
         <Link
             href={href}
             onClick={onClick}
-            className={`flex items-center gap-4 p-4 hover:bg-white/10 transition-all duration-300 group rounded-xl ${className}`}
+            className={`flex items-center gap-3 md:gap-4 py-2.5 md:py-3 px-4 md:px-5 hover:bg-white/10 transition-all duration-300 group rounded-xl ${className}`}
         >
             <div className="relative group-hover:scale-110 transition-transform duration-300">
                 <Icon strokeWidth={1.5} className="w-5 h-5 text-[#1a1a1a] group-hover:text-black transition-colors" />
             </div>
 
             <div className="flex flex-col">
-                <span className="text-base font-bold text-[#1a1a1a] tracking-tight group-hover:tracking-widest transition-all duration-500 whitespace-nowrap">
+                <span className="text-sm md:text-base font-bold text-[#1a1a1a] tracking-tight group-hover:tracking-widest transition-all duration-500 whitespace-nowrap">
                     {title}
                 </span>
-                {desc && <span className="text-[10px] text-gray-500 mt-0.5">{desc}</span>}
+                {desc && <span className="text-[9px] md:text-[10px] text-gray-500 mt-0.5">{desc}</span>}
             </div>
             {/* Dot Indicator */}
-            <div className="ml-auto w-1.5 h-1.5 rounded-full bg-black opacity-0 group-hover:opacity-100 transition-all transform scale-0 group-hover:scale-100 shadow-[0_0_8px_rgba(0,0,0,0.1)]" />
+            <div className="ml-auto w-1.2 md:w-1.5 h-1.2 md:h-1.5 rounded-full bg-black opacity-0 group-hover:opacity-100 transition-all transform scale-0 group-hover:scale-100 shadow-[0_0_8px_rgba(0,0,0,0.1)]" />
         </Link>
     );
 }
@@ -110,20 +110,27 @@ export default function UserProfileMenu({ isOpen, onClose }: UserProfileMenuProp
     };
 
     // [HYPER-REALISTIC LIQUID GLASS BLOCK]
-    const liquidGlassBlock = "transform-gpu bg-gradient-to-br from-white/20 to-transparent border border-white/40 shadow-[inset_0_1px_1px_rgba(255,255,255,0.9),inset_0_15px_30px_rgba(255,255,255,0.15),inset_0_-2px_10px_rgba(0,0,0,0.05),0_20px_40px_-10px_rgba(0,0,0,0.2)] overflow-hidden rounded-[32px] will-change-transform";
+    const liquidGlassBlock = "transform-gpu bg-gradient-to-br from-white/20 to-transparent border border-white/40 shadow-[inset_0_1px_1px_rgba(255,255,255,0.9),inset_0_15px_30px_rgba(255,255,255,0.15),inset_0_-2px_10px_rgba(0,0,0,0.05),0_20px_40px_-10px_rgba(0,0,0,0.2)] overflow-hidden rounded-[24px] md:rounded-[32px] will-change-transform";
 
     return (
         <AnimatePresence>
             {isOpen && (
                 <>
-                    {/* 투명 배경 (외부 클릭 감지 역할) */}
+                    {/* Mobile: Blur Overlay, Desktop: Transparent */}
+                    <motion.div
+                        initial={{ opacity: 0 }}
+                        animate={{ opacity: 1 }}
+                        exit={{ opacity: 0 }}
+                        className="fixed inset-0 z-40 bg-black/5 backdrop-blur-[4px] md:hidden"
+                        onClick={handleOverlayClick}
+                    />
                     <div
-                        className="fixed inset-0 z-40 bg-transparent"
+                        className="fixed inset-0 z-40 bg-transparent hidden md:block"
                         onClick={handleOverlayClick}
                     />
 
                     <motion.div
-                        className="fixed top-20 right-20 z-50 w-[260px] flex flex-col gap-4"
+                        className="fixed top-[72px] md:top-20 right-4 md:right-20 z-50 w-[calc(100%-32px)] sm:w-[320px] md:w-[260px] flex flex-col gap-3 md:gap-4"
                         variants={containerVariants}
                         initial="hidden"
                         animate="show"
@@ -154,10 +161,10 @@ export default function UserProfileMenu({ isOpen, onClose }: UserProfileMenuProp
                                         setLocalUser(null); onClose();
                                     }
                                 }}
-                                className="w-full flex items-center justify-between p-4 px-6 hover:bg-white/10 transition-all duration-300 group rounded-xl"
+                                className="w-full flex items-center justify-between p-3.5 md:p-4 px-5 md:px-6 hover:bg-white/10 transition-all duration-300 group rounded-xl"
                             >
-                                <span className="text-base font-bold text-[#1a1a1a] tracking-tight group-hover:tracking-widest transition-all duration-500">로그아웃</span>
-                                <LogOut strokeWidth={1.5} className="w-5 h-5 text-gray-400 group-hover:text-red-500 transition-all duration-300" />
+                                <span className="text-sm md:text-base font-bold text-[#1a1a1a] tracking-tight group-hover:tracking-widest transition-all duration-500">로그아웃</span>
+                                <LogOut strokeWidth={1.5} className="w-4 h-4 md:w-5 md:h-5 text-gray-400 group-hover:text-red-500 transition-all duration-300" />
                             </button>
                         </motion.div>
                     </motion.div>

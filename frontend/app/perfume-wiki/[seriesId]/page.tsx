@@ -7,6 +7,7 @@ import { notFound } from "next/navigation";
 import SeriesHeader from "@/components/perfume-wiki/SeriesHeader";
 import EpisodeListItem from "@/components/perfume-wiki/EpisodeListItem";
 import Pagination from "@/components/perfume-wiki/Pagination";
+import PageLayout from "@/components/common/PageLayout";
 import perfumeWikiData from "../_data/perfumeWiki.json";
 import type { PerfumeWikiData, Series } from "../types";
 
@@ -39,7 +40,7 @@ function findSeries(seriesId: string): Series | undefined {
 export default async function SeriesPage({ params, searchParams }: SeriesPageProps) {
   const { seriesId } = await params;
   const series = findSeries(seriesId);
-  
+
   if (!series) {
     notFound();
   }
@@ -55,21 +56,7 @@ export default async function SeriesPage({ params, searchParams }: SeriesPagePro
   const episodes = series.episodes.slice(startIndex, startIndex + PAGE_SIZE);
 
   return (
-    <div className="min-h-screen bg-[#FDFBF8] text-[#2B2B2B] font-sans">
-      <header className="fixed top-0 left-0 right-0 z-30 flex items-center justify-between px-6 md:px-10 py-5 bg-[#FDFBF8] border-b border-[#F0F0F0]">
-        <Link
-          href="/"
-          className="text-xl font-bold tracking-tight text-[#333] hover:opacity-70 transition"
-        >
-          Scentence
-        </Link>
-        <Link
-          href="/perfume-wiki"
-          className="text-xs font-semibold text-[#8C6A1D] tracking-[0.3em] uppercase"
-        >
-          Perfume Wiki
-        </Link>
-      </header>
+    <PageLayout subTitle="Perfume Wiki">
 
       <main className="pt-[120px] pb-24 px-6 md:px-10 max-w-5xl mx-auto space-y-12">
         <SeriesHeader series={series} />
@@ -98,6 +85,6 @@ export default async function SeriesPage({ params, searchParams }: SeriesPagePro
           totalPages={totalPages}
         />
       </main>
-    </div>
+    </PageLayout>
   );
 }

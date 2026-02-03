@@ -9,7 +9,7 @@ import { Message } from "../../components/Chat/MessageItem";
 import ChatSidebar from "../../components/Chat/Sidebar"; // 좌측 채팅 기록 사이드바
 import NavSidebar from "../../components/common/sidebar"; // 우측 내비게이션 팝오버
 import MagneticButton from "../../components/common/MagneticButton"; // [NEW] 마그네틱 버튼 추가
-import UserProfileMenu from "../../components/common/UserProfileMenu"; // [NEW] UserProfileMenu 추가
+import Header from "@/components/common/Header";
 import { SavedPerfumesProvider } from "../../contexts/SavedPerfumesContext";
 
 const API_URL = "/api/chat";
@@ -19,7 +19,6 @@ export default function ChatPage() {
     const router = useRouter();
     const [isSidebarOpen, setIsSidebarOpen] = useState(false); // 좌측 채팅 내역 사이드바
     const [isNavOpen, setIsNavOpen] = useState(false); // 우측 내비게이션 팝오버
-    const [isProfileMenuOpen, setIsProfileMenuOpen] = useState(false); // [NEW] 프로필 메뉴 상태
 
     const [messages, setMessages] = useState<Message[]>([]);
     const [inputValue, setInputValue] = useState("");
@@ -33,7 +32,8 @@ export default function ChatPage() {
 
     // [Profile Logic] 메인 페이지와 동일하게 이식
     const [localUser, setLocalUser] = useState<{ memberId?: string | null; email?: string | null; nickname?: string | null; roleType?: string | null; isAdmin?: boolean } | null>(null);
-    const [profileImageUrl, setProfileImageUrl] = useState<string | null>(null);
+
+    const [placeholder, setPlaceholder] = useState("어떤 향수를 찾으시나요?"); // [NEW] Responsive Placeholder
 
     useEffect(() => {
         setIsMounted(true);
@@ -46,49 +46,35 @@ export default function ChatPage() {
             }
         }
 
+        // [NEW] Window Resize Listener for Placeholder
+        const handleResize = () => {
+            if (window.innerWidth >= 768) { // md breakpoint
+                setPlaceholder("어떤 향수를 찾으시나요? 무엇이든 물어보세요.");
+            } else {
+                setPlaceholder("어떤 향수를 찾으시나요?");
+            }
+        };
+        handleResize();
+        window.addEventListener('resize', handleResize);
+
         // Always start a new session on visit (per requirements)
         const newId = crypto.randomUUID();
         localStorage.setItem("chat_thread_id", newId);
         setThreadId(newId);
         setMessages([]);
+
+        return () => window.removeEventListener('resize', handleResize);
     }, []);
 
     useEffect(() => {
-        // [기존 코드 주석 처리] 환경 변수에 의존하던 방식
-        // const apiBaseUrl = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000";
-
         const currentId = session?.user?.id || localUser?.memberId;
 
         if (!currentId) {
-            setProfileImageUrl(null);
             setMemberId(null);
             return;
         }
 
         setMemberId(parseInt(currentId, 10));
-
-        /**
-         * [수정 이유: 페이지별 통신 방식 표준화]
-         * 메인 페이지와 동일하게 '/api' 프록시를 사용하여 
-         * 로컬/배포 환경 구분 없이 안정적으로 프로필 정보를 가져오도록 수정합니다.
-         */
-        fetch(`/api/users/profile/${currentId}`)
-            .then((res) => (res.ok ? res.json() : null))
-            .then((data) => {
-                if (data?.profile_image_url) {
-                    const rawUrl = data.profile_image_url;
-
-                    // [표준화] 이미지 경로 결정 로직 수정
-                    // 1. 이미 http로 시작하는 전체 경로(S3, 카카오 등)라면 그대로 사용합니다.
-                    // 2. /uploads/로 시작하는 상대 경로라면, 도메인을 붙이지 않고 그대로 사용합니다. (Next.js rewrites 활용)
-                    // 3. 그 외 백엔드 상대 경로에는 '/api'를 붙여 프록시를 타게 합니다.
-                    const url = (rawUrl.startsWith("http") || rawUrl.startsWith("/uploads"))
-                        ? rawUrl
-                        : `/api${rawUrl}`; // `${apiBaseUrl}${rawUrl}` 대신 사용
-                    setProfileImageUrl(url);
-                }
-            })
-            .catch(() => setProfileImageUrl(null));
     }, [localUser, session]);
 
     const displayName = session?.user?.name || localUser?.nickname || localUser?.email?.split('@')[0] || "Guest";
@@ -282,62 +268,12 @@ export default function ChatPage() {
                     context="home"
                 />
 
-                {/* [STANDARD HEADER] Fully Transparent for Chat Page (Standard Size Icons, z-30 to match Wiki) */}
-                <header className="fixed top-0 left-0 right-0 z-30 flex items-center justify-between px-6 md:px-10 py-5 bg-transparent border-b border-transparent">
-                    {/* 로고 영역: Wiki와 동일하게 div로 감싸 구조 통일 */}
-                    <div className="flex items-center gap-4">
-                        <Link href="/" className="text-lg font-bold text-black tracking-[0.15em] uppercase hover:opacity-70 transition">
-                            SCENTENCE
-                        </Link>
-                    </div>
-
-                    {/* 우측 상단 UI: 로그인 상태 및 사이드바 토글 버튼 (표준) */}
-                    {/* 우측 상단 UI: Perfume Wiki와 동일하게 통일 */}
-                    <div className="flex items-center gap-4">
-                        {!isLoggedIn ? (
-                            <div className="flex items-center gap-2 text-sm font-medium text-gray-400">
-                                <Link href="/login" className="hover:text-black transition-colors">Sign in</Link>
-                                <span className="text-gray-300">|</span>
-                                <Link href="/signup" className="hover:text-black transition-colors">Sign up</Link>
-                            </div>
-                        ) : (
-                            <div className="flex items-center gap-3">
-                                <button
-                                    id="profile-menu-toggle"
-                                    onClick={() => setIsProfileMenuOpen(!isProfileMenuOpen)}
-                                    className="w-9 h-9 flex items-center justify-center rounded-full p-0.5 transform-gpu bg-gradient-to-br from-white/20 to-transparent border border-white/40 shadow-[inset_0_1px_1px_rgba(255,255,255,0.9),inset_0_15px_30px_rgba(255,255,255,0.15),inset_0_-2px_10px_rgba(0,0,0,0.05),0_20px_40px_-10px_rgba(0,0,0,0.2)] will-change-transform transition-all hover:scale-105 active:scale-95 overflow-hidden"
-                                >
-                                    <img
-                                        src={profileImageUrl || "/default_profile.png"}
-                                        alt="Profile"
-                                        className="w-full h-full object-cover rounded-full"
-                                        onError={(e) => { e.currentTarget.src = "/default_profile.png"; }}
-                                    />
-                                </button>
-                                <UserProfileMenu
-                                    isOpen={isProfileMenuOpen}
-                                    onClose={() => setIsProfileMenuOpen(false)}
-                                />
-                            </div>
-                        )}
-
-                        <button
-                            id="global-menu-toggle"
-                            onClick={() => setIsNavOpen(!isNavOpen)}
-                            className="w-9 h-9 flex items-center justify-center rounded-full p-0.5 transform-gpu bg-gradient-to-br from-white/20 to-transparent border border-white/40 shadow-[inset_0_1px_1px_rgba(255,255,255,0.9),inset_0_15px_30px_rgba(255,255,255,0.15),inset_0_-2px_10px_rgba(0,0,0,0.05),0_20px_40px_-10px_rgba(0,0,0,0.2)] will-change-transform transition-all hover:scale-105 active:scale-95"
-                        >
-                            {isNavOpen ? (
-                                <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor" className="w-full h-full text-[#333] p-1">
-                                    <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
-                                </svg>
-                            ) : (
-                                <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor" className="w-full h-full text-[#333] p-1">
-                                    <path strokeLinecap="round" strokeLinejoin="round" d="M4 6h16M4 12h16M4 18h16" />
-                                </svg>
-                            )}
-                        </button>
-                    </div>
-                </header>
+                <Header
+                    onToggleSidebar={() => setIsNavOpen(!isNavOpen)}
+                    isSidebarOpen={isNavOpen}
+                    isTransparent={true}
+                    subTitle="AI CHAT"
+                />
 
                 {/* 3. Content Wrapper (Sidebar + Main) */}
                 <div className="flex-1 flex relative overflow-hidden pt-[72px]">
@@ -372,18 +308,27 @@ export default function ChatPage() {
                         />
                     </div>
 
-                    {/* Main Chat Area: 사이드바가 밀어주는 만큼 가시 너비가 변하며 내부 mx-auto 콘텐츠가 자동 리정렬됨
-                        [수정] h-full 제거: Flex 컨테이너 안에서 높이를 자동 조절하도록 변경 (하단 겹침 방지 핵심)
-                        [수정] gap-6: 출력창(스크롤 영역)과 입력창 사이에 물리적인 간격을 줌
+                    {/* Main Chat Area: 
+                        - Mobile: translate-x-64 ensures the entire area (including toggle) slides right.
+                        - This creates an "open" feel without squishing the text.
                     */}
-                    <main className="flex-1 flex flex-col relative bg-[#FDFBF8] overflow-hidden gap-3">
+                    <main
+                        className={`flex-1 flex flex-col relative bg-[#FDFBF8] overflow-hidden gap-3 transition-transform duration-300 ease-in-out
+                            ${isSidebarOpen ? "translate-x-64 md:translate-x-0" : "translate-x-0"}
+                        `}
+                    >
+                        {/* Mobile Shift Overlay: Clicking the shifted content closes the sidebar */}
+                        {isSidebarOpen && (
+                            <div
+                                className="absolute inset-0 z-[35] bg-black/[0.03] md:hidden cursor-pointer"
+                                onClick={() => setIsSidebarOpen(false)}
+                            />
+                        )}
 
-                        {/* ✅ 사이드바 토글 버튼 (헤더 바로 아래 좌측)
-                            [수정] absolute 배치: 콘텐츠 영역을 밀어내지 않도록 띄움 (헤더와 대화창 사이 불필요한 공백 제거)
-                        */}
-                        <div className="absolute top-2 left-4 z-30">
-                            <button onClick={() => setIsSidebarOpen(!isSidebarOpen)} className="p-2 hover:bg-gray-100 rounded-lg transition-colors text-[#555]">
-                                <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" className="w-6 h-6">
+                        {/* ✅ 사이드바 토글 버튼 (헤더 바로 아래 좌측) */}
+                        <div className="absolute top-2 left-4 z-40">
+                            <button onClick={() => setIsSidebarOpen(!isSidebarOpen)} className="p-1.5 md:p-2 hover:bg-gray-100 rounded-lg transition-colors text-black">
+                                <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor" className="w-5 h-5 md:w-6 md:h-6">
                                     <rect x="3" y="3" width="18" height="18" rx="2" ry="2" strokeLinecap="round" strokeLinejoin="round" />
                                     <path strokeLinecap="round" strokeLinejoin="round" d="M9 3v18" />
                                 </svg>
@@ -423,8 +368,8 @@ export default function ChatPage() {
                             <form onSubmit={handleSubmit} className="relative bg-white rounded-[26px] shadow-sm border border-[#E5E4DE] focus-within:ring-1 focus-within:ring-[#D97757]/30 transition-all">
                                 <div className="flex items-center min-h-[50px] pr-2">
                                     <textarea
-                                        className="flex-1 w-full bg-transparent py-3 pl-5 text-[#393939] placeholder:text-gray-400 outline-none resize-none text-base custom-scrollbar"
-                                        placeholder={"어떤 향수를 찾으시나요? 무엇이든 물어보세요."}
+                                        className="flex-1 w-full bg-transparent py-3 pl-5 text-[#393939] placeholder:text-gray-400 outline-none resize-none text-sm md:text-base custom-scrollbar"
+                                        placeholder={placeholder}
                                         rows={1}
                                         value={inputValue}
                                         onChange={(e) => {
@@ -459,8 +404,8 @@ export default function ChatPage() {
                                     </div>
                                 </div>
                             </form>
-                            <div className="text-center mt-3">
-                                <span className="text-[11px] text-gray-400">AI는 가끔 실수할 때도 있습니다. 따뜻한 마음으로 대화해 주세요.</span>
+                            <div className="text-center mt-2 md:mt-3">
+                                <span className="text-[10px] md:text-[11px] text-gray-400">AI는 가끔 실수할 때도 있습니다. 따뜻한 마음으로 대화해 주세요.</span>
                             </div>
                         </div>
                     </main>
@@ -470,16 +415,7 @@ export default function ChatPage() {
 
 
 
-                    {/* 2. 좌측 ChatSidebar용 오버레이 (모바일 전용) 
-                        - md:hidden: 데스크탑에서는 오버레이를 숨겨서 본문 클릭(입력 등)을 허용
-                        - onClick 제거: 사용자가 "버튼으로만 닫기"를 원하므로 배경 클릭 닫기 비활성화
-                    */}
-                    {isSidebarOpen && (
-                        <div
-                            className="absolute inset-0 bg-transparent z-40 md:hidden"
-                        // onClick={() => setIsSidebarOpen(false)} // 사용자 요청으로 비활성화
-                        />
-                    )}
+
                 </div>
             </div>
         </SavedPerfumesProvider>

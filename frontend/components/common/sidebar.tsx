@@ -18,16 +18,16 @@ function MenuItem({ href, icon: Icon, title, desc, onClick, className = "" }: an
         <Link
             href={href}
             onClick={onClick}
-            className={`flex items-center gap-4 py-3.5 px-6 hover:bg-white/10 transition-all duration-300 group rounded-xl ${className}`}
+            className={`flex items-center gap-3 md:gap-4 py-2.5 md:py-3.5 px-4 md:px-6 hover:bg-white/10 transition-all duration-300 group rounded-xl ${className}`}
         >
             {/* Icon with Glassy Glow */}
             <div className="relative group-hover:scale-110 transition-transform duration-300">
-                <Icon strokeWidth={1.5} className="w-6 h-6 text-[#1a1a1a] group-hover:text-black transition-colors" />
+                <Icon strokeWidth={1.5} className="w-5 h-5 md:w-6 md:h-6 text-[#1a1a1a] group-hover:text-black transition-colors" />
                 <div className="absolute inset-0 bg-white/20 blur-md opacity-0 group-hover:opacity-100 transition-opacity" />
             </div>
 
             <div className="flex flex-col">
-                <span className="text-lg font-bold text-[#1a1a1a] tracking-tight group-hover:tracking-widest transition-all duration-500 whitespace-nowrap">
+                <span className="text-base md:text-lg font-bold text-[#1a1a1a] tracking-tight group-hover:tracking-widest transition-all duration-500 whitespace-nowrap">
                     {title}
                 </span>
                 {desc && <span className="text-[10px] text-gray-500 mt-0.5">{desc}</span>}
@@ -102,11 +102,19 @@ export default function Sidebar({ isOpen, onClose, context }: SidebarProps) {
         <AnimatePresence>
             {isOpen && (
                 <>
-                    <div className="fixed inset-0 z-40 bg-transparent" />
+                    {/* Mobile: Blur Overlay, Desktop: Transparent */}
+                    <motion.div
+                        initial={{ opacity: 0 }}
+                        animate={{ opacity: 1 }}
+                        exit={{ opacity: 0 }}
+                        className="fixed inset-0 z-40 bg-black/5 backdrop-blur-[4px] md:hidden"
+                        onClick={onClose}
+                    />
+                    <div className="fixed inset-0 z-40 bg-transparent hidden md:block" />
 
                     <motion.div
                         ref={setRef}
-                        className="fixed top-24 right-8 z-50 w-[300px] flex flex-col gap-5"
+                        className="fixed top-[72px] md:top-24 right-4 md:right-8 z-50 w-[calc(100%-32px)] sm:w-[350px] md:w-[300px] flex flex-col gap-3 md:gap-5"
                         variants={containerVariants}
                         initial="hidden"
                         animate="show"
@@ -128,7 +136,7 @@ export default function Sidebar({ isOpen, onClose, context }: SidebarProps) {
                         </motion.div>
 
                         {/* --- CHUNK 3: FOOTER (Obsidian Glass) --- */}
-                        <motion.div variants={cardVariants} className={`${obsidianGlassBlock} p-6 flex flex-col gap-4`}>
+                        <motion.div variants={cardVariants} className={`${obsidianGlassBlock} p-4 md:p-6 flex flex-col gap-3 md:gap-4`}>
                             <Link href="/contact" onClick={onClose} className="flex items-center justify-between group">
                                 <span className="text-xs font-bold tracking-[0.2em] text-gray-400 group-hover:text-white transition-colors">CONTACT</span>
                                 {/* 살아있는 레드 도트 (Pulse 애니메이션) */}

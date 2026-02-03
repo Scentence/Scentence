@@ -17,6 +17,7 @@ import SeriesRelatedCard from "@/components/perfume-wiki/SeriesRelatedCard";
 import TagList from "@/components/perfume-wiki/TagList";
 import LikeButton from "@/components/perfume-wiki/LikeButton";
 import ShareButton from "@/components/perfume-wiki/ShareButton";
+import PageLayout from "@/components/common/PageLayout";
 import perfumeWikiData from "../../_data/perfumeWiki.json";
 import type { PerfumeWikiData, Series, Episode, ContentSection } from "../../types";
 
@@ -93,22 +94,7 @@ export default async function EpisodePage({ params }: EpisodePageProps) {
   const tags = episode.tags || ["향수입문", "향의변화", "탑노트", "미들노트"];
 
   return (
-    <div className="min-h-screen bg-[#FDFBF8] text-[#2B2B2B] font-sans">
-      {/* Header */}
-      <header className="fixed top-0 left-0 right-0 z-30 flex items-center justify-between px-6 md:px-10 py-5 bg-[#FDFBF8]/95 backdrop-blur-sm border-b border-[#F0F0F0]">
-        <Link
-          href="/"
-          className="text-xl font-bold tracking-tight text-[#333] hover:opacity-70 transition"
-        >
-          Scentence
-        </Link>
-        <Link
-          href="/perfume-wiki"
-          className="text-xs font-semibold text-[#8C6A1D] tracking-[0.3em] uppercase hover:opacity-70 transition"
-        >
-          Perfume Wiki
-        </Link>
-      </header>
+    <PageLayout subTitle="Perfume Wiki">
 
       <main className="pt-[80px] pb-32">
         {/* Hero Section */}
@@ -157,6 +143,6 @@ export default async function EpisodePage({ params }: EpisodePageProps) {
           <EpisodeCTA />
         </div>
       </main>
-    </div>
+    </PageLayout>
   );
 }

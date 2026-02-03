@@ -92,9 +92,9 @@ const Sidebar = ({ isOpen, activeThreadId, onToggle, onNewChat, onSelectThread, 
             )}
 
             {/* [SIDEBAR CONTAINER] md:relative로 변경하여 Flex 밀어내기 지원 */}
-            <div className={`fixed inset-y-0 left-0 z-[60] w-64 bg-white border-r border-[#E5E4DE] transition-transform duration-300 transform 
+            <div className={`fixed top-[72px] bottom-0 left-0 z-[40] w-64 bg-white border-r border-[#E5E4DE] transition-transform duration-300 transform 
                 ${isOpen ? "translate-x-0" : "-translate-x-full"} 
-                md:relative md:translate-x-0 md:z-0 md:h-full`}>
+                md:relative md:top-0 md:translate-x-0 md:z-0 md:h-full`}>
                 <div className="flex h-full flex-col p-4 pt-4">
                     <div className="flex justify-between items-center mb-6 px-2">
                         <span className="text-[10px] font-bold tracking-widest text-[#8E8E8E]">RECENT HISTORY</span>
