@@ -7,13 +7,17 @@ tb_member_my_perfume_t 기반 사용자 취향을 분석하여
 
 from typing import List, Dict, Any, Optional
 from collections import defaultdict
-from .archive_db import get_my_perfumes
+from .archive_db import get_my_perfumes, get_perfume_notes_and_accords
 from .personalization_weights import (
     calculate_personalization_score,
     QUERY_LIMIT,
     MAX_LIKED_PERFUMES,
     MAX_DISLIKED_PERFUMES,
 )
+
+# [★추가] Notes/Accords 개인화 설정
+TOP_N_NOTES_ACCORDS = 3  # 프롬프트에 노출할 최대 개수
+MIN_SUPPORT_COUNT = 2    # 최소 N개 향수에서 등장해야 신뢰할 수 있음
 
 
 def get_personalization_summary(member_id: int) -> Dict[str, Any]:
@@ -54,9 +58,15 @@ def get_personalization_summary(member_id: int) -> Dict[str, Any]:
     # 최근 N개만 사용 (성능)
     my_perfumes = my_perfumes[:QUERY_LIMIT]
 
+    # [★추가] Notes/Accords 조회
+    perfume_ids = [p['perfume_id'] for p in my_perfumes]
+    notes_accords_map = get_perfume_notes_and_accords(perfume_ids)
+
     # 점수 계산
     scored_perfumes = []
     brand_scores = defaultdict(float)
+    note_scores = defaultdict(float)       # [★추가] 노트별 점수 집계
+    accord_scores = defaultdict(float)     # [★추가] 어코드별 점수 집계
 
     for idx, perfume in enumerate(my_perfumes):
         # [★수정] preference 필드 사용 (archive_db.py에서 추가됨)
@@ -78,6 +88,17 @@ def get_personalization_summary(member_id: int) -> Dict[str, Any]:
         brand = perfume.get("brand", "Unknown")
         if brand and brand != "Unknown":
             brand_scores[brand] += score
+        
+        # [★추가] Notes/Accords 점수 집계
+        perfume_id = perfume.get("perfume_id")
+        if perfume_id in notes_accords_map:
+            # 노트 점수 누적
+            for note in notes_accords_map[perfume_id].get("notes", []):
+                note_scores[note] += score
+            
+            # 어코드 점수 누적
+            for accord in notes_accords_map[perfume_id].get("accords", []):
+                accord_scores[accord] += score
 
     # 정렬
     scored_perfumes.sort(key=lambda x: x["personalization_score"], reverse=True)
@@ -90,15 +111,30 @@ def get_personalization_summary(member_id: int) -> Dict[str, Any]:
     # 브랜드 Top N
     liked_brands = {k: v for k, v in sorted(brand_scores.items(), key=lambda x: x[1], reverse=True) if v > 0}
     disliked_brands = {k: v for k, v in sorted(brand_scores.items(), key=lambda x: x[1]) if v < 0}
+    
+    # [★추가] Notes/Accords Top N 추출 (신뢰도 가드 적용)
+    liked_notes = _extract_top_n_with_support(note_scores, positive=True)
+    disliked_notes = _extract_top_n_with_support(note_scores, positive=False)
+    liked_accords = _extract_top_n_with_support(accord_scores, positive=True)
+    disliked_accords = _extract_top_n_with_support(accord_scores, positive=False)
 
     # 한 줄 요약 생성
-    summary_text = _generate_summary_text(liked_brands, disliked_brands, liked, disliked)
+    summary_text = _generate_summary_text(
+        liked_brands, disliked_brands, 
+        liked, disliked,
+        liked_notes, disliked_notes,
+        liked_accords, disliked_accords
+    )
 
     return {
         "liked_perfumes": liked,
         "disliked_perfumes": disliked,
         "liked_brands": liked_brands,
         "disliked_brands": disliked_brands,
+        "liked_notes": liked_notes,              # [★추가]
+        "disliked_notes": disliked_notes,        # [★추가]
+        "liked_accords": liked_accords,          # [★추가]
+        "disliked_accords": disliked_accords,    # [★추가]
         "total_count": len(my_perfumes),
         "summary_text": summary_text,
     }
@@ -111,9 +147,41 @@ def _empty_summary() -> Dict[str, Any]:
         "disliked_perfumes": [],
         "liked_brands": {},
         "disliked_brands": {},
+        "liked_notes": [],          # [★추가]
+        "disliked_notes": [],       # [★추가]
+        "liked_accords": [],        # [★추가]
+        "disliked_accords": [],     # [★추가]
         "total_count": 0,
         "summary_text": "",
     }
+
+
+def _extract_top_n_with_support(
+    scores: Dict[str, float],
+    positive: bool = True,
+    top_n: int = TOP_N_NOTES_ACCORDS,
+    min_support: int = MIN_SUPPORT_COUNT,
+) -> List[str]:
+    """
+    신뢰도 가드 적용하여 Top-N 추출
+    
+    Args:
+        scores: 항목별 점수 dict
+        positive: True면 양수(선호), False면 음수(기피)
+        top_n: 최대 개수
+        min_support: 최소 지원수 (현재는 점수 절대값으로 대체)
+    
+    Returns:
+        Top-N 항목 리스트
+    """
+    if positive:
+        filtered = {k: v for k, v in scores.items() if v > 0}
+        sorted_items = sorted(filtered.items(), key=lambda x: x[1], reverse=True)
+    else:
+        filtered = {k: v for k, v in scores.items() if v < 0}
+        sorted_items = sorted(filtered.items(), key=lambda x: x[1])
+    
+    return [k for k, v in sorted_items[:top_n]]
 
 
 def _generate_summary_text(
@@ -121,11 +189,15 @@ def _generate_summary_text(
     disliked_brands: Dict[str, float],
     liked_perfumes: List[Dict],
     disliked_perfumes: List[Dict],
+    liked_notes: List[str] = None,
+    disliked_notes: List[str] = None,
+    liked_accords: List[str] = None,
+    disliked_accords: List[str] = None,
 ) -> str:
     """
     프롬프트 주입용 한 줄 요약 생성
-
-    민감정보 최소화: 브랜드명만 사용, 향수 전체 이름은 포함하지 않음
+    
+    민감정보 최소화: 브랜드명/노트/어코드만 사용, 향수 전체 이름은 포함하지 않음
     """
     parts = []
 
@@ -134,12 +206,27 @@ def _generate_summary_text(
         top_brands = list(liked_brands.keys())[:3]
         brands_str = ", ".join(top_brands)
         parts.append(f"{brands_str} 브랜드를 선호하시는 것 같아요")
+    
+    # [★추가] 좋아하는 어코드 (최대 2개)
+    if liked_accords:
+        accords_str = ", ".join(liked_accords[:2])
+        parts.append(f"{accords_str} 계열을 선호하시는 편이네요")
+    
+    # [★추가] 좋아하는 노트 (최대 2개)
+    if liked_notes:
+        notes_str = ", ".join(liked_notes[:2])
+        parts.append(f"{notes_str} 향을 좋아하시는 것 같아요")
 
     # 싫어하는 브랜드 (최대 2개)
     if disliked_brands:
         bottom_brands = list(disliked_brands.keys())[:2]
         brands_str = ", ".join(bottom_brands)
         parts.append(f"{brands_str} 브랜드는 피하시는 편이네요")
+    
+    # [★추가] 싫어하는 어코드/노트 (최대 2개씩)
+    if disliked_accords:
+        accords_str = ", ".join(disliked_accords[:2])
+        parts.append(f"{accords_str} 계열은 피하시는 편이네요")
 
     if not parts:
         return ""

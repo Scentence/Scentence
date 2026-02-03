@@ -78,6 +78,9 @@ class UserPreferences(BaseModel):
     
     # [★추가] 제외 브랜드 (말고/제외/빼고)
     exclude_brands: Optional[List[str]] = Field(None, description="검색에서 제외할 브랜드 목록 (최대 5개, 정규화된 브랜드명)")
+    
+    # [★추가] 사용 목적 구분 (본인용 vs 선물용)
+    use_case: Optional[Literal['SELF', 'GIFT']] = Field(None, description="사용 목적 (SELF: 본인용, GIFT: 선물용)")
 
 class InterviewResult(BaseModel):
     user_preferences: UserPreferences = Field(description="추출된 사용자 선호 정보")

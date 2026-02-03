@@ -151,3 +151,73 @@ def update_my_perfume_logic(member_id: int, perfume_id: int, status: str, prefer
     finally:
         cur.close()
         release_recom_db_connection(conn)
+
+def get_perfume_notes_and_accords(perfume_ids: List[int]) -> Dict[int, Dict[str, Any]]:
+    """
+    Get notes and accords for a list of perfume IDs.
+    
+    Args:
+        perfume_ids: List of perfume IDs to fetch notes/accords for
+    
+    Returns:
+        Dictionary mapping perfume_id to {notes: List[str], accords: List[str]}
+        Example: {
+            123: {
+                "notes": ["Rose", "Vanilla", "Sandalwood"],
+                "accords": ["Floral", "Woody"]
+            }
+        }
+    """
+    if not perfume_ids:
+        return {}
+    
+    conn = get_db_connection()
+    if not conn:
+        return {}
+    
+    result = {}
+    
+    try:
+        with conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor) as cur:
+            # Fetch accords
+            fmt = ','.join(['%s'] * len(perfume_ids))
+            cur.execute(f"""
+                SELECT perfume_id, accord
+                FROM TB_PERFUME_ACCORD_R
+                WHERE perfume_id IN ({fmt}) AND accord IS NOT NULL
+            """, tuple(perfume_ids))
+            accords_rows = cur.fetchall()
+            
+            # Fetch notes (all types: TOP, MIDDLE, BASE)
+            cur.execute(f"""
+                SELECT perfume_id, note
+                FROM TB_PERFUME_NOTES_M
+                WHERE perfume_id IN ({fmt}) AND note IS NOT NULL
+            """, tuple(perfume_ids))
+            notes_rows = cur.fetchall()
+            
+            # Build result dictionary
+            for pid in perfume_ids:
+                result[pid] = {"notes": [], "accords": []}
+            
+            # Populate accords
+            for row in accords_rows:
+                pid = row['perfume_id']
+                accord = row['accord']
+                if pid in result and accord and accord not in result[pid]["accords"]:
+                    result[pid]["accords"].append(accord)
+            
+            # Populate notes (deduplicated across TOP/MIDDLE/BASE)
+            for row in notes_rows:
+                pid = row['perfume_id']
+                note = row['note']
+                if pid in result and note and note not in result[pid]["notes"]:
+                    result[pid]["notes"].append(note)
+    
+    except Exception as e:
+        print(f"Error fetching notes/accords: {e}")
+        return {}
+    finally:
+        release_db_connection(conn)
+    
+    return result

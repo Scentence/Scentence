@@ -54,6 +54,7 @@ from .denylist import has_forbidden_words, UserFriendlyStrategyLabels
 
 from .followup_classifier import classify_followup
 from .personalization import get_personalization_summary
+from .use_case_utils import infer_use_case
 
 # [정보 검색 전용 서브 그래프 임포트]
 from .graph_info import info_graph
@@ -472,10 +473,18 @@ async def parallel_reco_node(state: AgentState):
     user_prefs = state.get("user_preferences", {})
     current_context = json.dumps(user_prefs, ensure_ascii=False)
 
-    # Get personalization summary
-    personalization = get_personalization_summary(member_id) or {}
-    if personalization.get("summary_text"):
-        print(f"🎯 [Personalization] {personalization['summary_text']}", flush=True)
+    # [★추가] Infer use case (SELF vs GIFT)
+    use_case = infer_use_case(user_prefs)
+    
+    # [★수정] Personalization gate: only apply for SELF use case with logged-in member
+    personalization = {}
+    if use_case == 'SELF' and member_id > 0:
+        personalization = get_personalization_summary(member_id) or {}
+        if personalization.get("summary_text"):
+            print(f"🎯 [Personalization] {personalization['summary_text']}", flush=True)
+    else:
+        if use_case == 'GIFT':
+            print(f"🎁 [GIFT Mode] Personalization disabled for gift recommendations", flush=True)
 
     researcher_prompt = RESEARCHER_SYSTEM_PROMPT
     if personalization.get("summary_text"):
@@ -489,13 +498,14 @@ async def parallel_reco_node(state: AgentState):
     
     # [★추가] 세션 레벨 추천 다양성: 이전 추천 이력 로드
     recommended_history = state.get("recommended_history", [])
-    exclude_ids = recommended_history.copy()  # 세션 히스토리 제외
+    exclude_ids = recommended_history.copy()  # 세션 히스토리 제외 (SELF/GIFT 공통)
 
-    # Add disliked perfumes (BAD preference)
-    for disliked in personalization.get("disliked_perfumes", []):
-        perfume_id = disliked.get("id")
-        if perfume_id:
-            exclude_ids.append(perfume_id)
+    # [★수정] Add disliked perfumes only for SELF use case
+    if use_case == 'SELF':
+        for disliked in personalization.get("disliked_perfumes", []):
+            perfume_id = disliked.get("id")
+            if perfume_id:
+                exclude_ids.append(perfume_id)
 
     exclude_id_set = set(exclude_ids)
     
