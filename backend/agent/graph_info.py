@@ -1,6 +1,7 @@
 # backend/agent/graph_info.py
 import json
 import asyncio
+from typing import Literal
 from dotenv import load_dotenv
 from langchain_openai import ChatOpenAI
 from langchain_core.messages import SystemMessage, HumanMessage, AIMessage
@@ -157,6 +158,38 @@ async def stream_fixed_message(text: str) -> AIMessage:
 
 
 # ==========================================
+# 5-1. Result Status Classification (Wave 1)
+# ==========================================
+
+def classify_info_status(result: str) -> Literal['OK', 'NO_RESULTS', 'ERROR']:
+    """
+    검색 결과 문자열을 분석하여 상태를 분류합니다.
+    
+    분기 기준:
+    - ERROR: 기술적 오류 (DB 에러, 예외 등)
+    - NO_RESULTS: 데이터 부재 (빈 결과, 검색 실패)
+    - OK: 정상 데이터 존재
+    
+    Args:
+        result: 검색 결과 문자열
+        
+    Returns:
+        'ERROR' | 'NO_RESULTS' | 'OK'
+    """
+    if any(keyword in result for keyword in ["DB 에러", "Error"]):
+        return 'ERROR'
+    
+    if (
+        not result
+        or result in ["{}", "[]", ""]
+        or any(keyword in result for keyword in ["찾을 수 없습니다", "검색 실패", "결과가 없습니다"])
+    ):
+        return 'NO_RESULTS'
+    
+    return 'OK'
+
+
+# ==========================================
 # 6. Node Functions
 # ==========================================
 
@@ -250,39 +283,18 @@ async def perfume_describer_node(state: InfoState):
         else:
             search_result_json = await lookup_perfume_info_tool.ainvoke(target)
 
-        # [★수정] 가드레일 강화: "검색 실패" 뿐만 아니라 "DB 에러"나 "Error"가 포함된 경우도 차단
-        is_error = any(
-            keyword in search_result_json
-            for keyword in ["검색 실패", "찾을 수 없습니다", "DB 에러", "Error"]
-        )
-        is_empty = (
-            not search_result_json
-            or search_result_json == "{}"
-            or search_result_json == "[]"
-        )
-
-        if is_error or is_empty:
+        # [Wave 2] 검색 결과 상태 분류
+        status = classify_info_status(search_result_json)
+        
+        if status != "OK":
+            # Retry with name if we have both ID and name
             if target_id and target:
                 search_result_json = await lookup_perfume_info_tool.ainvoke(target)
-                
-                is_error_retry = any(
-                    keyword in search_result_json
-                    for keyword in ["검색 실패", "찾을 수 없습니다", "DB 에러", "Error"]
-                )
-                is_empty_retry = (
-                    not search_result_json
-                    or search_result_json == "{}"
-                    or search_result_json == "[]"
-                )
-                
-                if is_error_retry or is_empty_retry:
-                    fail_msg = f"죄송합니다. '{target}'에 대한 상세 정보를 데이터베이스에서 찾을 수 없습니다. 😢"
-                    response = await stream_fixed_message(fail_msg)
-                    return {"messages": [response], "final_answer": response.content}
-            else:
-                fail_msg = f"죄송합니다. '{target}'에 대한 상세 정보를 데이터베이스에서 찾을 수 없습니다. 😢"
-                response = await stream_fixed_message(fail_msg)
-                return {"messages": [response], "final_answer": response.content}
+                status = classify_info_status(search_result_json)
+            
+            # Still not OK after retry
+            if status != "OK":
+                return {"info_status": status}
 
         if user_mode == "EXPERT":
             print("      😎 [Mode] 전문가용 분석 프롬프트 적용")
@@ -344,13 +356,11 @@ async def perfume_describer_node(state: InfoState):
         ]
         response = await INFO_LLM.ainvoke(messages)
 
-        return {"messages": [response], "final_answer": response.content}
+        return {"messages": [response], "final_answer": response.content, "info_status": "OK"}
 
     except Exception as e:
         print(f"      ❌ Perfume Describer 에러: {e}", flush=True)
-        msg = f"죄송합니다. '{target}' 정보를 불러오는 중 기술적인 오류가 발생했습니다."
-        response = await stream_fixed_message(msg)
-        return {"messages": [response], "final_answer": response.content}
+        return {"info_status": "ERROR"}
 
 
 async def ingredient_specialist_node(state: InfoState):
@@ -421,27 +431,17 @@ async def ingredient_specialist_node(state: InfoState):
         print_result_log("Note DB", note_result)
         print_result_log("Accord DB", accord_result)
 
-        # =============================================================
-        # [★ 할루시네이션 방지: 조기 차단(Early Exit) 가드레일]
-        # =============================================================
-        # 분석된 노트와 어코드에 대해 DB 검색 결과가 모두 유효하지 않은지 확인합니다.
-        # 결과가 없거나("{}"), 검색 실패 메시지가 포함된 경우 LLM 호출을 생략합니다.
-        is_note_empty = (
-            not note_result or "검색 실패" in note_result or note_result == "{}"
-        )
-        is_accord_empty = (
-            not accord_result or "검색 실패" in accord_result or accord_result == "{}"
-        )
-
-        if is_note_empty and is_accord_empty:
-            print(
-                f"      ⚠️ [Hallucination Guard] 데이터 부재로 LLM 호출을 생략합니다.",
-                flush=True,
-            )
-            fail_msg = f"죄송합니다. 말씀하신 '{user_query}' 성분에 대한 상세 정보가 현재 데이터베이스에 등록되어 있지 않습니다. 😢"
-            response = await stream_fixed_message(fail_msg)
-            return {"messages": [response], "final_answer": response.content}
-        # =============================================================
+        # [Wave 2] 검색 결과 상태 분류
+        note_status = classify_info_status(note_result)
+        accord_status = classify_info_status(accord_result)
+        
+        # 둘 다 NO_RESULTS 또는 ERROR면 실패
+        if note_status != "OK" and accord_status != "OK":
+            # 둘 중 하나라도 ERROR면 ERROR, 아니면 NO_RESULTS
+            if note_status == "ERROR" or accord_status == "ERROR":
+                return {"info_status": "ERROR"}
+            else:
+                return {"info_status": "NO_RESULTS"}
 
         # 4. LLM 기반 답변 생성 (데이터가 있을 때만 실행)
         # [★ Dynamic Expression Injection]
@@ -488,13 +488,11 @@ async def ingredient_specialist_node(state: InfoState):
         ]
         response = await INFO_LLM.ainvoke(messages)
 
-        return {"messages": [response], "final_answer": response.content}
+        return {"messages": [response], "final_answer": response.content, "info_status": "OK"}
 
     except Exception as e:
         print(f"      ❌ Ingredient Specialist 에러: {e}", flush=True)
-        msg = "성분 정보를 분석하는 도중 기술적인 문제가 발생했습니다."
-        response = await stream_fixed_message(msg)
-        return {"messages": [response], "final_answer": response.content}
+        return {"info_status": "ERROR"}
 
 
 async def similarity_curator_node(state: InfoState):
@@ -507,29 +505,11 @@ async def similarity_curator_node(state: InfoState):
         # 1. 도구 호출 (기존 로직 유지)
         search_result_json = await lookup_similar_perfumes_tool.ainvoke(target)
 
-        # =============================================================
-        # [★ 할루시네이션 방지: 조기 차단(Early Exit) 가드레일]
-        # =============================================================
-        # 유사 향수 검색 결과가 없거나 실패 메시지인 경우, LLM 호출을 건너뜁니다.
-        # 결과가 "[]"이거나 특정 실패 키워드가 포함되어 있는지 확인합니다.
-        is_empty = (
-            not search_result_json
-            or search_result_json == "[]"
-            or "{}" in search_result_json
-        )
-        is_failed = (
-            "검색 실패" in search_result_json or "결과가 없습니다" in search_result_json
-        )
-
-        if is_empty or is_failed:
-            print(
-                f"      ⚠️ [Hallucination Guard] 유사 향수 데이터 부재로 LLM 호출을 생략합니다.",
-                flush=True,
-            )
-            fail_msg = f"현재 저희 데이터베이스에는 '{target}'과 결이 비슷한 향수 정보가 충분하지 않네요. 😅 다른 향수로 다시 찾아봐 드릴까요?"
-            response = await stream_fixed_message(fail_msg)
-            return {"messages": [response], "final_answer": response.content}
-        # =============================================================
+        # [Wave 2] 검색 결과 상태 분류
+        status = classify_info_status(search_result_json)
+        
+        if status != "OK":
+            return {"info_status": status}
         if user_mode == "EXPERT":
             print("      😎 [Mode] 전문가용 큐레이터 프롬프트 적용")
             selected_prompt = SIMILARITY_CURATOR_PROMPT_EXPERT
@@ -545,15 +525,11 @@ async def similarity_curator_node(state: InfoState):
         ]
         response = await INFO_LLM.ainvoke(messages)
 
-        # [★수정] 결과가 화면에 나오도록 final_answer를 포함하여 반환
-        return {"messages": [response], "final_answer": response.content}
+        return {"messages": [response], "final_answer": response.content, "info_status": "OK"}
 
     except Exception as e:
-        # 시스템 에러 처리 (기존 로직 유지)
         print(f"      ❌ Similarity Curator 에러: {e}", flush=True)
-        msg = f"죄송합니다. '{target}'과 유사한 향수를 찾는 과정에서 기술적인 문제가 발생했습니다."
-        response = await stream_fixed_message(msg)
-        return {"messages": [response], "final_answer": response.content}
+        return {"info_status": "ERROR"}
 
 
 async def fallback_handler_node(state: InfoState):
@@ -571,7 +547,82 @@ async def fallback_handler_node(state: InfoState):
 
 
 # ==========================================
-# 5. Graph Build (Info Subgraph)
+# 6-1. Result Router and Status-Specific Nodes (Wave 2)
+# ==========================================
+
+def info_result_router_node(state: InfoState):
+    """
+    info_status 값에 따라 다음 노드로 라우팅합니다.
+    
+    Returns:
+        다음 노드 이름 ('info_writer' | 'info_no_results' | 'info_error')
+    """
+    info_status = state.get("info_status", "OK")
+    
+    print(f"\n   🔀 [Info Router] Status: {info_status}", flush=True)
+    
+    if info_status == "NO_RESULTS":
+        return "info_no_results"
+    elif info_status == "ERROR":
+        return "info_error"
+    else:
+        return "info_writer"
+
+
+async def info_no_results_node(state: InfoState):
+    """
+    검색 결과가 없을 때 대안을 제시하는 노드입니다.
+    """
+    print(f"\n   ⚠️ [Info No Results] 검색 결과 없음 처리", flush=True)
+    
+    target_name = state.get("target_name", "해당 항목")
+    info_type = state.get("info_type", "unknown")
+    
+    if info_type == "perfume":
+        msg = f"죄송합니다. '{target_name}'에 대한 상세 정보를 데이터베이스에서 찾을 수 없습니다. 😢\n\n다른 향수 이름으로 다시 검색해 보시거나, '플로랄 향수 추천해줘' 같은 방식으로 물어봐 주세요!"
+    elif info_type in ["note", "accord", "ingredient"]:
+        msg = f"죄송합니다. '{target_name}' 성분에 대한 상세 정보가 현재 데이터베이스에 등록되어 있지 않습니다. 😢\n\n'우디', '플로랄', '시트러스' 같은 일반적인 노트나 어코드로 다시 물어봐 주세요!"
+    elif info_type == "similarity":
+        msg = f"현재 저희 데이터베이스에는 '{target_name}'과 결이 비슷한 향수 정보가 충분하지 않네요. 😅\n\n다른 향수로 다시 찾아봐 드릴까요?"
+    else:
+        msg = f"죄송합니다. '{target_name}'에 대한 정보를 찾을 수 없습니다. 😢\n\n향수 이름을 정확히 말씀해 주시거나, 다른 방식으로 질문해 주세요!"
+    
+    response = await stream_fixed_message(msg)
+    return {"messages": [response], "final_answer": response.content}
+
+
+async def info_error_node(state: InfoState):
+    """
+    기술적 오류 발생 시 고정 문구를 출력하는 노드입니다.
+    """
+    print(f"\n   ❌ [Info Error] 기술적 오류 처리", flush=True)
+    
+    msg = "죄송합니다. 현재 알 수 없는 오류가 발생하였습니다. 잠시 후 다시 시도해 주세요. 🙏"
+    
+    response = await stream_fixed_message(msg)
+    return {"messages": [response], "final_answer": response.content}
+
+
+async def info_writer_node(state: InfoState):
+    """
+    OK 상태일 때 검색 결과를 형식화/요약하는 노드입니다.
+    근거 없는 새 사실 생성 금지 (ZERO HALLUCINATION).
+    """
+    print(f"\n   ✍️ [Info Writer] 결과 형식화", flush=True)
+    
+    final_answer = state.get("final_answer")
+    if final_answer:
+        print(f"      ℹ️ [Info Writer] 기존 답변 사용 (이미 처리됨)", flush=True)
+        return {"messages": [AIMessage(content=final_answer)]}
+    
+    print(f"      ⚠️ [Info Writer] final_answer 없음, fallback 처리", flush=True)
+    msg = "죄송합니다. 답변을 생성하는 중 문제가 발생했습니다."
+    response = await stream_fixed_message(msg)
+    return {"messages": [response], "final_answer": response.content}
+
+
+# ==========================================
+# 7. Graph Build (Info Subgraph)
 # ==========================================
 info_workflow = StateGraph(InfoState)
 
@@ -597,9 +648,32 @@ info_workflow.add_conditional_edges(
     },
 )
 
-info_workflow.add_edge("perfume_describer", END)
-info_workflow.add_edge("ingredient_specialist", END)
-info_workflow.add_edge("similarity_curator", END)
+# [Wave 2] 새 노드 추가
+info_workflow.add_node("info_result_router", info_result_router_node)
+info_workflow.add_node("info_no_results", info_no_results_node)
+info_workflow.add_node("info_error", info_error_node)
+info_workflow.add_node("info_writer", info_writer_node)
+
+# [Wave 2] 기존 노드들 → router로 연결
+info_workflow.add_edge("perfume_describer", "info_result_router")
+info_workflow.add_edge("ingredient_specialist", "info_result_router")
+info_workflow.add_edge("similarity_curator", "info_result_router")
 info_workflow.add_edge("fallback_handler", END)
+
+# [Wave 2] router → 상태별 노드로 분기
+info_workflow.add_conditional_edges(
+    "info_result_router",
+    lambda x: x,
+    {
+        "info_writer": "info_writer",
+        "info_no_results": "info_no_results",
+        "info_error": "info_error",
+    },
+)
+
+# [Wave 2] 상태별 노드 → END
+info_workflow.add_edge("info_writer", END)
+info_workflow.add_edge("info_no_results", END)
+info_workflow.add_edge("info_error", END)
 
 info_graph = info_workflow.compile()

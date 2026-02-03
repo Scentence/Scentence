@@ -25,6 +25,9 @@ class InfoState(Dict):
     # 사용자 모드 (메인 그래프에서 전달)
     user_mode: Optional[str]         # BEGINNER 또는 EXPERT
     
+    # [★ Wave 1] 결과 상태 분기용 필드 (NO_RESULTS/ERROR/OK 구분)
+    info_status: Optional[Literal['OK', 'NO_RESULTS', 'ERROR']]  # 검색 결과 상태
+    
     # 메시지 기록
     messages: List[Any] 
 
