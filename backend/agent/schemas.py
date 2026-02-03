@@ -52,6 +52,11 @@ class AgentState(Dict):
     constraint_scope: Literal["FRAME", "SESSION", "PROFILE"] | None = None
     constraint_source: Literal["explicit_user", "inferred", "system_default"] | None = None
 
+    # [★Wave 2] 상태 분류 필드 (OK/NO_RESULTS/ERROR 통합 관리)
+    chat_outcome_status: Optional[Literal["OK","NO_RESULTS","ERROR"]]
+    chat_outcome_reason_code: Optional[str]  # 예: "partial_results", "tool_error", "no_candidates"
+    chat_outcome_reason_detail: Optional[str]  # 사용자 노출 금지, 로그/테스트용
+
 
 # =================================================================
 # 2. 인터뷰 및 라우팅 (Interviewer & Router)
@@ -78,6 +83,9 @@ class UserPreferences(BaseModel):
     
     # [★추가] 제외 브랜드 (말고/제외/빼고)
     exclude_brands: Optional[List[str]] = Field(None, description="검색에서 제외할 브랜드 목록 (최대 5개, 정규화된 브랜드명)")
+    
+    # [★추가] 사용 목적 구분 (본인용 vs 선물용)
+    use_case: Optional[Literal['SELF', 'GIFT']] = Field(None, description="사용 목적 (SELF: 본인용, GIFT: 선물용)")
 
 class InterviewResult(BaseModel):
     user_preferences: UserPreferences = Field(description="추출된 사용자 선호 정보")

@@ -142,8 +142,12 @@ async def stream_generator(
                     "writer",
                     "perfume_describer",
                     "ingredient_specialist",
-                    "similarity_curator",  # <--- 이거 추가 필수!
-                    "fallback_handler",     # <--- 이것도 추가 권장
+                    "similarity_curator",
+                    "fallback_handler",
+                    # [Wave 2] Info graph status-specific nodes
+                    "info_writer",
+                    "info_no_results",
+                    "info_error",
                 ]
                 # NOTE: LangGraph's node name comes from workflow.add_node("<name>", ...).
                 # We include a prefix fallback in case the runtime metadata differs.
