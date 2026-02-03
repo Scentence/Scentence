@@ -20,6 +20,9 @@ from .schemas import (
     UserQueryAnalysis,
 )
 from .tools import (
+    _matches_input_name,
+    _should_exclude_candidate,
+    build_input_name_keys,
     evaluate_pair,
     rank_brand_universal_perfume,
     rank_recommendations,
@@ -201,12 +204,19 @@ def _extract_perfume_query_llm(user_text: str) -> list[str]:
     messages = [SystemMessage(content=system_prompt), HumanMessage(content=user_text)]
     try:
         response = model.invoke(messages)
-        raw = response.content or ""
-        start = raw.find("{")
-        end = raw.rfind("}")
+        raw_text = response.content
+        if isinstance(raw_text, str):
+            payload_text = raw_text
+        else:
+            payload_text = (
+                json.dumps(raw_text, ensure_ascii=False) if raw_text is not None else ""
+            )
+        payload_text = payload_text or ""
+        start = payload_text.find("{")
+        end = payload_text.rfind("}")
         if start == -1 or end == -1:
             return []
-        payload = json.loads(raw[start : end + 1])
+        payload = json.loads(payload_text[start : end + 1])
     except Exception:
         return []
 
@@ -317,6 +327,40 @@ def _build_detected_perfumes(
             )
         )
     return detected
+
+
+def _filter_detected_perfumes(
+    detected_perfumes: list[DetectedPerfume],
+    repository: PerfumeRepository,
+) -> list[DetectedPerfume]:
+    if len(detected_perfumes) < 2:
+        return detected_perfumes
+    filtered: list[DetectedPerfume] = []
+    cache: dict[str, Any] = {}
+    for item in detected_perfumes:
+        if item.perfume_id not in cache:
+            try:
+                cache[item.perfume_id] = repository.get_perfume(item.perfume_id)
+            except KeyError:
+                continue
+        candidate_vector = cache[item.perfume_id]
+        duplicate = False
+        for kept in filtered:
+            if kept.perfume_id not in cache:
+                try:
+                    cache[kept.perfume_id] = repository.get_perfume(kept.perfume_id)
+                except KeyError:
+                    continue
+            base_vector = cache[kept.perfume_id]
+            if _should_exclude_candidate(base_vector, candidate_vector):
+                duplicate = True
+                break
+            if _should_exclude_candidate(candidate_vector, base_vector):
+                duplicate = True
+                break
+        if not duplicate:
+            filtered.append(item)
+    return filtered
 
 
 def is_info_request(user_text: str) -> bool:
@@ -451,6 +495,8 @@ def analyze_user_query(
     candidates = _collect_perfume_candidates(user_text, repository, limit=6)
     detected_perfumes = _build_detected_perfumes(candidates)
     detected_perfumes = _prioritize_base_hint(user_text, repository, detected_perfumes)
+    detected_perfumes = _filter_detected_perfumes(detected_perfumes, repository)
+    input_name_keys = build_input_name_keys(user_text, detected_perfumes)
 
     if is_similarity_request(user_text):
         if detected_perfumes:
@@ -514,39 +560,63 @@ def analyze_user_query(
         base_candidate = detected_perfumes[0]
         candidate_id = context_recommended_perfume_id
         if base_candidate.perfume_id != candidate_id:
-            detected_pair = DetectedPair(
-                base_perfume_id=base_candidate.perfume_id,
-                candidate_perfume_id=candidate_id,
-            )
-            pairing_result = evaluate_pair(
-                base_candidate.perfume_id,
-                candidate_id,
-                preferences.keywords,
-                repository,
-            )
-            pairing_analysis = PairingAnalysis(
-                base_perfume_id=base_candidate.perfume_id,
-                candidate_perfume_id=candidate_id,
-                result=pairing_result,
-            )
+            try:
+                base_vector = repository.get_perfume(base_candidate.perfume_id)
+                candidate_vector = repository.get_perfume(candidate_id)
+            except KeyError:
+                base_vector = None
+                candidate_vector = None
+            if base_vector and candidate_vector:
+                if not _should_exclude_candidate(base_vector, candidate_vector):
+                    detected_pair = DetectedPair(
+                        base_perfume_id=base_candidate.perfume_id,
+                        candidate_perfume_id=candidate_id,
+                    )
+                    pairing_result = evaluate_pair(
+                        base_candidate.perfume_id,
+                        candidate_id,
+                        preferences.keywords,
+                        repository,
+                    )
+                    pairing_analysis = PairingAnalysis(
+                        base_perfume_id=base_candidate.perfume_id,
+                        candidate_perfume_id=candidate_id,
+                        result=pairing_result,
+                    )
     elif len(detected_perfumes) >= 2:
         base_candidate = detected_perfumes[0]
         candidate = detected_perfumes[1]
-        detected_pair = DetectedPair(
-            base_perfume_id=base_candidate.perfume_id,
-            candidate_perfume_id=candidate.perfume_id,
-        )
-        pairing_result = evaluate_pair(
-            base_candidate.perfume_id,
-            candidate.perfume_id,
-            preferences.keywords,
-            repository,
-        )
-        pairing_analysis = PairingAnalysis(
-            base_perfume_id=base_candidate.perfume_id,
-            candidate_perfume_id=candidate.perfume_id,
-            result=pairing_result,
-        )
+        try:
+            base_vector = repository.get_perfume(base_candidate.perfume_id)
+            candidate_vector = repository.get_perfume(candidate.perfume_id)
+        except KeyError:
+            base_vector = None
+            candidate_vector = None
+        if base_vector and candidate_vector:
+            if not _should_exclude_candidate(base_vector, candidate_vector):
+                detected_pair = DetectedPair(
+                    base_perfume_id=base_candidate.perfume_id,
+                    candidate_perfume_id=candidate.perfume_id,
+                )
+                pairing_result = evaluate_pair(
+                    base_candidate.perfume_id,
+                    candidate.perfume_id,
+                    preferences.keywords,
+                    repository,
+                )
+                pairing_analysis = PairingAnalysis(
+                    base_perfume_id=base_candidate.perfume_id,
+                    candidate_perfume_id=candidate.perfume_id,
+                    result=pairing_result,
+                )
+    if pairing_analysis and input_name_keys:
+        try:
+            candidate_vector = repository.get_perfume(pairing_analysis.candidate_perfume_id)
+        except KeyError:
+            candidate_vector = None
+        if candidate_vector and _matches_input_name(candidate_vector, input_name_keys):
+            pairing_analysis = None
+            detected_pair = None
 
     if not detected_perfumes and is_brand_layering_request(user_text):
         brand_candidates = repository.find_brand_candidates(user_text)
@@ -604,7 +674,13 @@ def preview_layering_paths(
     keywords = preferences.keywords
     if preferences.intensity >= 0.85:
         keywords = keywords + keywords
-    recommendations, _ = rank_recommendations(base_perfume_id, keywords, repository)
+    input_name_keys = build_input_name_keys(user_text, None)
+    recommendations, _ = rank_recommendations(
+        base_perfume_id,
+        keywords,
+        repository,
+        input_name_keys=input_name_keys,
+    )
     return {
         "preferences": preferences.model_dump(),
         "recommendations": recommendations,

@@ -111,7 +111,14 @@ export default function AccordWheel({ vector, size = DEFAULT_SIZE }: AccordWheel
   return (
     <div className="relative w-full flex flex-col items-center gap-4">
       {/* ==================== SVG 원판 ==================== */}
-      <svg viewBox={viewBox} width={size} height={size} aria-label="Accord wheel">
+      <div className="w-full max-w-[360px] aspect-square">
+        <svg
+          viewBox={viewBox}
+          width="100%"
+          height="100%"
+          className="w-full h-full"
+          aria-label="Accord wheel"
+        >
         {DISPLAY_ACCORDS.map((accord, index) => {
           const vectorIndex = backendIndex.get(accord) ?? index;
           const rawValue = safeVector[vectorIndex] ?? 0;
@@ -179,7 +186,8 @@ export default function AccordWheel({ vector, size = DEFAULT_SIZE }: AccordWheel
         >
           ACCORDS
         </text>
-      </svg>
+        </svg>
+      </div>
 
       {/* ==================== 툴팁 (호버/고정 정보) ==================== */}
       {accordInfo && (
