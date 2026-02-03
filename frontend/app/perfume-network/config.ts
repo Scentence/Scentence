@@ -17,7 +17,7 @@ export const GRAPH_CONFIG = {
   TOP_ACCORDS_MIN: 1, // 어코드 최소 개수
   TOP_ACCORDS_MAX: 5, // 어코드 최대 개수
   
-  API_MAX_PERFUMES: null, // API에서 가져올 최대 향수 개수 (null = 전체)
+  API_MAX_PERFUMES: 300, // [개선] API에서 가져올 최대 향수 개수 (300개로 제한하여 성능 향상)
   
   // 물리 엔진 설정
   PHYSICS: {
