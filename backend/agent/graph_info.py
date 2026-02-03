@@ -52,42 +52,7 @@ from .utils import (
 
 
 # ==========================================
-# 5. Streaming Helper for Silent Failure Prevention
-# ==========================================
-
-async def stream_fixed_message(text: str) -> AIMessage:
-    """
-    Stream a fixed message through LLM to ensure output appears in UI.
-    Prevents silent failures by guaranteeing on_chat_model_stream events.
-    """
-    system_prompt = "Output EXACTLY the next user message. Do not add, remove, or change any character. No quotes."
-    messages = [
-        SystemMessage(content=system_prompt),
-        HumanMessage(content=text)
-    ]
-    
-    response = await INFO_LLM.ainvoke(messages)
-    
-    if response.content.strip() != text.strip():
-        print(f"      ⚠️ [Stream Mismatch] Expected: '{text}' | Got: '{response.content}'", flush=True)
-        
-        retry_system = "Your previous output was invalid. Output the next user message EXACTLY, character-for-character."
-        retry_messages = [
-            SystemMessage(content=retry_system),
-            HumanMessage(content=text)
-        ]
-        response = await INFO_LLM.ainvoke(retry_messages)
-        
-        if response.content.strip() != text.strip():
-            print(f"      ⚠️ [Stream Retry Failed] Using retry output anyway", flush=True)
-    
-    return response
-
-
-
-
-# ==========================================
-# 6. Node Functions
+# 5. Node Functions
 # ==========================================
 
 
@@ -515,19 +480,17 @@ async def similarity_curator_node(state: InfoState):
 async def fallback_handler_node(state: InfoState):
     """[Fallback] 안내"""
     print(f"\n   ⚠️ [Info Subgraph] Fallback Handler 실행", flush=True)
-    
+
     fail_msg = state.get("fail_msg")
     if fail_msg:
-        response = await stream_fixed_message(fail_msg)
-        return {"messages": [response], "final_answer": response.content}
-    
+        return {"messages": [AIMessage(content=fail_msg)], "final_answer": fail_msg}
+
     fallback_msg = "죄송합니다. 말씀하신 향수가 무엇인지 정확히 파악하지 못했어요. 😅\n'샤넬 넘버5랑 비슷한 거 추천해줘' 처럼 향수 이름을 콕 집어서 다시 말씀해 주시겠어요?"
-    response = await stream_fixed_message(fallback_msg)
-    return {"messages": [response], "final_answer": response.content}
+    return {"messages": [AIMessage(content=fallback_msg)], "final_answer": fallback_msg}
 
 
 # ==========================================
-# 6-1. Result Router and Status-Specific Nodes (Wave 2)
+# 5-1. Result Router and Status-Specific Nodes (Wave 2)
 # ==========================================
 
 def info_result_router_node(state: InfoState):
@@ -553,11 +516,11 @@ async def info_no_results_node(state: InfoState):
     """
     검색 결과가 없을 때 대안을 제시하는 노드입니다.
     """
-    print(f"\n   ⚠️ [Info No Results] 검색 결과 없음 처리", flush=True)
-    
+    print(f"\n   ❌ [Info No Results] 검색 결과 없음 처리", flush=True)
+
     target_name = state.get("target_name", "해당 항목")
     info_type = state.get("info_type", "unknown")
-    
+
     if info_type == "perfume":
         msg = f"죄송합니다. '{target_name}'에 대한 상세 정보를 데이터베이스에서 찾을 수 없습니다. 😢\n\n다른 향수 이름으로 다시 검색해 보시거나, '플로랄 향수 추천해줘' 같은 방식으로 물어봐 주세요!"
     elif info_type in ["note", "accord", "ingredient"]:
@@ -566,9 +529,8 @@ async def info_no_results_node(state: InfoState):
         msg = f"현재 저희 데이터베이스에는 '{target_name}'과 결이 비슷한 향수 정보가 충분하지 않네요. 😅\n\n다른 향수로 다시 찾아봐 드릴까요?"
     else:
         msg = f"죄송합니다. '{target_name}'에 대한 정보를 찾을 수 없습니다. 😢\n\n향수 이름을 정확히 말씀해 주시거나, 다른 방식으로 질문해 주세요!"
-    
-    response = await stream_fixed_message(msg)
-    return {"messages": [response], "final_answer": response.content}
+
+    return {"messages": [AIMessage(content=msg)], "final_answer": msg}
 
 
 async def info_error_node(state: InfoState):
@@ -576,11 +538,10 @@ async def info_error_node(state: InfoState):
     기술적 오류 발생 시 고정 문구를 출력하는 노드입니다.
     """
     print(f"\n   ❌ [Info Error] 기술적 오류 처리", flush=True)
-    
+
     msg = "죄송합니다. 현재 알 수 없는 오류가 발생하였습니다. 잠시 후 다시 시도해 주세요. 🙏"
-    
-    response = await stream_fixed_message(msg)
-    return {"messages": [response], "final_answer": response.content}
+
+    return {"messages": [AIMessage(content=msg)], "final_answer": msg}
 
 
 async def info_writer_node(state: InfoState):
@@ -589,20 +550,19 @@ async def info_writer_node(state: InfoState):
     근거 없는 새 사실 생성 금지 (ZERO HALLUCINATION).
     """
     print(f"\n   ✍️ [Info Writer] 결과 형식화", flush=True)
-    
+
     final_answer = state.get("final_answer")
     if final_answer:
         print(f"      ℹ️ [Info Writer] 기존 답변 사용 (이미 처리됨)", flush=True)
         return {"messages": [AIMessage(content=final_answer)]}
-    
+
     print(f"      ⚠️ [Info Writer] final_answer 없음, fallback 처리", flush=True)
     msg = "죄송합니다. 답변을 생성하는 중 문제가 발생했습니다."
-    response = await stream_fixed_message(msg)
-    return {"messages": [response], "final_answer": response.content}
+    return {"messages": [AIMessage(content=msg)], "final_answer": msg}
 
 
 # ==========================================
-# 7. Graph Build (Info Subgraph) - Search/Writer 분리
+# 6. Graph Build (Info Subgraph) - Search/Writer 분리
 # ==========================================
 info_workflow = StateGraph(InfoState)
 

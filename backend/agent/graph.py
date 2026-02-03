@@ -21,6 +21,7 @@ from .schemas import (
     UserPreferences,
     InterviewResult,
     RoutingDecision,
+    ValidationResult,
     SearchStrategyPlan,
     StrategyResult,
     PerfumeDetail,
@@ -39,6 +40,7 @@ from .tools import (
 )
 
 from .prompts import (
+    PRE_VALIDATOR_PROMPT,
     SUPERVISOR_PROMPT,
     INTERVIEWER_PROMPT,
     RESEARCHER_SYSTEM_PROMPT,
@@ -153,6 +155,35 @@ async def call_info_graph_wrapper(state: AgentState):
 # ==========================================
 # 3. Node Functions
 # ==========================================
+
+
+def pre_validator_node(state: AgentState):
+    """
+    [Pre-Validator] 요청 실현 가능성 사전 검증.
+    DB에 없는 속성 요청을 조기 차단합니다.
+    """
+    print("\n" + "=" * 60, flush=True)
+    print("🔍 [Pre-Validator] 요청 가능 여부 검증 중...", flush=True)
+
+    messages = [SystemMessage(content=PRE_VALIDATOR_PROMPT)] + state["messages"]
+
+    try:
+        result = SMART_LLM.with_structured_output(ValidationResult).invoke(messages)
+
+        if result.is_unsupported:
+            print(f"   ❌ 지원 불가: {result.unsupported_category} - {result.reason}", flush=True)
+            return {
+                "validation_result": "unsupported",
+                "unsupported_category": result.unsupported_category,
+                "unsupported_reason": result.reason
+            }
+        else:
+            print(f"   ✅ 지원 가능 - {result.reason}", flush=True)
+            return {"validation_result": "supported"}
+
+    except Exception as e:
+        print(f"   ⚠️ 검증 실패(Error): {e} -> 기본값 지원 가능으로 처리", flush=True)
+        return {"validation_result": "supported"}
 
 
 def supervisor_node(state: AgentState):
@@ -1099,10 +1130,56 @@ async def parallel_reco_error(_state: AgentState):
     ERROR 상태일 때 - 고정 문구 출력 (내부 오류 노출 금지).
     """
     print(f"\n❌ [Reco Error] 기술적 오류 처리", flush=True)
-    
+
     error_msg = "죄송합니다. 현재 알 수 없는 오류가 발생하였습니다. 잠시 후 다시 시도해 주세요. 🙏"
-    
+
     return {"messages": [AIMessage(content=error_msg)]}
+
+
+async def out_of_scope_handler(_state: AgentState):
+    """
+    향수와 관련 없는 질문 처리 - 고정 메시지 반환 (LLM 호출 없음).
+    """
+    print(f"\n🚫 [Out of Scope] 향수 관련 없는 질문 처리", flush=True)
+
+    fixed_msg = "죄송하지만 저는 향수 큐레이션 챗봇이기 때문에 향수 추천이나 정보제공 이외의 답변을 드리기는 어렵습니다."
+
+    return {
+        "messages": [AIMessage(content=fixed_msg)],
+        "chat_outcome_status": "OUT_OF_SCOPE"
+    }
+
+
+async def unsupported_request_handler(_state: AgentState):
+    """
+    DB에 없는 속성 요청 처리 - 카테고리별 커스터마이징된 고정 메시지 반환.
+    """
+    print(f"\n⚠️ [Unsupported Request] DB 미지원 속성 요청 처리", flush=True)
+
+    category = _state.get("unsupported_category", "")
+
+    # 카테고리별 메시지
+    category_messages = {
+        "제형": "죄송하지만 저희는 향수의 제형(오일/워터/고체 등) 정보를 보유하고 있지 않아 해당 기준으로 추천이 어렵습니다.",
+        "성능": "죄송하지만 발향력, 지속력 등 성능 정보는 보유하고 있지 않아 해당 기준으로 추천이 어렵습니다.",
+        "가격": "죄송하지만 가격 정보를 보유하고 있지 않아 가격 기반 추천이 어렵습니다.",
+        "레이어링": "죄송하지만 레이어링이나 조합 추천은 현재 지원하지 않습니다. 개별 향수 추천은 가능합니다!",
+        "구매정보": "죄송하지만 구매처나 매장 정보는 제공하지 않습니다.",
+        "물리적": "죄송하지만 용량, 크기 등 물리적 정보는 보유하고 있지 않습니다.",
+    }
+
+    specific_msg = category_messages.get(category, "죄송하지만 해당 요청은 현재 지원하지 않습니다.")
+
+    guidance = "\n\n💡 대신 이런 방식으로 질문해주시면 도움드릴 수 있습니다:\n" \
+               "- 분위기나 느낌 (사랑스러운, 시원한, 우아한 등)\n" \
+               "- 계절이나 상황 (여름용, 데일리, 데이트용 등)\n" \
+               "- 어코드나 노트 (플로랄, 우디, 시트러스 등)\n" \
+               "- 특정 향수 정보나 유사 향수 추천"
+
+    return {
+        "messages": [AIMessage(content=specific_msg + guidance)],
+        "chat_outcome_status": "UNSUPPORTED_REQUEST"
+    }
 
 
 # ==========================================
@@ -1110,6 +1187,7 @@ async def parallel_reco_error(_state: AgentState):
 # ==========================================
 workflow = StateGraph(AgentState)
 
+workflow.add_node("pre_validator", pre_validator_node)
 workflow.add_node("supervisor", supervisor_node)
 workflow.add_node("interviewer", interviewer_node)
 # workflow.add_node("researcher", researcher_node)  # Replaced by parallel_reco
@@ -1120,9 +1198,21 @@ workflow.add_node("parallel_reco", parallel_reco_node)
 workflow.add_node("parallel_reco_ok_writer", parallel_reco_ok_writer)
 workflow.add_node("parallel_reco_no_results", parallel_reco_no_results)
 workflow.add_node("parallel_reco_error", parallel_reco_error)
+workflow.add_node("out_of_scope_handler", out_of_scope_handler)
+workflow.add_node("unsupported_request_handler", unsupported_request_handler)
 workflow.add_node("info_retrieval_subgraph", call_info_graph_wrapper)
 
-workflow.add_edge(START, "supervisor")
+workflow.add_edge(START, "pre_validator")
+
+# Pre-validator routing
+workflow.add_conditional_edges(
+    "pre_validator",
+    lambda x: x.get("validation_result", "supported"),
+    {
+        "supported": "supervisor",
+        "unsupported": "unsupported_request_handler"
+    }
+)
 
 workflow.add_conditional_edges(
     "supervisor",
@@ -1130,7 +1220,7 @@ workflow.add_conditional_edges(
     {
         "interviewer": "interviewer",
         "info_retrieval": "info_retrieval_subgraph",
-        "writer": "parallel_reco",  # Replaced writer with parallel_reco
+        "writer": "out_of_scope_handler",  # Out-of-scope questions (non-perfume related)
     },
 )
 
@@ -1158,6 +1248,8 @@ workflow.add_conditional_edges(
 workflow.add_edge("parallel_reco_ok_writer", END)
 workflow.add_edge("parallel_reco_no_results", END)
 workflow.add_edge("parallel_reco_error", END)
+workflow.add_edge("out_of_scope_handler", END)
+workflow.add_edge("unsupported_request_handler", END)
 workflow.add_edge("info_retrieval_subgraph", END)
 
 checkpointer = MemorySaver()

@@ -130,7 +130,7 @@ async def stream_generator(
 
             # [A] Writer & Info Agents: 실시간 답변 스트리밍
             if kind == "on_chat_model_stream":
-                
+
                 # [★추가] 내부용 헬퍼(번역기 등)의 출력은 화면에 보내지 않고 무시(Skip)
                 tags = event.get("tags", [])
                 if "internal_helper" in tags:
@@ -144,11 +144,8 @@ async def stream_generator(
                     "perfume_describer",
                     "ingredient_specialist",
                     "similarity_curator",
-                    "fallback_handler",
-                    # [Wave 2] Info graph status-specific nodes
+                    # [Wave 2] Info graph status-specific nodes (only streaming ones)
                     "info_writer",
-                    "info_no_results",
-                    "info_error",
                 ]
                 # NOTE: LangGraph's node name comes from workflow.add_node("<name>", ...).
                 # We include a prefix fallback in case the runtime metadata differs.
@@ -178,8 +175,20 @@ async def stream_generator(
                         )
                         yield f"data: {data}\n\n"
 
-            # [B] Interviewer: 결과 전송
-            elif kind == "on_chain_end" and node_name == "interviewer":
+            # [B] Interviewer & Fixed Message Nodes: 결과 전송 (non-streaming)
+            elif kind == "on_chain_end" and node_name in [
+                "interviewer",
+                # Info graph fixed message nodes
+                "fallback_handler",
+                "info_no_results",
+                "info_error",
+                # Main graph fixed message nodes
+                "out_of_scope_handler",
+                "unsupported_request_handler",
+                # Reco graph fixed message nodes
+                "parallel_reco_no_results",
+                "parallel_reco_error",
+            ]:
                 output = event["data"].get("output")
                 if output and isinstance(output, dict):
                     messages = output.get("messages")

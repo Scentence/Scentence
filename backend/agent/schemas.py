@@ -99,12 +99,29 @@ class RoutingDecision(BaseModel):
     [★수정] Supervisor가 결정할 수 있는 다음 단계입니다.
     - interviewer: 향수 추천 요청인 경우 (정보가 충분하든 부족하든 이쪽으로 보냄)
     - info_retrieval: 특정 향수/노트/어코드에 대한 지식/정보 질문인 경우 (신규)
-    - writer: 단순 잡담인 경우
+    - writer: 향수와 관련 없는 질문인 경우 (범위 외 질문, 잡담 등)
     * 'researcher' 선택지가 삭제되었습니다 (Interviewer를 통해서만 진입 가능)
     """
 
     next_step: Literal["interviewer", "info_retrieval", "writer"] = Field(
         description="질문 의도에 따른 다음 담당 에이전트"
+    )
+
+
+class ValidationResult(BaseModel):
+    """
+    Pre-Validator가 반환하는 검증 결과.
+    요청이 시스템에서 지원 가능한지 판단합니다.
+    """
+    is_unsupported: bool = Field(
+        description="True면 지원 불가능, False면 지원 가능"
+    )
+    unsupported_category: Optional[str] = Field(
+        None,
+        description="불가능한 경우 카테고리: '제형', '성능', '가격', '레이어링', '구매정보' 등"
+    )
+    reason: str = Field(
+        description="판단 이유 설명"
     )
 
 
