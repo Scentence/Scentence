@@ -147,7 +147,7 @@ export default function UserProfileMenu({ isOpen, onClose }: UserProfileMenuProp
                         <motion.div variants={cardVariants} className={`${liquidGlassBlock} p-1`}>
                             <div className="flex flex-col divide-y divide-black/5">
                                 <MenuItem href="/mypage" icon={User} title="마이 페이지" desc="내 정보 및 프로필 관리" onClick={onClose} />
-                                <MenuItem href="/archives" icon={Library} title="마이 컬렉션" desc="나만의 향수 라이브러리" onClick={onClose} />
+                                <MenuItem href="/archives" icon={Library} title="나만의 보관함" desc="나만의 향수 라이브러리" onClick={onClose} />
                             </div>
                         </motion.div>
 

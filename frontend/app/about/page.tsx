@@ -165,7 +165,7 @@ export default function AboutPage() {
                 <section className="py-32 px-6 md:px-20 bg-[#f4f1ea] border-t border-gray-200">
                     <div className="max-w-6xl mx-auto">
                         <AnimateOnScroll>
-                            <h2 className="text-xs font-bold uppercase tracking-[0.2em] text-[#999] mb-20 text-center">5S Creators</h2>
+                            <h2 className="text-xs font-bold uppercase tracking-[0.2em] text-[#999] mb-20 text-center">TEAM. 5S</h2>
                         </AnimateOnScroll>
 
                         <div className="divide-y divide-gray-300">
@@ -215,7 +215,7 @@ export default function AboutPage() {
                         {/* [New Footer Logo Area] */}
                         <AnimateOnScroll delay={0.4} className="flex flex-col items-center opacity-50 hover:opacity-100 transition-opacity duration-500">
                             <div className="flex items-center gap-2 mb-2">
-                                <span className="text-xs font-medium tracking-widest text-[#888]">Since 2026.</span>
+                                <span className="text-xs font-medium tracking-widest text-[#888]">TEAM.</span>
                                 {/* Permanently Skewed Logo with CSS transform removed */}
                                 <img
                                     src="/images/5s_logo_skewed.png"

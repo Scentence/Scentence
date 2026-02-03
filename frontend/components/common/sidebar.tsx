@@ -129,7 +129,7 @@ export default function Sidebar({ isOpen, onClose, context }: SidebarProps) {
                         <motion.div variants={cardVariants} className={`${liquidGlassBlock} p-1`}>
                             <div className="flex flex-col divide-y divide-black/5">
                                 <MenuItem href="/chat" icon={Sparkles} title="향수 추천" onClick={onClose} />
-                                <MenuItem href="/layering" icon={Layers} title="향수 레이어링" onClick={onClose} />
+                                <MenuItem href="/layering" icon={Layers} title="레이어링 랩" onClick={onClose} />
                                 <MenuItem href="/perfume-network/nmap" icon={MapIcon} title="향수 지도" onClick={onClose} />
                                 <MenuItem href="/perfume-wiki" icon={BookOpen} title="향수 백과" onClick={onClose} />
                             </div>
