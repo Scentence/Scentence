@@ -231,7 +231,9 @@ def interviewer_node(state: AgentState):
         fallback_prefs = {
             **current_prefs,
             "gender": current_prefs.get("gender", "Unisex"),
-            "season": current_prefs.get("season", "All"),
+            # season, occasion은 None으로 두어 필터링 안 함 (모든 계절/상황 포함)
+            "season": current_prefs.get("season"),
+            "occasion": current_prefs.get("occasion"),
             "style": current_prefs.get("style", "Daily"),
             "target": current_prefs.get("target", "일반"),
         }
@@ -711,8 +713,8 @@ class RecoSearcher:
                     ),
                     image_url=selected_perfume.get("image_url"),
                     gender=selected_perfume.get("gender", "Unisex"),
-                    season="All",
-                    occasion="Any",
+                    season=selected_perfume.get("seasons") or "All",
+                    occasion=selected_perfume.get("occasions") or "Any",
                 )
             ],
         )

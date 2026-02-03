@@ -206,7 +206,9 @@ def search_perfumes(
             (SELECT gender FROM TB_PERFUME_GENDER_R WHERE perfume_id = m.perfume_id LIMIT 1) as gender,
             (SELECT STRING_AGG(DISTINCT n.note, ', ') FROM TB_PERFUME_NOTES_M n WHERE n.perfume_id = m.perfume_id AND UPPER(n.type) = 'TOP') as top_notes,
             (SELECT STRING_AGG(DISTINCT n.note, ', ') FROM TB_PERFUME_NOTES_M n WHERE n.perfume_id = m.perfume_id AND UPPER(n.type) = 'MIDDLE') as middle_notes,
-            (SELECT STRING_AGG(DISTINCT n.note, ', ') FROM TB_PERFUME_NOTES_M n WHERE n.perfume_id = m.perfume_id AND UPPER(n.type) = 'BASE') as base_notes
+            (SELECT STRING_AGG(DISTINCT n.note, ', ') FROM TB_PERFUME_NOTES_M n WHERE n.perfume_id = m.perfume_id AND UPPER(n.type) = 'BASE') as base_notes,
+            (SELECT STRING_AGG(season, ', ') FROM TB_PERFUME_SEASON_R WHERE perfume_id = m.perfume_id) as seasons,
+            (SELECT STRING_AGG(occasion, ', ') FROM TB_PERFUME_OCA_R WHERE perfume_id = m.perfume_id) as occasions
             FROM TB_PERFUME_BASIC_M m
         """
         params, where_clauses = [], []
