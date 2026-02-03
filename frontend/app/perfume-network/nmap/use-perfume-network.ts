@@ -301,7 +301,7 @@ export function usePerfumeNetwork(sessionUserId?: string | number) {
     }
   };
 
-  // 6. 라벨 및 필터 옵션 로드
+  // [개선] 6. 라벨 및 필터 옵션 로드 (필터는 정적 파일 사용)
   useEffect(() => {
     const fetchLabels = async () => {
       try {
@@ -311,17 +311,24 @@ export function usePerfumeNetwork(sessionUserId?: string | number) {
     };
     const fetchFilters = async () => {
       try {
-        const res = await fetch(`${API_BASE}/nmap/filter-options`);
+        // [개선] API 대신 정적 JSON 파일 로드 (API 호출 제거)
+        const res = await fetch('/data/filter-options.json');
         if (res.ok) setFilterOptions(await res.json());
-      } catch (e) { }
+      } catch (e) {
+        console.warn('필터 옵션 로드 실패, 기본값 사용:', e);
+      }
     };
     fetchLabels();
     fetchFilters();
-  }, []);
+  }, []); // [개선] memberId 의존성 제거 (필터는 정적 데이터)
 
-  // 6. 전체 데이터 로드
+  // [개선] 6. 전체 데이터 로드 (스마트 로딩: 300개 제한)
   const requestUrl = useMemo(() => {
-    const params = new URLSearchParams({ min_similarity: "0.0", top_accords: "5" });
+    const params = new URLSearchParams({ 
+      min_similarity: "0.0", 
+      top_accords: "5",
+      max_perfumes: String(GRAPH_CONFIG.API_MAX_PERFUMES || 300) // [개선] max_perfumes 파라미터 추가
+    });
     if (memberId) params.set("member_id", memberId);
     return `${API_BASE}/nmap/perfumes?${params.toString()}`;
   }, [memberId]);
