@@ -35,7 +35,10 @@ export default function LandingPage() {
 
   useEffect(() => {
     if (typeof window === "undefined") return;
-    const apiBaseUrl = process.env.NEXT_PUBLIC_API_URL || "";
+
+    // [기존 코드 주석 처리] 환경 변수(apiBaseUrl)에 의존하던 방식
+    // const apiBaseUrl = process.env.NEXT_PUBLIC_API_URL || "";
+
     const memberId = session?.user?.id || localUser?.memberId;
 
     if (!memberId) {
@@ -43,24 +46,35 @@ export default function LandingPage() {
       return;
     }
 
-    fetch(`${apiBaseUrl}/users/profile/${memberId}`)
+    /**
+     * [수정 이유: 팀 협업 및 배포 환경 대응]
+     * 기존 fetch(`${apiBaseUrl}/...`) 방식은 각 팀원의 환경 변수 설정에 따라 
+     * 통신 성공 여부가 갈리는 문제가 있었습니다. (특히 메인 페이지에서 가시화됨)
+     * 
+     * [해결책: /api 프록시 표준화]
+     * next.config.ts의 rewrites 설정을 활용하여 모든 백엔드 요청을 '/api'로 통일합니다.
+     * 이렇게 하면 로컬 포트가 8000이든 8001이든, 혹은 AWS 배포 환경이든 
+     * 코드 수정 없이 자동으로 올바른 백엔드 서버를 찾아갑니다.
+     */
+    fetch(`/api/users/profile/${memberId}`)
       .then((res) => (res.ok ? res.json() : null))
       .then((data) => {
-        // [사용자 정보 업데이트] 가져온 데이터에 닉네임이 있으면 저장하기
         if (data?.nickname) {
           setProfileNickname(data.nickname);
         }
 
-        // [프로필 이미지 경로 처리 로직]
-        // 1. 이미 http로 시작하는 전체 경로(S3, 카카오 등)라면 그대로 사용합니다.
-        // 2. /uploads/로 시작하는 상대 경로라면, 도메인을 붙이지 않고 그대로 사용합니다.
-        //    (Next.js의 rewrites 설정 덕분에 브라우저가 알아서 현재 서버의 백엔드로 요청을 보냅니다.)
-        // 3. 이를 통해 'localhost'가 코드에 박히는 현상을 방지하여 팀원들 PC에서도 사진이 잘 나오게 합니다.
         if (data?.profile_image_url) {
           const rawUrl = data.profile_image_url;
+
+          /**
+           * [이미지 주소 처리 표준화]
+           * 1. 외부 주소(http)나 프록시 주소(/uploads)는 그대로 유지
+           * 2. 그 외 백엔드 상대 경로에는 '/api'를 붙여 프록시를 타게 함
+           * (기존 apiBaseUrl 상수 대신 '/api'를 사용하여 환경 의존성 제거)
+           */
           const finalUrl = (rawUrl.startsWith("http") || rawUrl.startsWith("/uploads"))
             ? rawUrl
-            : `${apiBaseUrl}${rawUrl}`;
+            : `/api${rawUrl}`; // `${apiBaseUrl}${rawUrl}` 대신 사용
 
           setProfileImageUrl(finalUrl);
         }
@@ -126,13 +140,27 @@ export default function LandingPage() {
                 <button
                   id="profile-menu-toggle"
                   onClick={() => setIsProfileMenuOpen(!isProfileMenuOpen)}
-                  className="block w-9 h-9 rounded-full overflow-hidden border border-gray-100 shadow-sm hover:opacity-80 transition-opacity"
+                  className="w-9 h-9 flex items-center justify-center rounded-full p-0.5 transform-gpu bg-gradient-to-br from-white/20 to-transparent border border-white/40 shadow-[inset_0_1px_1px_rgba(255,255,255,0.9),inset_0_15px_30px_rgba(255,255,255,0.15),inset_0_-2px_10px_rgba(0,0,0,0.05),0_20px_40px_-10px_rgba(0,0,0,0.2)] will-change-transform transition-all hover:scale-105 active:scale-95 overflow-hidden"
                 >
+                  {/* 
+                    [수정됨: 이미지 소스 우선순위 로직 강화]
+                    1순위: DB에서 가져온 프로필 이미지 (profileImageUrl)
+                    2순위: 카카오 로그인 세션 이미지 (session?.user?.image) - DB fetch 실패/누락 시 폴백
+                    3순위: 기본 이미지 (/default_profile.png)
+                  */}
                   <img
-                    src={profileImageUrl || "/default_profile.png"}
+                    src={profileImageUrl || session?.user?.image || "/default_profile.png"}
                     alt="Profile"
-                    className="w-full h-full object-cover"
-                    onError={(e) => { e.currentTarget.src = "/default_profile.png"; }}
+                    className="w-full h-full object-cover rounded-full"
+                    onError={(e) => {
+                      // 이미지 로드 실패 시 세션 이미지가 있으면 시도, 없으면 기본 이미지
+                      const target = e.currentTarget;
+                      if (session?.user?.image && target.src !== session.user.image) {
+                        target.src = session.user.image;
+                      } else {
+                        target.src = "/default_profile.png";
+                      }
+                    }}
                   />
                 </button>
                 <UserProfileMenu
@@ -145,15 +173,15 @@ export default function LandingPage() {
             <button
               id="global-menu-toggle"
               onClick={() => setIsSidebarOpen(!isSidebarOpen)}
-              className="w-9 h-9 flex items-center justify-center rounded-full hover:bg-gray-100 transition-colors"
+              className="w-9 h-9 flex items-center justify-center rounded-full p-0.5 transform-gpu bg-gradient-to-br from-white/20 to-transparent border border-white/40 shadow-[inset_0_1px_1px_rgba(255,255,255,0.9),inset_0_15px_30px_rgba(255,255,255,0.15),inset_0_-2px_10px_rgba(0,0,0,0.05),0_20px_40px_-10px_rgba(0,0,0,0.2)] will-change-transform transition-all hover:scale-105 active:scale-95"
             >
               {isSidebarOpen ? (
-                <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" className="w-8 h-8 text-[#555]">
+                <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor" className="w-full h-full text-[#333] p-1">
                   <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
                 </svg>
               ) : (
-                <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" className="w-8 h-8 text-[#555]">
-                  <path strokeLinecap="round" strokeLinejoin="round" d="M3.75 9h16.5m-16.5 6.75h16.5" />
+                <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor" className="w-full h-full text-[#333] p-1">
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M4 6h16M4 12h16M4 18h16" />
                 </svg>
               )}
             </button>

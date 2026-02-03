@@ -84,18 +84,33 @@ export default function UserProfileMenu({ isOpen, onClose }: UserProfileMenuProp
     const handleOverlayClick = () => onClose();
 
     // [ANIMATION VARIANTS]
+    // 1. Container: Orchestrates the staging of children. (No visual styles itself)
     const containerVariants: Variants = {
-        hidden: { opacity: 0, scale: 0.95, y: -10, backdropFilter: "blur(0px)" },
+        hidden: { opacity: 1, transition: { staggerChildren: 0.05 } },
+        show: { opacity: 1, transition: { staggerChildren: 0.05 } },
+        exit: { opacity: 0, transition: { duration: 0.2 } }
+    };
+
+    // 2. Card: Individual "Round Blur Plates" that animate in.
+    const cardVariants: Variants = {
+        hidden: {
+            opacity: 0, scale: 0.95, y: -10,
+            backdropFilter: "blur(20px)", WebkitBackdropFilter: "blur(20px)"
+        },
         show: {
             opacity: 1, scale: 1, y: 0,
-            backdropFilter: "blur(16px)", // 서서히 흐려지도록 추가
+            backdropFilter: "blur(20px)", WebkitBackdropFilter: "blur(20px)",
             transition: { type: "spring" as const, stiffness: 300, damping: 30 }
         },
-        exit: { opacity: 0, scale: 0.95, y: -10, backdropFilter: "blur(0px)", transition: { duration: 0.2 } }
+        exit: {
+            opacity: 0, scale: 0.95, y: -10,
+            backdropFilter: "blur(20px)", WebkitBackdropFilter: "blur(20px)",
+            transition: { duration: 0.2 }
+        }
     };
 
     // [HYPER-REALISTIC LIQUID GLASS BLOCK]
-    const liquidGlassBlock = "bg-gradient-to-br from-white/[0.08] to-transparent border border-white/40 shadow-[inset_0_1px_1px_rgba(255,255,255,0.9),inset_0_15px_30px_rgba(255,255,255,0.15),inset_0_-2px_10px_rgba(0,0,0,0.05),0_20px_40px_-10px_rgba(0,0,0,0.2)] overflow-hidden rounded-[32px]";
+    const liquidGlassBlock = "transform-gpu bg-gradient-to-br from-white/20 to-transparent border border-white/40 shadow-[inset_0_1px_1px_rgba(255,255,255,0.9),inset_0_15px_30px_rgba(255,255,255,0.15),inset_0_-2px_10px_rgba(0,0,0,0.05),0_20px_40px_-10px_rgba(0,0,0,0.2)] overflow-hidden rounded-[32px] will-change-transform";
 
     return (
         <AnimatePresence>
@@ -116,13 +131,13 @@ export default function UserProfileMenu({ isOpen, onClose }: UserProfileMenuProp
                     >
                         {/* --- CHUNK 1: ADMIN STUDIO --- */}
                         {isAdmin && (
-                            <motion.div className={`${liquidGlassBlock} p-1`}>
+                            <motion.div variants={cardVariants} className={`${liquidGlassBlock} p-1`}>
                                 <MenuItem href="/admin" icon={Shield} title="관리자 페이지" className="!text-blue-600" onClick={onClose} />
                             </motion.div>
                         )}
 
                         {/* --- CHUNK 2: PERSONAL --- */}
-                        <motion.div className={`${liquidGlassBlock} p-1`}>
+                        <motion.div variants={cardVariants} className={`${liquidGlassBlock} p-1`}>
                             <div className="flex flex-col divide-y divide-black/5">
                                 <MenuItem href="/mypage" icon={User} title="마이 페이지" desc="내 정보 및 프로필 관리" onClick={onClose} />
                                 <MenuItem href="/archives" icon={Library} title="마이 컬렉션" desc="나만의 향수 라이브러리" onClick={onClose} />
@@ -130,7 +145,7 @@ export default function UserProfileMenu({ isOpen, onClose }: UserProfileMenuProp
                         </motion.div>
 
                         {/* --- CHUNK 3: LOGOUT --- */}
-                        <motion.div className={`${liquidGlassBlock} p-1`}>
+                        <motion.div variants={cardVariants} className={`${liquidGlassBlock} p-1`}>
                             <button
                                 onClick={() => {
                                     if (session) signOut({ callbackUrl: "/login" });

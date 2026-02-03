@@ -41,8 +41,8 @@ export default function PerfumeWikiPage() {
   const [localUser, setLocalUser] = useState<any>(null);
   const [profileImageUrl, setProfileImageUrl] = useState<string | null>(null);
 
-  // API 호출 경로 설정
-  const API_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000";
+  // [기존 코드 주석 처리] 환경 변수에 의존하던 방식
+  // const API_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000";
 
   useEffect(() => {
     // 1. 로컬 스토리지 데이터 확인
@@ -52,31 +52,27 @@ export default function PerfumeWikiPage() {
         const parsed = JSON.parse(authData);
         setLocalUser(parsed);
       } catch (e) {
-        console.error("Local auth parse error", e);
+        // console.error("Local auth parse error", e);
       }
     }
 
-    // 2. 세션(카카오) 기반 프로필 이미지 가져오기
-    if (session?.user?.id) {
-      fetch(`${API_URL}/users/profile/${session.user.id}`)
-        .then((res) => res.json())
+    // [수정] 프로필 이미지 가져오기 로직 표준화 (/api 사용)
+    const currentId = session?.user?.id || localUser?.memberId;
+
+    if (currentId) {
+      fetch(`/api/users/profile/${currentId}`)
+        .then((res) => (res.ok ? res.json() : null))
         .then((data) => {
-          if (data.profile_image_url) {
-            setProfileImageUrl(data.profile_image_url);
+          if (data?.profile_image_url) {
+            const rawUrl = data.profile_image_url;
+            // [표준화] 이미지 경로 결정 로직 (메인, 채팅 페이지와 동일)
+            const url = (rawUrl.startsWith("http") || rawUrl.startsWith("/uploads"))
+              ? rawUrl
+              : `/api${rawUrl}`;
+            setProfileImageUrl(url);
           }
         })
-        .catch((err) => console.error("Profile image fetch error", err));
-    }
-    // 3. 로컬 사용자 기반 프로필 이미지 가져오기
-    else if (localUser?.memberId) {
-      fetch(`${API_URL}/users/profile/${localUser.memberId}`)
-        .then((res) => res.json())
-        .then((data) => {
-          if (data.profile_image_url) {
-            setProfileImageUrl(data.profile_image_url);
-          }
-        })
-        .catch((err) => console.error("Local profile image fetch error", err));
+        .catch(() => setProfileImageUrl(null));
     }
   }, [session, localUser?.memberId]);
 
@@ -128,7 +124,15 @@ export default function PerfumeWikiPage() {
                   src={profileImageUrl || "/default_profile.png"}
                   alt="Profile"
                   className="w-full h-full object-cover"
-                  onError={(e) => { e.currentTarget.src = "/default_profile.png"; }}
+                  onError={(e) => {
+                    const target = e.currentTarget;
+                    // [추가] 이미지 로드 실패 시 세션 이미지가 있으면 시도, 없으면 기본 이미지
+                    if (session?.user?.image && target.src !== session.user.image) {
+                      target.src = session.user.image;
+                    } else {
+                      target.src = "/default_profile.png";
+                    }
+                  }}
                 />
               </button>
               <UserProfileMenu

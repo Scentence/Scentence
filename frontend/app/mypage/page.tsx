@@ -53,17 +53,19 @@ export default function MyPage() {
   const [selectedFile, setSelectedFile] = useState<string | null>(null); // 자르기 전 원본 이미지 URL
   const [isCropperOpen, setIsCropperOpen] = useState(false); // 모달 열림 여부
 
-  const apiBaseUrl = process.env.NEXT_PUBLIC_API_URL || "";
+  // [기존 코드 주석 처리] 환경 변수에 의존하던 방식
+  // const apiBaseUrl = process.env.NEXT_PUBLIC_API_URL || "";
 
-  // [이미지 경로 결정 로직]
+  // [표준화] 이미지 경로 결정 로직 수정
   // 1. 이미 http로 시작하는 전체 경로(S3, 카카오 등)라면 그대로 사용합니다.
   // 2. /uploads/로 시작하는 상대 경로라면, 도메인을 붙이지 않고 그대로 사용합니다. (Next.js rewrites 활용)
   // 3. 사진이 없는 경우 기본 이미지를 보여줍니다.
+  // 4. [변경점] apiBaseUrl 대신 /api 프록시를 사용하거나 상대 경로를 유지하여 호환성을 높입니다.
   const resolvedProfileImageUrl = profileImageUrl
     ? (profileImageUrl.startsWith("http") || profileImageUrl.startsWith("/uploads"))
       ? profileImageUrl
-      : `${apiBaseUrl}${profileImageUrl}`
-    : "/default_profile.png";
+      : `/api${profileImageUrl}` // `${apiBaseUrl}${profileImageUrl}` 대신 사용
+    : (session?.user?.image || "/default_profile.png"); // [추가] DB 이미지 없으면 세션/기본 이미지 폴백
   const checkedSnsJoinYn = profile?.sns_join_yn; // existing logic check
   const showPasswordSection = profile?.sns_join_yn !== "Y";
 
@@ -97,14 +99,27 @@ export default function MyPage() {
 
     const loadProfile = async () => {
       try {
+        /**
+         * [수정 이유: 페이지별 통신 방식 표준화]
+         * 메인 페이지와 동일하게 '/api' 프록시를 사용하여 
+         * 로컬/배포 환경 구분 없이 안정적으로 프로필 정보를 가져오도록 수정합니다.
+         */
         const response = await fetch(`/api/users/profile/${memberId}`, {
           signal: controller.signal,
         });
         if (!response.ok) {
           if (response.status === 404) {
-            setLoadMessage("회원 정보를 찾을 수 없습니다. 다시 로그인해주세요.");
-            if (typeof window !== "undefined") {
-              localStorage.removeItem("localAuth");
+            // [추가] DB에 정보가 없더라도 카카오 세션 정보로 폼을 채워주는 UX 개선
+            if (session?.user) {
+              setProfile(null);
+              setNickname(session.user.name || "");
+              setEmail(session.user.email || "");
+              setProfileImageUrl(session.user.image || "");
+            } else {
+              setLoadMessage("회원 정보를 찾을 수 없습니다. 다시 로그인해주세요.");
+              if (typeof window !== "undefined") {
+                localStorage.removeItem("localAuth");
+              }
             }
           }
           return;
@@ -114,13 +129,14 @@ export default function MyPage() {
         if (data?.member_id) {
           setMemberId(String(data.member_id));
         }
-        setNickname(data.nickname || "");
-        setProfileImageUrl(data.profile_image_url || "");
+        // [수정] DB 값이 없으면 세션 값이라도 보여주기 (nullish coalescing)
+        setNickname(data.nickname || session?.user?.name || "");
+        setProfileImageUrl(data.profile_image_url || session?.user?.image || "");
         setName(data.name || "");
         setSex((data.sex as "M" | "F" | "") || "");
         setPhoneNo(data.phone_no || "");
         setAddress(data.address || "");
-        setEmail(data.email || "");
+        setEmail(data.email || session?.user?.email || "");
         setSubEmail(data.sub_email || "");
         setEmailMarketing(data.email_alarm_yn === "Y");
         setSnsMarketing(data.sns_alarm_yn === "Y");
@@ -161,7 +177,7 @@ export default function MyPage() {
     }, 350);
 
     return () => window.clearTimeout(timeoutId);
-  }, [apiBaseUrl, memberId, nickname]);
+  }, [memberId, nickname]);
 
   const nicknameHint = useMemo(() => {
     if (nicknameStatus === "invalid") return "2~12자의 한글/영문/숫자만 가능합니다.";
@@ -328,15 +344,15 @@ export default function MyPage() {
             <button
               id="global-menu-toggle"
               onClick={() => setIsSidebarOpen(!isSidebarOpen)}
-              className="p-1 rounded-md hover:bg-gray-100 transition-colors"
+              className="w-9 h-9 flex items-center justify-center rounded-full p-0.5 transform-gpu bg-gradient-to-br from-white/20 to-transparent border border-white/40 shadow-[inset_0_1px_1px_rgba(255,255,255,0.9),inset_0_15px_30px_rgba(255,255,255,0.15),inset_0_-2px_10px_rgba(0,0,0,0.05),0_20px_40px_-10px_rgba(0,0,0,0.2)] will-change-transform transition-all hover:scale-105 active:scale-95"
             >
               {isSidebarOpen ? (
-                <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" className="w-8 h-8 text-[#555]">
+                <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor" className="w-full h-full text-[#333]">
                   <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
                 </svg>
               ) : (
-                <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" className="w-8 h-8 text-[#555]">
-                  <path strokeLinecap="round" strokeLinejoin="round" d="M3.75 9h16.5m-16.5 6.75h16.5" />
+                <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor" className="w-full h-full text-[#333]">
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M3 9h18M3 15h18" />
                 </svg>
               )}
             </button>
@@ -380,12 +396,12 @@ export default function MyPage() {
             <button
               id="profile-menu-toggle"
               onClick={() => setIsProfileMenuOpen(!isProfileMenuOpen)}
-              className="block w-9 h-9 rounded-full overflow-hidden border border-gray-100 shadow-sm hover:opacity-80 transition-opacity"
+              className="w-9 h-9 flex items-center justify-center rounded-full p-0.5 transform-gpu bg-gradient-to-br from-white/20 to-transparent border border-white/40 shadow-[inset_0_1px_1px_rgba(255,255,255,0.9),inset_0_15px_30px_rgba(255,255,255,0.15),inset_0_-2px_10px_rgba(0,0,0,0.05),0_20px_40px_-10px_rgba(0,0,0,0.2)] will-change-transform transition-all hover:scale-105 active:scale-95 overflow-hidden"
             >
               <img
                 src={resolvedProfileImageUrl}
                 alt="Profile"
-                className="w-full h-full object-cover"
+                className="w-full h-full object-cover rounded-full"
                 onError={(e) => { e.currentTarget.src = "/default_profile.png"; }}
               />
             </button>
@@ -398,15 +414,15 @@ export default function MyPage() {
           <button
             id="global-menu-toggle"
             onClick={() => setIsSidebarOpen(!isSidebarOpen)}
-            className="w-9 h-9 flex items-center justify-center rounded-full hover:bg-gray-100 transition-colors"
+            className="w-9 h-9 flex items-center justify-center rounded-full p-0.5 transform-gpu bg-gradient-to-br from-white/20 to-transparent border border-white/40 shadow-[inset_0_1px_1px_rgba(255,255,255,0.9),inset_0_15px_30px_rgba(255,255,255,0.15),inset_0_-2px_10px_rgba(0,0,0,0.05),0_20px_40px_-10px_rgba(0,0,0,0.2)] will-change-transform transition-all hover:scale-105 active:scale-95"
           >
             {isSidebarOpen ? (
-              <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" className="w-8 h-8 text-[#555]">
+              <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor" className="w-full h-full text-[#333]">
                 <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
               </svg>
             ) : (
-              <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" className="w-8 h-8 text-[#555]">
-                <path strokeLinecap="round" strokeLinejoin="round" d="M3.75 9h16.5m-16.5 6.75h16.5" />
+              <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor" className="w-full h-full text-[#333]">
+                <path strokeLinecap="round" strokeLinejoin="round" d="M3 9h18M3 15h18" />
               </svg>
             )}
           </button>
@@ -432,7 +448,13 @@ export default function MyPage() {
                 alt="프로필"
                 className="w-full h-full object-cover"
                 onError={(event) => {
-                  event.currentTarget.src = "/default_profile.png";
+                  const target = event.currentTarget;
+                  // [추가] 이미지 로드 실패 시 세션 이미지가 있으면 시도, 없으면 기본 이미지
+                  if (session?.user?.image && target.src !== session.user.image) {
+                    target.src = session.user.image;
+                  } else {
+                    target.src = "/default_profile.png";
+                  }
                 }}
               />
             </div>

@@ -100,7 +100,11 @@ export default function ArchivesPage() {
     }, [session]);
 
     useEffect(() => {
-        const apiBaseUrl = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000";
+        if (typeof window === "undefined") return;
+
+        // [기존 코드 주석 처리]
+        // const apiBaseUrl = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000";
+
         const currentId = session?.user?.id || localUser?.memberId;
 
         if (!currentId) {
@@ -108,17 +112,21 @@ export default function ArchivesPage() {
             return;
         }
 
-        fetch(`${apiBaseUrl}/users/profile/${currentId}`)
+        /**
+         * [수정 이유: 페이지별 통신 방식 표준화]
+         * 메인 페이지와 동일하게 '/api' 프록시를 사용하여 
+         * 로컬/배포 환경 구분 없이 안정적으로 프로필 정보를 가져오도록 수정합니다.
+         */
+        fetch(`/api/users/profile/${currentId}`)
             .then((res) => (res.ok ? res.json() : null))
             .then((data) => {
                 if (data?.profile_image_url) {
-                    // [이미지 경로 함정 방지 로직]
-                    // 전체 경로(http)나 프록시 경로(/uploads)는 그대로 사용하고,
-                    // 그 외의 경우에만 도메인을 결합하여 사진 깨짐을 방지합니다.
                     const rawUrl = data.profile_image_url;
+
+                    // [표준화] 외부 링크는 유지, 그 외에는 /api 붙여서 프록시 태우기
                     const finalUrl = (rawUrl.startsWith("http") || rawUrl.startsWith("/uploads"))
                         ? rawUrl
-                        : `${apiBaseUrl}${rawUrl}`;
+                        : `/api${rawUrl}`;
                     setProfileImageUrl(finalUrl);
                 }
             })
@@ -260,11 +268,22 @@ export default function ArchivesPage() {
                                     onClick={() => setIsProfileMenuOpen(!isProfileMenuOpen)}
                                     className="block w-9 h-9 rounded-full overflow-hidden border border-gray-100 shadow-sm hover:opacity-80 transition-opacity"
                                 >
+                                    {/* 
+                                      [수정됨: 이미지 소스 우선순위 로직 적용]
+                                      DB 이미지 > 카카오 세션 이미지 > 기본 이미지
+                                    */}
                                     <img
-                                        src={profileImageUrl || "/default_profile.png"}
+                                        src={profileImageUrl || session?.user?.image || "/default_profile.png"}
                                         alt="Profile"
                                         className="w-full h-full object-cover"
-                                        onError={(e) => { e.currentTarget.src = "/default_profile.png"; }}
+                                        onError={(e) => {
+                                            const target = e.currentTarget;
+                                            if (session?.user?.image && target.src !== session.user.image) {
+                                                target.src = session.user.image;
+                                            } else {
+                                                target.src = "/default_profile.png";
+                                            }
+                                        }}
                                     />
                                 </button>
                                 <UserProfileMenu
@@ -428,24 +447,28 @@ export default function ArchivesPage() {
                     </div>
                 </Link>
 
-                {isSearchOpen && (
-                    <PerfumeSearchModal
-                        memberId={String(memberId)}
-                        onClose={() => setIsSearchOpen(false)}
-                        onAdd={handleAdd}
-                        isKorean={isKorean}
-                        onToggleLanguage={() => setIsKorean(!isKorean)}
-                        existingIds={collection.map(p => p.perfume_id)} // <--- 기존 등록된 ID 목록 전달
-                    />
-                )}
+                {
+                    isSearchOpen && (
+                        <PerfumeSearchModal
+                            memberId={String(memberId)}
+                            onClose={() => setIsSearchOpen(false)}
+                            onAdd={handleAdd}
+                            isKorean={isKorean}
+                            onToggleLanguage={() => setIsKorean(!isKorean)}
+                            existingIds={collection.map(p => p.perfume_id)} // <--- 기존 등록된 ID 목록 전달
+                        />
+                    )
+                }
                 {selectedPerfume && <PerfumeDetailModal perfume={selectedPerfume} onClose={() => setSelectedPerfume(null)} onUpdateStatus={handleUpdateStatus} onDelete={handleDelete} onUpdatePreference={handleUpdatePreference} isKorean={isKorean} />}
 
                 {/* NavSidebar Overlay (Main Page와 동일) */}
-                {isNavOpen && (
-                    <div className="fixed inset-0 bg-transparent z-40" onClick={() => setIsNavOpen(false)} />
-                )}
-            </div>
-        </SavedPerfumesProvider>
+                {
+                    isNavOpen && (
+                        <div className="fixed inset-0 bg-transparent z-40" onClick={() => setIsNavOpen(false)} />
+                    )
+                }
+            </div >
+        </SavedPerfumesProvider >
     );
 }
 

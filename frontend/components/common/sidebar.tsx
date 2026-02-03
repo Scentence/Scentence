@@ -63,34 +63,40 @@ export default function Sidebar({ isOpen, onClose, context }: SidebarProps) {
     }, [isOpen, ref, onClose]);
 
     // [ANIMATION VARIANTS] EC2 빌드 에러 방지를 위해 'as const' 추가 - ksu.
+    // [ANIMATION VARIANTS] EC2 빌드 에러 방지를 위해 'as const' 추가 - ksu.
+    // 1. Container: Orchestrates the staging of children. (No visual styles itself)
     const containerVariants = {
-        hidden: { opacity: 0, x: 20, backdropFilter: "blur(0px)" }, // 초기 블러 0
-        show: {
-            opacity: 1, x: 0,
-            backdropFilter: "blur(16px)", // 나타날 때 블러 16px까지 부드럽게 상승
-            transition: { type: "spring", stiffness: 300, damping: 30, staggerChildren: 0.1 }
-        },
-        exit: { opacity: 0, x: 20, backdropFilter: "blur(0px)", transition: { duration: 0.2 } }
+        hidden: { opacity: 1, transition: { staggerChildren: 0.1 } },
+        show: { opacity: 1, transition: { staggerChildren: 0.1 } },
+        exit: { opacity: 0, transition: { duration: 0.2 } }
     } as const;
 
-    // 애니메이션 속성 타입 고정을 위해 'as const' 적용 - ksu.
+    // 2. Card: Individual "Round Blur Plates" that animate in.
     const cardVariants = {
-        hidden: { opacity: 0, y: 10, scale: 0.95, backdropFilter: "blur(0px)" },
-        show: {
-            opacity: 1, y: 0, scale: 1,
-            backdropFilter: "blur(16px)"
+        hidden: {
+            opacity: 0, x: 20, y: 0, scale: 0.95,
+            backdropFilter: "blur(20px)", WebkitBackdropFilter: "blur(20px)"
         },
-        exit: { opacity: 0, y: 10, scale: 0.95, backdropFilter: "blur(0px)" }
+        show: {
+            opacity: 1, x: 0, y: 0, scale: 1,
+            backdropFilter: "blur(20px)", WebkitBackdropFilter: "blur(20px)",
+            transition: { type: "spring", stiffness: 300, damping: 30 }
+        },
+        exit: {
+            opacity: 0, x: 20, y: 0, scale: 0.95,
+            backdropFilter: "blur(20px)", WebkitBackdropFilter: "blur(20px)",
+            transition: { duration: 0.2 }
+        }
     } as const;
 
     // [HYPER-REALISTIC LIQUID GLASS BLOCK]
     // 1. Specular Highlights: Multiple inset shadows for the sharp rim and surface sheen.
     // 2. Volumetric Depth: Bottom inset shadow to simulate the glass meniscus.
-    // 3. Clarity: Minimal background color. (블러는 애니메이션으로 제어함)
-    const liquidGlassBlock = "bg-gradient-to-br from-white/[0.08] to-transparent border border-white/40 shadow-[inset_0_1px_1px_rgba(255,255,255,0.9),inset_0_15px_30px_rgba(255,255,255,0.15),inset_0_-2px_10px_rgba(0,0,0,0.05),0_20px_40px_-10px_rgba(0,0,0,0.2)] overflow-hidden rounded-[36px]";
+    // 3. Clarity: Opacity increased to 0.15. Blur handled via Motion Variants (Zero Delay).
+    const liquidGlassBlock = "transform-gpu bg-gradient-to-br from-white/20 to-transparent border border-white/40 shadow-[inset_0_1px_1px_rgba(255,255,255,0.9),inset_0_15px_30px_rgba(255,255,255,0.15),inset_0_-2px_10px_rgba(0,0,0,0.05),0_20px_40px_-10px_rgba(0,0,0,0.2)] overflow-hidden rounded-[36px] will-change-transform";
 
     // [OBSIDIAN LIQUID GLASS BLOCK]
-    const obsidianGlassBlock = "bg-gradient-to-br from-black/80 to-black/40 border border-white/10 shadow-[inset_0_1px_1px_rgba(255,255,255,0.3),inset_0_10px_20px_rgba(255,255,255,0.05),inset_0_-2px_10px_rgba(0,0,0,0.5),0_20px_40px_-5px_rgba(0,0,0,0.4)] overflow-hidden rounded-[32px]";
+    const obsidianGlassBlock = "transform-gpu bg-gradient-to-br from-black/80 to-black/40 border border-white/10 shadow-[inset_0_1px_1px_rgba(255,255,255,0.3),inset_0_10px_20px_rgba(255,255,255,0.05),inset_0_-2px_10px_rgba(0,0,0,0.5),0_20px_40px_-5px_rgba(0,0,0,0.4)] overflow-hidden rounded-[32px] will-change-transform";
 
     return (
         <AnimatePresence>

@@ -59,6 +59,10 @@ const handler = NextAuth({
                     return true;
                 } catch (error) {
                     console.error('Sync Error:', error);
+                    // [Fallback] 백엔드가 죽어도 카카오 ID로 로그인 세션은 유지
+                    if (account?.providerAccountId) {
+                        user.id = account.providerAccountId;
+                    }
                     return true;
                 }
             }

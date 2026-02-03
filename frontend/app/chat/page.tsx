@@ -54,7 +54,9 @@ export default function ChatPage() {
     }, []);
 
     useEffect(() => {
-        const apiBaseUrl = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000";
+        // [기존 코드 주석 처리] 환경 변수에 의존하던 방식
+        // const apiBaseUrl = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000";
+
         const currentId = session?.user?.id || localUser?.memberId;
 
         if (!currentId) {
@@ -65,13 +67,24 @@ export default function ChatPage() {
 
         setMemberId(parseInt(currentId, 10));
 
-        fetch(`${apiBaseUrl}/users/profile/${currentId}`)
+        /**
+         * [수정 이유: 페이지별 통신 방식 표준화]
+         * 메인 페이지와 동일하게 '/api' 프록시를 사용하여 
+         * 로컬/배포 환경 구분 없이 안정적으로 프로필 정보를 가져오도록 수정합니다.
+         */
+        fetch(`/api/users/profile/${currentId}`)
             .then((res) => (res.ok ? res.json() : null))
             .then((data) => {
                 if (data?.profile_image_url) {
-                    const url = data.profile_image_url.startsWith("http")
-                        ? data.profile_image_url
-                        : `${apiBaseUrl}${data.profile_image_url}`;
+                    const rawUrl = data.profile_image_url;
+
+                    // [표준화] 이미지 경로 결정 로직 수정
+                    // 1. 이미 http로 시작하는 전체 경로(S3, 카카오 등)라면 그대로 사용합니다.
+                    // 2. /uploads/로 시작하는 상대 경로라면, 도메인을 붙이지 않고 그대로 사용합니다. (Next.js rewrites 활용)
+                    // 3. 그 외 백엔드 상대 경로에는 '/api'를 붙여 프록시를 타게 합니다.
+                    const url = (rawUrl.startsWith("http") || rawUrl.startsWith("/uploads"))
+                        ? rawUrl
+                        : `/api${rawUrl}`; // `${apiBaseUrl}${rawUrl}` 대신 사용
                     setProfileImageUrl(url);
                 }
             })
@@ -292,12 +305,12 @@ export default function ChatPage() {
                                 <button
                                     id="profile-menu-toggle"
                                     onClick={() => setIsProfileMenuOpen(!isProfileMenuOpen)}
-                                    className="block w-9 h-9 rounded-full overflow-hidden border border-gray-100 shadow-sm hover:opacity-80 transition-opacity"
+                                    className="w-9 h-9 flex items-center justify-center rounded-full p-0.5 transform-gpu bg-gradient-to-br from-white/20 to-transparent border border-white/40 shadow-[inset_0_1px_1px_rgba(255,255,255,0.9),inset_0_15px_30px_rgba(255,255,255,0.15),inset_0_-2px_10px_rgba(0,0,0,0.05),0_20px_40px_-10px_rgba(0,0,0,0.2)] will-change-transform transition-all hover:scale-105 active:scale-95 overflow-hidden"
                                 >
                                     <img
                                         src={profileImageUrl || "/default_profile.png"}
                                         alt="Profile"
-                                        className="w-full h-full object-cover"
+                                        className="w-full h-full object-cover rounded-full"
                                         onError={(e) => { e.currentTarget.src = "/default_profile.png"; }}
                                     />
                                 </button>
@@ -311,15 +324,15 @@ export default function ChatPage() {
                         <button
                             id="global-menu-toggle"
                             onClick={() => setIsNavOpen(!isNavOpen)}
-                            className="w-9 h-9 flex items-center justify-center rounded-full hover:bg-gray-100 transition-colors"
+                            className="w-9 h-9 flex items-center justify-center rounded-full p-0.5 transform-gpu bg-gradient-to-br from-white/20 to-transparent border border-white/40 shadow-[inset_0_1px_1px_rgba(255,255,255,0.9),inset_0_15px_30px_rgba(255,255,255,0.15),inset_0_-2px_10px_rgba(0,0,0,0.05),0_20px_40px_-10px_rgba(0,0,0,0.2)] will-change-transform transition-all hover:scale-105 active:scale-95"
                         >
                             {isNavOpen ? (
-                                <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" className="w-8 h-8 text-[#555]">
+                                <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor" className="w-full h-full text-[#333] p-1">
                                     <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
                                 </svg>
                             ) : (
-                                <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" className="w-8 h-8 text-[#555]">
-                                    <path strokeLinecap="round" strokeLinejoin="round" d="M3.75 9h16.5m-16.5 6.75h16.5" />
+                                <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor" className="w-full h-full text-[#333] p-1">
+                                    <path strokeLinecap="round" strokeLinejoin="round" d="M4 6h16M4 12h16M4 18h16" />
                                 </svg>
                             )}
                         </button>
