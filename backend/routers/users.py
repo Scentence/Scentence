@@ -1158,6 +1158,15 @@ async def upload_profile_image(member_id: int, file: UploadFile = File(...)):
             release_member_db_connection(conn)
 
 
+from fastapi import APIRouter, HTTPException, UploadFile, File, Header, Depends
+from pydantic import BaseModel
+from typing import Optional
+
+# [Security Fix] Separate logic file import removed
+# from security_deps import verify_gatekeeper_headers 
+
+# ...
+
 @router.get("/admin/members")
 def admin_list_members(admin_member_id: int):
     conn = get_member_db_connection()

@@ -95,23 +95,20 @@ export default function UserProfileMenu({ isOpen, onClose }: UserProfileMenuProp
     // 2. Card: Individual "Round Blur Plates" that animate in.
     const cardVariants: Variants = {
         hidden: {
-            opacity: 0, scale: 0.95, y: -10,
-            backdropFilter: "blur(20px)", WebkitBackdropFilter: "blur(20px)"
+            opacity: 0, scale: 0.95, y: -10
         },
         show: {
             opacity: 1, scale: 1, y: 0,
-            backdropFilter: "blur(20px)", WebkitBackdropFilter: "blur(20px)",
             transition: { type: "spring" as const, stiffness: 300, damping: 30 }
         },
         exit: {
             opacity: 0, scale: 0.95, y: -10,
-            backdropFilter: "blur(20px)", WebkitBackdropFilter: "blur(20px)",
             transition: { duration: 0.2 }
         }
     };
 
     // [HYPER-REALISTIC LIQUID GLASS BLOCK]
-    const liquidGlassBlock = "transform-gpu bg-gradient-to-br from-white/20 to-transparent border border-white/40 shadow-[inset_0_1px_1px_rgba(255,255,255,0.9),inset_0_15px_30px_rgba(255,255,255,0.15),inset_0_-2px_10px_rgba(0,0,0,0.05),0_20px_40px_-10px_rgba(0,0,0,0.2)] overflow-hidden rounded-[24px] md:rounded-[32px] will-change-transform";
+    const liquidGlassBlock = "transform-gpu bg-gradient-to-br from-white/20 to-transparent border border-white/40 shadow-[inset_0_1px_1px_rgba(255,255,255,0.9),inset_0_15px_30px_rgba(255,255,255,0.15),inset_0_-2px_10px_rgba(0,0,0,0.05),0_20px_40px_-10px_rgba(0,0,0,0.2)] overflow-hidden rounded-[24px] md:rounded-[32px] will-change-transform backdrop-blur-[20px]";
 
     return (
         <AnimatePresence>
