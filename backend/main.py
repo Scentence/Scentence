@@ -248,6 +248,16 @@ async def stream_generator(
                         last_msg = messages[-1]
                         if hasattr(last_msg, "content") and last_msg.content:
                             if did_stream_parallel_reco:
+                                # [★수정] 스트리밍 후 추가된 내용(안내 메시지) 전송
+                                if last_msg.content != full_ai_response:
+                                    additional_content = last_msg.content[len(full_ai_response):]
+                                    if additional_content:
+                                        full_ai_response += additional_content
+                                        data = json.dumps(
+                                            {"type": "answer", "content": additional_content},
+                                            ensure_ascii=False,
+                                        )
+                                        yield f"data: {data}\n\n"
                                 continue
                             full_ai_response += last_msg.content
                             data = json.dumps(

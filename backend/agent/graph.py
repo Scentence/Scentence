@@ -94,17 +94,16 @@ def log_filters(h_filters: dict, s_filters: dict):
     pass
 
 
-def generate_count_notice(
+def generate_pre_notice(
     requested: int,
-    actual: int,
     is_explicit: bool
 ) -> str:
     """
-    추천 개수 관련 안내 메시지를 생성합니다.
+    스트리밍 전에 출력 가능한 안내 메시지를 생성합니다.
+    (케이스 1: 과다 요청)
 
     Args:
-        requested: 요청된 개수 (명시적 또는 디폴트)
-        actual: 실제 생성된 개수
+        requested: 요청된 개수
         is_explicit: 사용자가 명시적으로 개수를 요청했는지
 
     Returns:
@@ -115,14 +114,33 @@ def generate_count_notice(
     # 케이스 1: 과다 요청 (명시적일 때만)
     if is_explicit and requested > MAX_COUNT:
         return (f"💡 안내: 한 번에 최대 {MAX_COUNT}개까지만 추천이 가능합니다. "
-                f"{MAX_COUNT}개의 향수를 엄선하여 추천드리겠습니다.\n\n")
+                f"{MAX_COUNT}개의 향수를 엄선하여 추천드렸습니다.\n\n")
 
+    return ""
+
+
+def generate_post_notice(
+    requested: int,
+    actual: int,
+    is_explicit: bool
+) -> str:
+    """
+    스트리밍 후에 출력 가능한 안내 메시지를 생성합니다.
+    (케이스 2: 부분 실패)
+
+    Args:
+        requested: 요청된 개수
+        actual: 실제 생성된 개수
+        is_explicit: 사용자가 명시적으로 개수를 요청했는지
+
+    Returns:
+        안내 메시지 (필요 없으면 빈 문자열)
+    """
     # 케이스 2: 부분 실패 (명시적 요청일 때만!)
     if is_explicit and actual < requested:
-        return (f"💡 안내: 요청하신 {requested}개 중 {actual}개의 향수를 찾았습니다. "
-                f"조건에 맞는 향수가 제한적이었습니다.\n\n")
+        return (f"\n\n💡 안내: 요청하신 {requested}개 중 {actual}개의 향수를 찾았습니다. "
+                f"조건에 맞는 향수가 제한적이었습니다.")
 
-    # 케이스 3: 묵시적이거나 정상 → 아무 말 안 함
     return ""
 
 
@@ -382,6 +400,9 @@ def interviewer_node(state: AgentState):
         # [★추가] recommended_count를 state 최상위로 올림 (parallel_reco_node에서 사용)
         if merged_prefs.get("recommended_count"):
             state["recommended_count"] = merged_prefs["recommended_count"]
+            state["is_count_explicit"] = True
+        else:
+            state["is_count_explicit"] = False
 
         if interview_result.is_sufficient:
             print(
@@ -392,6 +413,7 @@ def interviewer_node(state: AgentState):
                 "next_step": "researcher",
                 "user_preferences": merged_prefs,
                 "recommended_count": merged_prefs.get("recommended_count"),  # [★수정] 반환값에 명시적으로 포함
+                "is_count_explicit": merged_prefs.get("recommended_count") is not None,  # [★추가] 명시적 요청 여부
                 "status": "모든 정보가 확인되었습니다. 추천 전략을 수립합니다...",
                 "active_mode": None,
                 "question_count": question_count,
@@ -404,6 +426,7 @@ def interviewer_node(state: AgentState):
             "messages": [AIMessage(content=interview_result.response_message)],
             "user_preferences": merged_prefs,
             "recommended_count": merged_prefs.get("recommended_count"),  # [★수정] 반환값에 명시적으로 포함
+            "is_count_explicit": merged_prefs.get("recommended_count") is not None,  # [★추가] 명시적 요청 여부
             "active_mode": "interviewer",
             "next_step": "end",
             "question_count": question_count,
@@ -858,11 +881,15 @@ class RecoWriter:
             ),
         ]
 
+        # [★추가] 마지막 섹션일 때 종합 의견 추가 지시
         if is_last:
             content_parts.append(
-                "[마지막 섹션 규칙]: 마지막 섹션에는 전체 추천을 마무리하는 1~2문장의 짧은 코멘트를 추가하세요. "
-                "이 코멘트는 SAVE 태그 직전에 위치해야 하며, SAVE 태그는 섹션의 마지막 줄로 유지하세요."
+                "\n[마지막 섹션 지시사항]: 이 섹션이 마지막이므로, 향수 설명과 [[SAVE:...]] 태그를 모두 작성한 후 "
+                "구분선(---)을 추가하고, 그 아래에 향수 사용에 대한 친절한 종합 의견을 2-3문장으로 작성해주세요. "
+                "예: '마지막으로, 향을 처음 들이실 땐 1~2번만 가볍게 뿌려서 내 살결에 어떻게 남는지부터 확인해보세요. "
+                "데일리일수록 \"과하지 않은 잔향\"이 가장 오래 갑니다.'"
             )
+
 
         if expression_text:
             content_parts.append(f"\n[감각 표현 참고]:\n{expression_text}")
@@ -993,12 +1020,12 @@ async def parallel_reco_node(state: AgentState):
         rank_mode = "POPULAR"
         print(f"🔥 [Ranking] Mode: {rank_mode}", flush=True)
 
-    target_count = state.get("recommended_count")
-    if target_count is None:
+    requested_count = state.get("recommended_count")
+    if requested_count is None:
         parsed = parse_recommended_count(state.get("user_query", ""))
-        target_count = parsed if parsed is not None else 3
+        requested_count = parsed if parsed is not None else 3
 
-    target_count = normalize_recommended_count(target_count)
+    target_count = normalize_recommended_count(requested_count)
 
     print(f"🔢 [Count] Target recommendations: {target_count}", flush=True)
 
@@ -1093,14 +1120,29 @@ async def parallel_reco_node(state: AgentState):
             next_text = _normalize_section_boundary(full_text, next_text)
             full_text = f"{full_text}\n\n{next_text}"
 
-        # [★추가] 개수 관련 안내 메시지 생성 및 추가
-        is_explicit = state.get("is_count_explicit", False)
+        # [★추가] 스트리밍 후 안내 메시지 (케이스 1 + 케이스 2)
         actual_count = len(output_texts)
-        intro_notice = generate_count_notice(target_count, actual_count, is_explicit)
+        is_explicit = state.get("is_count_explicit", False)
 
-        if intro_notice:
-            full_text = f"{intro_notice}{full_text}"
-            print(f"💬 [Notice] Added count notice to response", flush=True)
+        # 케이스 1: 과다 요청 메시지
+        pre_notice_msg = generate_pre_notice(requested_count, is_explicit)
+        # 케이스 2: 부분 실패 메시지
+        post_notice_msg = generate_post_notice(requested_count, actual_count, is_explicit)
+
+        # 하나만 선택해서 추가 (우선순위: 케이스 1 > 케이스 2)
+        notice_msg = ""
+        if pre_notice_msg:
+            # 케이스 1: 과다 요청 (우선순위 높음)
+            notice_msg = pre_notice_msg.strip()
+        elif post_notice_msg:
+            # 케이스 2: 부분 실패 (과다 요청이 아닐 때만)
+            notice_msg = post_notice_msg.strip()
+
+        # [★수정] 종합 의견은 LLM이 마지막 섹션에서 자동 생성 (하드코딩 제거)
+        # 안내 메시지만 조건부로 추가
+        if notice_msg:
+            full_text = f"{full_text}\n{notice_msg}"
+            print(f"💬 [Notice] Added notice to end of response", flush=True)
     else:
         fallback_messages = [
             SystemMessage(content=WRITER_FAILURE_PROMPT),

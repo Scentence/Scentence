@@ -11,7 +11,35 @@ logger = logging.getLogger(__name__)
 
 
 # =================================================================
-# [A] Recommendation Count Parsing (from graph.py)
+# [A] Text Normalization (Special Character Removal)
+# =================================================================
+
+def remove_special_chars(text: str) -> str:
+    """
+    모든 특수문자를 제거하여 검색 매칭률을 높입니다.
+    영문자, 숫자, 한글만 남기고 나머지(공백, 하이픈, 어포스트로피 등) 제거
+
+    Args:
+        text: 원본 텍스트 (예: "J'adore L'Or", "자도르 로르")
+
+    Returns:
+        정규화된 텍스트 (예: "JadoreLOr", "자도르로르")
+
+    Examples:
+        >>> remove_special_chars("J'adore L'Or")
+        'JadoreLOr'
+        >>> remove_special_chars("자도르 로르")
+        '자도르로르'
+        >>> remove_special_chars("Chanel N°5")
+        'ChanelN5'
+    """
+    if not text:
+        return ""
+    return re.sub(r'[^a-zA-Z0-9가-힣]', '', text)
+
+
+# =================================================================
+# [B] Recommendation Count Parsing (from graph.py)
 # =================================================================
 
 def parse_recommended_count(query: str) -> Optional[int]:

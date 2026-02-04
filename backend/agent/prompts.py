@@ -351,7 +351,7 @@ Researcher가 전달한 **JSON 데이터(ResearcherOutput)**를 바탕으로 사
 
 1. **[도입부]**:
    - **절대 금지**: "요청하신 3가지 전략에 맞춰" 혹은 "수립한 전략대로"와 같은 표현은 사용하지 마세요. 사용자는 전략을 요청한 적이 없습니다.
-   - **권장**: "사용자님의 취향과 상황을 고려하여, 서로 다른 매력을 가진 세 가지 향수를 엄선해 보았습니다. 같은 브랜드라도 분위기가 꽤 다르게 느껴져서, 그날의 옷차림이나 기분에 맞춰 골라 쓰기 좋아요."와 같이 자연스럽게 시작하세요.
+   - **권장**: "사용자님의 취향과 상황을 고려하여, 다양한 매력을 가진 향수를 엄선해 보았습니다. 같은 브랜드라도 분위기가 꽤 다르게 느껴져서, 그날의 옷차림이나 기분에 맞춰 골라 쓰기 좋아요."와 같이 자연스럽게 시작하세요.
 
 2. **[수량 제한 및 중복 방지]**: 
    - 반드시 Researcher가 제공한 **3가지 전략에 대해 각각 1개씩, 총 3개의 향수만** 추천하세요. (데이터가 부족할 경우 검색된 개수만 추천)
@@ -380,7 +380,7 @@ Researcher가 전달한 **JSON 데이터(ResearcherOutput)**를 바탕으로 사
       [[SAVE:12345:Dior Blooming Bouquet]]"
 
 [출력 예시]
-안녕하세요! 사용자님이 말씀하신 상황에 맞춰 서로 다른 분위기를 연출할 수 있는 세 가지 향수를 골라봤어요.
+안녕하세요! 사용자님이 말씀하신 상황에 맞춰 서로 다른 분위기를 연출할 수 있는 향수를 골라봤어요.
 
 ## 1. [단정하고 신뢰감 있는 무드] Chanel - Bleu de Chanel
 ![Bleu de Chanel](이미지링크)
@@ -426,7 +426,7 @@ Researcher가 전달한 **JSON 데이터(ResearcherOutput)**를 바탕으로 사
 
 1. **[도입부]**:
    - **절대 금지**: "요청하신 3가지 전략에 맞춰" 혹은 "수립한 전략대로"와 같은 표현은 사용하지 마세요. 사용자는 전략을 요청한 적이 없습니다.
-   - **권장**: "사용자님의 취향과 상황을 고려하여, 한 가지 향수를 엄선해 보았습니다. 같은 브랜드라도 분위기가 꽤 다르게 느껴져서, 그날의 옷차림이나 기분에 맞춰 골라 쓰기 좋아요."와 같이 자연스럽게 시작하세요.
+   - **권장**: "사용자님의 취향과 상황을 고려하여, 향수를 엄선해 보았습니다. 같은 브랜드라도 분위기가 꽤 다르게 느껴져서, 그날의 옷차림이나 기분에 맞춰 골라 쓰기 좋아요."와 같이 자연스럽게 시작하세요.
    - **섹션 조건**: 사용자 메시지의 `[섹션 번호]`가 `1`일 때만 도입부를 작성하세요. 그 외 번호에서는 도입부를 쓰지 말고 바로 제목(##)으로 시작하세요.
 
 2. **[수량 제한 및 중복 방지]**: 
@@ -466,7 +466,7 @@ Researcher가 전달한 **JSON 데이터(ResearcherOutput)**를 바탕으로 사
     - `---`는 반드시 **단독 줄**로 출력하고, 앞뒤로 **빈 줄**이 있도록 작성하세요.
 
 [출력 예시]
-안녕하세요! 사용자님이 말씀하신 상황에 맞춰 한 가지 향수를 골라봤어요.
+안녕하세요! 사용자님이 말씀하신 상황에 맞춰 향수를 골라봤어요.
 
 ## 1. [단정하고 신뢰감 있는 무드] Chanel - Bleu de Chanel
 ![Bleu de Chanel](이미지링크)
@@ -516,7 +516,7 @@ Researcher가 전달한 **JSON 데이터(ResearcherOutput)**를 바탕으로 향
       [[SAVE:12345:Dior Blooming Bouquet]]"
 
 [출력 예시]
-안녕하세요! 사용자님이 선호하시는 어코드 밸런스를 고려하여, 각기 다른 매력을 지닌 세 가지 향수를 분석해 보았습니다.
+안녕하세요! 사용자님이 선호하시는 어코드 밸런스를 고려하여, 각기 다른 매력을 지닌 향수를 분석해 보았습니다.
 
 ## 1. [단정하고 신뢰감 있는 무드] Chanel - Bleu de Chanel
 ![Bleu de Chanel](이미지링크)
@@ -592,7 +592,7 @@ Researcher가 전달한 **JSON 데이터(ResearcherOutput)**를 바탕으로 향
      - `---`는 반드시 **단독 줄**로 출력하고, 앞뒤로 **빈 줄**이 있도록 작성하세요.
 
 [출력 예시]
-안녕하세요! 사용자님이 선호하시는 어코드 밸런스를 고려하여, 한 가지 향수를 분석해 보았습니다.
+안녕하세요! 사용자님이 선호하시는 어코드 밸런스를 고려하여, 향수를 분석해 보았습니다.
 
 ## 1. [단정하고 신뢰감 있는 무드] Chanel - Bleu de Chanel
 ![Bleu de Chanel](이미지링크)
@@ -637,18 +637,38 @@ INFO_SUPERVISOR_PROMPT = """
 [대명사 해결 (Pronoun Resolution)]
 - "이거(this)", "그거"가 나오면 [Recent Chat Context]에서 마지막 향수 이름을 찾아 타겟으로 지정하세요.
 
+[★Phase 3: 브랜드 및 이중 언어 추출]
+사용자 질문에서 다음 정보를 모두 추출하세요:
+1. **target_brand**: 브랜드 이름 (영어, 예: "Dior", "Jo Malone", "Chanel")
+2. **target_name**: 영어 향수명 (예: "J'adore", "Wood Sage & Sea Salt", "No.5")
+3. **target_name_kr**: 원본 한글명 유지 (예: "자도르", "우드세이지", "넘버5")
+
+중요: 사용자가 한글로 입력하면 target_name_kr에 원본 그대로 보존하고, target_name에는 영어로 변환한 이름을 넣으세요.
+
 [★결정적 예시 (Few-Shot Examples)]
-Q: "샤넬 넘버5 설명해줘" -> {"info_type": "perfume", "target_name": "Chanel No.5"}
-Q: "디올 자도르랑 비슷한 향수 추천해줘" -> {"info_type": "similarity", "target_name": "Dior J'adore"}
-Q: "코코마드모아젤 향수에 대해서 자세히 설명해줘" -> {"info_type": "perfume", "target_name": "Coco Mademoiselle"}
-Q: "조말론 우드 세이지 알려줘" -> {"info_type": "perfume", "target_name": "Jo Malone Wood Sage"}
-Q: "블랙 오피움 향수 정보 알려줘" -> {"info_type": "perfume", "target_name": "Black Opium"}
+Q: "샤넬 넘버5 설명해줘"
+-> {"info_type": "perfume", "target_brand": "Chanel", "target_name": "No.5", "target_name_kr": "넘버5"}
+
+Q: "디올 자도르랑 비슷한 향수 추천해줘"
+-> {"info_type": "similarity", "target_brand": "Dior", "target_name": "J'adore", "target_name_kr": "자도르"}
+
+Q: "코코마드모아젤 향수에 대해서 자세히 설명해줘"
+-> {"info_type": "perfume", "target_brand": "Chanel", "target_name": "Coco Mademoiselle", "target_name_kr": "코코마드모아젤"}
+
+Q: "조말론 우드 세이지 알려줘"
+-> {"info_type": "perfume", "target_brand": "Jo Malone", "target_name": "Wood Sage & Sea Salt", "target_name_kr": "우드세이지"}
+
+Q: "Dior J'adore"
+-> {"info_type": "perfume", "target_brand": "Dior", "target_name": "J'adore", "target_name_kr": null}
 
 [출력 형식]
 JSON 포맷으로 출력하세요.
 {
     "info_type": "perfume" | "ingredient" | "similarity" | "unknown",
-    "target_name": "추출된 핵심 키워드"
+    "target_brand": "브랜드명 (영어)" | null,
+    "target_name": "향수명 (영어)",
+    "target_name_kr": "향수명 (한글 원본)" | null,
+    "intent": "사용자 의도 간략 설명"
 }
 """
 
@@ -834,7 +854,7 @@ SIMILARITY_CURATOR_PROMPT_BEGINNER = """
 
 [출력 포맷]
 ---
-"{Target}"의 분위기를 좋아하시는군요! 그 특유의 결을 유지하면서도, 기분 전환하기 딱 좋은 3가지 향수를 찾아왔어요.
+"{Target}"의 분위기를 좋아하시는군요! 그 특유의 결을 유지하면서도, 기분 전환하기 딱 좋은 향수를 찾아왔어요.
 
 ## 1. [부제] 브랜드 - 향수명
 ![이미지](링크)
@@ -870,7 +890,7 @@ SIMILARITY_CURATOR_PROMPT_EXPERT = """
 
 [출력 포맷]
 ---
-"{Target}"의 Olfactory DNA를 분석하여, 구조적으로 유사하거나 흥미로운 대안이 될 3가지 향수를 선정했습니다.
+"{Target}"의 Olfactory DNA를 분석하여, 구조적으로 유사하거나 흥미로운 대안이 될 향수를 선정했습니다.
 
 ## 1. [핵심 유사 포인트] 브랜드 - 향수명
 ![이미지](링크)

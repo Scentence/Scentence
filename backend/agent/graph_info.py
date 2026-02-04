@@ -85,38 +85,44 @@ def info_supervisor_node(state: InfoState):
         decision = ROUTER_LLM.with_structured_output(InfoRoutingDecision).invoke(
             messages
         )
+
+        # [Phase 3] 브랜드 및 이중 언어 추출
         final_target = decision.target_name
-        
+        final_brand = decision.target_brand
+        final_target_kr = decision.target_name_kr
+
         save_refs = extract_save_refs(chat_history)
-        
+
         resolved = resolve_target_from_ordinal_or_pronoun(
             user_query, final_target, save_refs
         )
-        
+
         if resolved:
             ordinal = parse_ordinal(user_query)
-            
+
             info_type = decision.info_type
             if any(kw in user_query for kw in ['비슷', '추천', '대체', '같은']):
                 info_type = "similarity"
             elif resolved:
                 info_type = "perfume"
-            
+
             return {
                 "info_type": info_type,
                 "target_id": resolved['id'],
-                "target_name": resolved['name']
+                "target_name": resolved['name'],
+                "target_brand": final_brand,
+                "target_name_kr": final_target_kr
             }
-        
+
         if not save_refs and (parse_ordinal(user_query) or any(p in user_query for p in ['이거', '그거', '이 향수', '저거'])):
             fail_msg = "최근에 추천드린 향수 목록을 찾지 못했어요. 향수 이름을 직접 말씀해 주시면 바로 찾아드릴게요."
             return {"info_type": "unknown", "target_name": "unknown", "fail_msg": fail_msg}
-        
+
         ordinal = parse_ordinal(user_query)
         if ordinal and ordinal > len(save_refs):
             fail_msg = f"지금 추천은 1~{len(save_refs)}번째까지 있어요. 원하시는 번호로 다시 말씀해 주세요."
             return {"info_type": "unknown", "target_name": "unknown", "fail_msg": fail_msg}
-        
+
         if not final_target or final_target in [
             "이거",
             "그거",
@@ -126,7 +132,12 @@ def info_supervisor_node(state: InfoState):
         ]:
             return {"info_type": "unknown", "target_name": "unknown"}
 
-        return {"info_type": decision.info_type, "target_name": final_target}
+        return {
+            "info_type": decision.info_type,
+            "target_name": final_target,
+            "target_brand": final_brand,
+            "target_name_kr": final_target_kr
+        }
 
     except Exception as e:
         print(f"      ❌ Supervisor 에러 발생: {e}", flush=True)
@@ -420,10 +431,16 @@ async def similarity_search_node(state: InfoState):
     print(f"\n   🔍 [Similarity Search] 검색 시작", flush=True)
 
     try:
-        target = state["target_name"]
+        # [Phase 4] 브랜드 및 이중 언어 활용
+        target_name = state["target_name"]
+        target_brand = state.get("target_brand", "")
+        target_name_kr = state.get("target_name_kr", "")
+
+        # 파이프 구분자로 정보 전달 (브랜드|영어명|한글명)
+        search_input = f"{target_brand}|{target_name}|{target_name_kr}"
 
         # 도구 호출 (객체 반환)
-        search_result = await lookup_similar_perfumes_tool.ainvoke(target)
+        search_result = await lookup_similar_perfumes_tool.ainvoke(search_input)
 
         # 검색 결과 상태 분류 (객체 기반)
         status = classify_info_status(search_result)
@@ -447,7 +464,11 @@ async def similarity_curator_node(state: InfoState):
     print(f"\n   ✍️ [Similarity Curator - Writer] 출력 생성 중", flush=True)
 
     try:
-        target = state["target_name"]
+        # [Phase 4] 한글명 우선 표시
+        target_name_kr = state.get("target_name_kr")
+        target_name = state.get("target_name", "")
+        target = target_name_kr if target_name_kr else target_name
+
         user_mode = state.get("user_mode", "BEGINNER")
         search_result_json = state.get("info_payload", "")
 
@@ -518,17 +539,21 @@ async def info_no_results_node(state: InfoState):
     """
     print(f"\n   ❌ [Info No Results] 검색 결과 없음 처리", flush=True)
 
+    # [Phase 4] 한글명 우선 표시
+    target_name_kr = state.get("target_name_kr")
     target_name = state.get("target_name", "해당 항목")
+    display_name = target_name_kr if target_name_kr else target_name
+
     info_type = state.get("info_type", "unknown")
 
     if info_type == "perfume":
-        msg = f"죄송합니다. '{target_name}'에 대한 상세 정보를 데이터베이스에서 찾을 수 없습니다. 😢\n\n다른 향수 이름으로 다시 검색해 보시거나, '플로랄 향수 추천해줘' 같은 방식으로 물어봐 주세요!"
+        msg = f"죄송합니다. '{display_name}'에 대한 상세 정보를 데이터베이스에서 찾을 수 없습니다. 😢\n\n다른 향수 이름으로 다시 검색해 보시거나, '플로랄 향수 추천해줘' 같은 방식으로 물어봐 주세요!"
     elif info_type in ["note", "accord", "ingredient"]:
-        msg = f"죄송합니다. '{target_name}' 성분에 대한 상세 정보가 현재 데이터베이스에 등록되어 있지 않습니다. 😢\n\n'우디', '플로랄', '시트러스' 같은 일반적인 노트나 어코드로 다시 물어봐 주세요!"
+        msg = f"죄송합니다. '{display_name}' 성분에 대한 상세 정보가 현재 데이터베이스에 등록되어 있지 않습니다. 😢\n\n'우디', '플로랄', '시트러스' 같은 일반적인 노트나 어코드로 다시 물어봐 주세요!"
     elif info_type == "similarity":
-        msg = f"현재 저희 데이터베이스에는 '{target_name}'과 결이 비슷한 향수 정보가 충분하지 않네요. 😅\n\n다른 향수로 다시 찾아봐 드릴까요?"
+        msg = f"현재 저희 데이터베이스에는 '{display_name}'과 결이 비슷한 향수 정보가 충분하지 않네요. 😅\n\n다른 향수로 다시 찾아봐 드릴까요?"
     else:
-        msg = f"죄송합니다. '{target_name}'에 대한 정보를 찾을 수 없습니다. 😢\n\n향수 이름을 정확히 말씀해 주시거나, 다른 방식으로 질문해 주세요!"
+        msg = f"죄송합니다. '{display_name}'에 대한 정보를 찾을 수 없습니다. 😢\n\n향수 이름을 정확히 말씀해 주시거나, 다른 방식으로 질문해 주세요!"
 
     return {"messages": [AIMessage(content=msg)], "final_answer": msg}
 
