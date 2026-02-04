@@ -112,7 +112,10 @@ PERFUME_ALIAS_MAP: Dict[str, Dict[str, str]] = {
     "우드 세이지 앤 씨 솔트": {"name": "Wood Sage & Sea Salt", "brand": "Jo Malone"},
     "조말론 우드 세이지 시솔트": {"name": "Wood Sage & Sea Salt", "brand": "Jo Malone"},
     "ck one": {"name": "CK One", "brand": "Calvin Klein"},
+    "ck one": {"name": "CK One", "brand": "Calvin Klein"},
     "씨케이 원": {"name": "CK One", "brand": "Calvin Klein"},
+    "느와르": {"name": "Noir", "brand": ""},
+
 }
 
 BRAND_ALIAS_MAP: Dict[str, str] = {
@@ -120,6 +123,8 @@ BRAND_ALIAS_MAP: Dict[str, str] = {
     "조 말론": "Jo Malone",
     "디올": "Dior",
     "에르메스": "Hermes",
+    "샤넬": "Chanel",
+
 }
 
 
