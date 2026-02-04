@@ -123,7 +123,7 @@ function HeroSection() {
             className="w-6 h-6 rounded-full bg-[#FF6B6B]"
           />
           <h1 className="text-5xl md:text-8xl font-sans font-bold tracking-tighter text-[#1a1a1a] leading-[0.9]">
-            FIND <br /> YOUR <br /> SCENTENCE.
+            FIND <br /> YOUR <br /> SIGNATURE.
           </h1>
           <p className="text-lg md:text-xl text-[#555] font-medium max-w-md">
             {/* 당신의 언어는 향기가 된다. <br /> */}
