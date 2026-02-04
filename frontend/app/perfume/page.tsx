@@ -83,141 +83,141 @@ export default function PerfumeDetailPage() {
   return (
     <PageLayout subTitle="Perfume Detail">
       <div className="page pt-24">
-      <div className="container">
-        {loading && <div className="status">불러오는 중...</div>}
-        {!loading && error && <div className="status error">{error}</div>}
+        <div className="container">
+          {loading && <div className="status">불러오는 중...</div>}
+          {!loading && error && <div className="status error">{error}</div>}
 
-        {!loading && !error && detail && (
-          <>
-            <header>
-              <div>
-                <div className="brand">{detail.brand || "정보 없음"}</div>
-                <h1>{detail.name || "향수 정보 없음"}</h1>
-              </div>
-            </header>
-
-            <div className="wiki-layout">
-              <div className="main-content">
-                <div className="hero-image-container">
-                  <div className="hero-image-crop">
-                    <img
-                      src={detail.image_url || PLACEHOLDER_IMAGE}
-                      alt={detail.name}
-                    />
-                  </div>
+          {!loading && !error && detail && (
+            <>
+              <header>
+                <div>
+                  <div className="brand">{detail.brand || "정보 없음"}</div>
+                  <h1>{detail.name || "향수 정보 없음"}</h1>
                 </div>
+              </header>
 
-                {hasNotes ? (
-                  <>
-                    <h2>향의 구조 (Notes)</h2>
-                    <div className="note-container">
-                      <div className="note-level top-note">
-                        <span className="note-label">Top Notes</span>
-                        {detail.notes.top.length ? detail.notes.top.join(", ") : "정보 없음"}
-                      </div>
-                      <div className="note-level mid-note">
-                        <span className="note-label">Middle Notes</span>
-                        {detail.notes.middle.length ? detail.notes.middle.join(", ") : "정보 없음"}
-                      </div>
-                      <div className="note-level base-note">
-                        <span className="note-label">Base Notes</span>
-                        {detail.notes.base.length ? detail.notes.base.join(", ") : "정보 없음"}
-                      </div>
+              <div className="wiki-layout">
+                <div className="main-content">
+                  <div className="hero-image-container">
+                    <div className="hero-image-crop">
+                      <img
+                        src={detail.image_url || PLACEHOLDER_IMAGE}
+                        alt={detail.name}
+                      />
                     </div>
-                  </>
-                ) : (
-                  <div className="empty-section">노트 정보가 없습니다.</div>
-                )}
+                  </div>
 
-                {hasAccords && (
-                  <>
-                    <h2>주요 어코드 (Main Accords)</h2>
-                    <div className="accord-list">
-                      {detail.accords.map((accord, index) => (
-                        <div key={`${accord.name}-${index}`} className="accord-item">
-                          <div className="accord-label">
-                            <span>{accord.name}</span>
-                            <span>{formatRatio(accord)}</span>
-                          </div>
-                          <div className="progress-bg">
-                            <div
-                              className="progress-fill"
-                              style={{
-                                width: `${accord.ratio}%`,
-                                backgroundColor: ACCORD_COLORS[index % ACCORD_COLORS.length],
-                              }}
-                            />
-                          </div>
+                  {hasNotes ? (
+                    <>
+                      <h2>향의 구조 (Notes)</h2>
+                      <div className="note-container">
+                        <div className="note-level top-note">
+                          <span className="note-label">Top Notes</span>
+                          {detail.notes.top.length ? detail.notes.top.join(", ") : "정보 없음"}
                         </div>
-                      ))}
-                    </div>
-                  </>
-                )}
+                        <div className="note-level mid-note">
+                          <span className="note-label">Middle Notes</span>
+                          {detail.notes.middle.length ? detail.notes.middle.join(", ") : "정보 없음"}
+                        </div>
+                        <div className="note-level base-note">
+                          <span className="note-label">Base Notes</span>
+                          {detail.notes.base.length ? detail.notes.base.join(", ") : "정보 없음"}
+                        </div>
+                      </div>
+                    </>
+                  ) : (
+                    <div className="empty-section">노트 정보가 없습니다.</div>
+                  )}
 
-                {(hasSeasons || hasOccasions) && (
-                  <>
-                    <h2>스타일 & 추천 (Vibe & TPO)</h2>
-                    <p>
-                      <strong>느낌:</strong>
-                      <span className="tag-cloud inline">
-                        {detail.accords.length
-                          ? detail.accords.map((accord, index) => (
+                  {hasAccords && (
+                    <>
+                      <h2>주요 어코드 (Main Accords)</h2>
+                      <div className="accord-list">
+                        {detail.accords.map((accord, index) => (
+                          <div key={`${accord.name}-${index}`} className="accord-item">
+                            <div className="accord-label">
+                              <span>{accord.name}</span>
+                              <span>{formatRatio(accord)}</span>
+                            </div>
+                            <div className="progress-bg">
+                              <div
+                                className="progress-fill"
+                                style={{
+                                  width: `${accord.ratio}%`,
+                                  backgroundColor: ACCORD_COLORS[index % ACCORD_COLORS.length],
+                                }}
+                              />
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    </>
+                  )}
+
+                  {(hasSeasons || hasOccasions) && (
+                    <>
+                      <h2>스타일 & 추천 (Vibe & TPO)</h2>
+                      <p>
+                        <strong>느낌:</strong>
+                        <span className="tag-cloud inline">
+                          {detail.accords.length
+                            ? detail.accords.map((accord, index) => (
                               <span key={`${accord.name}-${index}`} className="tag">#{accord.name}</span>
                             ))
-                          : "정보 없음"}
-                      </span>
-                    </p>
-                    <p>
-                      <strong>추천 계절:</strong>{" "}
-                      {hasSeasons ? (
-                        detail.seasons.map((season, index) => (
-                          <span key={`${season.name}-${index}`} className="season-tag">
-                            {season.name} ({formatRatio(season)}){index < detail.seasons.length - 1 ? ", " : ""}
-                          </span>
-                        ))
-                      ) : (
-                        "정보 없음"
-                      )}
-                    </p>
-                    <p>
-                      <strong>추천 상황:</strong>{" "}
-                      {hasOccasions ? joinNames(detail.occasions) : "정보 없음"}
-                    </p>
-                  </>
-                )}
-              </div>
+                            : "정보 없음"}
+                        </span>
+                      </p>
+                      <p>
+                        <strong>추천 계절:</strong>{" "}
+                        {hasSeasons ? (
+                          detail.seasons.map((season, index) => (
+                            <span key={`${season.name}-${index}`} className="season-tag">
+                              {season.name} ({formatRatio(season)}){index < detail.seasons.length - 1 ? ", " : ""}
+                            </span>
+                          ))
+                        ) : (
+                          "정보 없음"
+                        )}
+                      </p>
+                      <p>
+                        <strong>추천 상황:</strong>{" "}
+                        {hasOccasions ? joinNames(detail.occasions) : "정보 없음"}
+                      </p>
+                    </>
+                  )}
+                </div>
 
-              <div className="side-panel">
-                <div className="infobox">
-                  <table className="info-table">
-                    <tbody>
-                      <tr>
-                        <th>브랜드</th>
-                        <td>{detail.brand || "정보 없음"}</td>
-                      </tr>
-                      <tr>
-                        <th>출시 연도</th>
-                        <td>{detail.release_year ?? "정보 없음"}</td>
-                      </tr>
-                      <tr>
-                        <th>농도</th>
-                        <td>{detail.concentration || "정보 없음"}</td>
-                      </tr>
-                      <tr>
-                        <th>조향사</th>
-                        <td>{detail.perfumer || "정보 없음"}</td>
-                      </tr>
-                    </tbody>
-                  </table>
+                <div className="side-panel">
+                  <div className="infobox">
+                    <table className="info-table">
+                      <tbody>
+                        <tr>
+                          <th>브랜드</th>
+                          <td>{detail.brand || "정보 없음"}</td>
+                        </tr>
+                        <tr>
+                          <th>출시 연도</th>
+                          <td>{detail.release_year ?? "정보 없음"}</td>
+                        </tr>
+                        <tr>
+                          <th>농도</th>
+                          <td>{detail.concentration || "정보 없음"}</td>
+                        </tr>
+                        <tr>
+                          <th>조향사</th>
+                          <td>{detail.perfumer || "정보 없음"}</td>
+                        </tr>
+                      </tbody>
+                    </table>
+                  </div>
                 </div>
               </div>
-            </div>
-          </>
-        )}
-      </div>
-    </PageLayout>
+            </>
+          )}
+        </div>
 
-      <style jsx>{`
+
+        <style jsx>{`
         :global(body) {
           margin: 0;
           background-color: #f4f6f7;
@@ -443,6 +443,7 @@ export default function PerfumeDetailPage() {
           }
         }
       `}</style>
-    </div >
+      </div >
+    </PageLayout>
   );
 }
