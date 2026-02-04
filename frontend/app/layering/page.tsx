@@ -190,6 +190,75 @@ const getScoreEvaluation = (score: number) => {
   }
 };
 
+const DROP_TOKENS = new Set([
+  "eau",
+  "de",
+  "toilette",
+  "parfum",
+  "perfume",
+  "cologne",
+  "edp",
+  "edt",
+  "edc",
+  "intense",
+  "elixir",
+  "absolu",
+  "absolute",
+  "absolue",
+  "extreme",
+  "extrait",
+  "spray",
+  "오",
+  "드",
+  "오드",
+  "퍼퓸",
+  "퍼품",
+  "뚜왈렛",
+  "뚜알렛",
+  "코롱",
+  "오드퍼퓸",
+  "오드뚜왈렛",
+  "오드코롱",
+]);
+
+const normalizeText = (value?: string | null) => {
+  return (value ?? "")
+    .toLowerCase()
+    .replace(/[^a-z0-9가-힣]+/g, " ")
+    .replace(/\s+/g, " ")
+    .trim();
+};
+
+const normalizeName = (value?: string | null) => {
+  const normalized = normalizeText(value);
+  if (!normalized) {
+    return "";
+  }
+  const tokens = normalized.split(" ").filter((token) => token && !DROP_TOKENS.has(token));
+  return tokens.join(" ");
+};
+
+const isSamePerfume = (base?: PerfumeSummary | null, candidate?: LayeringCandidate | null) => {
+  if (!base || !candidate) {
+    return false;
+  }
+  const baseName = normalizeName(base.perfume_name);
+  const candidateName = normalizeName(candidate.perfume_name);
+  if (!baseName || !candidateName || baseName !== candidateName) {
+    return false;
+  }
+  const baseBrand = normalizeText(base.perfume_brand);
+  const candidateBrand = normalizeText(candidate.perfume_brand);
+  if (!baseBrand || !candidateBrand) {
+    return true;
+  }
+  return (
+    baseBrand === candidateBrand
+    || baseBrand.includes(candidateBrand)
+    || candidateBrand.includes(baseBrand)
+  );
+};
+
 /**
  * 피드백 상태에 따른 스타일 클래스 반환
  */
@@ -400,520 +469,592 @@ export default function LayeringPage() {
     setIsMounted(true);
   }, []);
 
-  useEffect(() => {
-    // 1. 로컬 스토리지 데이터 확인
-    const authData = localStorage.getItem("localAuth");
-    if (authData) {
-      try {
-        const parsed = JSON.parse(authData);
-        setLocalUser(parsed);
-      } catch (e) {
-        console.error("Local auth parse error", e);
-      }
-    }
-  }, [session, localUser?.memberId]);
 
-  const displayName = session?.user?.name || localUser?.nickname || localUser?.email?.split('@')[0] || "Guest";
-  const isLoggedIn = !!(session || localUser);
+}, [session, localUser?.memberId]);
 
-  /**
-   * 채팅 메시지가 업데이트될 때마다 자동으로 스크롤
-   */
-  useEffect(() => {
-    chatEndRef.current?.scrollIntoView({ behavior: "smooth" });
-  }, [chatMessages, loading]);
+const displayName = session?.user?.name || localUser?.nickname || localUser?.email?.split('@')[0] || "Guest";
+const isLoggedIn = !!(session || localUser);
 
-  useEffect(() => {
-    setMemberId(getMemberId(session?.user?.id));
-  }, [session?.user?.id]);
+/**
+ * 채팅 메시지가 업데이트될 때마다 자동으로 스크롤
+ */
+useEffect(() => {
+  chatEndRef.current?.scrollIntoView({ behavior: "smooth" });
+}, [chatMessages, loading]);
 
-  /**
-   * 자연어 질문 분석 및 레이어링 추천 요청
-   * - 사용자 입력 검증
-   * - 채팅 메시지 추가
-   * - 로컬 스토리지에서 회원 ID 추출
-   * - API 호출 및 결과 처리
-   * - 에러 핸들링
-   */
-  const handleAnalyze = async () => {
-    // 입력값 검증
-    const trimmedQuery = queryText.trim();
-    if (!trimmedQuery) {
-      // 빈 입력 오류 메시지를 채팅에 추가
-      setChatMessages((prev) => [
-        ...prev,
-        {
-          id: `error-${Date.now()}`,
-          type: "assistant",
-          content: TEXT_MESSAGES.EMPTY_QUERY_ERROR,
-          timestamp: new Date(),
-        },
-      ]);
-      return;
-    }
+useEffect(() => {
+  setMemberId(getMemberId(session?.user?.id));
+}, [session?.user?.id]);
 
-    const contextRecommendedId = lastRecommendationId ?? result?.recommendation?.perfume_id ?? null;
+/**
+ * 자연어 질문 분석 및 레이어링 추천 요청
+ * - 사용자 입력 검증
+ * - 채팅 메시지 추가
+ * - 로컬 스토리지에서 회원 ID 추출
+ * - API 호출 및 결과 처리
+ * - 에러 핸들링
+ */
+const handleAnalyze = async () => {
+  // 입력값 검증
+  const trimmedQuery = queryText.trim();
+  if (!trimmedQuery) {
+    // 빈 입력 오류 메시지를 채팅에 추가
+    setChatMessages((prev) => [
+      ...prev,
+      {
+        id: `error-${Date.now()}`,
+        type: "assistant",
+        content: TEXT_MESSAGES.EMPTY_QUERY_ERROR,
+        timestamp: new Date(),
+      },
+    ]);
+    return;
+  }
 
-    // 사용자 메시지 추가
-    const userMessage: ChatMessage = {
-      id: `user-${Date.now()}`,
-      type: "user",
-      content: trimmedQuery,
-      timestamp: new Date(),
-    };
-    setChatMessages((prev) => [...prev, userMessage]);
+  const contextRecommendedId = lastRecommendationId ?? result?.recommendation?.perfume_id ?? null;
 
-    // 입력창 초기화 및 상태 초기화
-    setQueryText("");
-    setLoading(true);
-    setError(null);
-    setResult(null);
-    setFeedbackStatus(null);
-    setFeedbackSaving(false);
-    setFeedbackLocked(false);
-
-    try {
-      // 로컬 스토리지에서 회원 ID 추출
-      const currentMemberId = getMemberId(session?.user?.id);
-
-      // 레이어링 분석 API 호출
-      const response = await fetch(`${apiBase}/analyze`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          user_text: trimmedQuery,
-          member_id: currentMemberId,
-          context_recommended_perfume_id: contextRecommendedId,
-          save_recommendations: true,  // 추천 결과 저장 여부
-          save_my_perfume: false,      // 내 향수로 저장 여부
-        }),
-      });
-
-      // 응답 오류 처리
-      if (!response.ok) {
-        const errorMessage = await parseErrorResponse(response);
-        throw new Error(errorMessage);
-      }
-
-      // 응답 데이터 파싱
-      let payload: UserQueryResponse;
-      try {
-        payload = (await response.json()) as UserQueryResponse;
-      } catch (parseError) {
-        throw new Error(defaultErrorMessage);
-      }
-
-      // 추천 결과 상태 업데이트
-      const recommendation = payload.recommendation ?? null;
-      setResult({
-        ...payload,
-        recommendation,
-      });
-
-      if (recommendation) {
-        setLastRecommendationId(recommendation.perfume_id);
-      } else if (payload.brand_best_perfume) {
-        setLastRecommendationId(payload.brand_best_perfume.perfume_id);
-      } else if (
-        (payload.similar_perfumes && payload.similar_perfumes.length > 0)
-        || payload.recommended_perfume_info
-      ) {
-        setLastRecommendationId(null);
-      }
-
-      // 추천 성공 메시지 추가
-      if (recommendation) {
-        setChatMessages((prev) => [
-          ...prev,
-          {
-            id: `rec-${Date.now()}`,
-            type: "assistant",
-            content: `추천 결과가 나왔어요! 👈 왼쪽에서 "${recommendation.perfume_name}" 향수를 확인해보세요.`,
-            timestamp: new Date(),
-            isRecommendation: true,
-          },
-          {
-            id: `feedback-${Date.now()}`,
-            type: "assistant",
-            content: "추천 결과가 마음에 드시나요? 아래에서 만족도를 알려주세요!",
-            timestamp: new Date(),
-          },
-        ]);
-      } else if (payload.similar_perfumes && payload.similar_perfumes.length > 0) {
-        const similarList = payload.similar_perfumes
-          .map((item) => `${item.perfume_name} (${item.perfume_brand})`)
-          .join("\n");
-        setChatMessages((prev) => [
-          ...prev,
-          {
-            id: `similar-${Date.now()}`,
-            type: "assistant",
-            content: `비슷한 느낌의 향수 후보를 골라봤어요.\n\n${similarList}`,
-            timestamp: new Date(),
-            similarPerfumes: payload.similar_perfumes,
-          },
-        ]);
-      } else if (payload.brand_best_perfume) {
-        const brandName = payload.brand_name ?? payload.brand_best_perfume.perfume_brand;
-        setChatMessages((prev) => [
-          ...prev,
-          {
-            id: `brand-${Date.now()}`,
-            type: "assistant",
-            content: `${brandName} 브랜드에서 어디에나 레이어링하기 좋은 향수를 골라드렸어요. 👈 왼쪽 카드에서 "${payload.brand_best_perfume.perfume_name}"을 확인해보세요.`,
-            timestamp: new Date(),
-          },
-        ]);
-      } else if (payload.clarification_prompt) {
-        // 명확화 요청 메시지 (옵션 포함)
-        let clarificationText = payload.clarification_prompt;
-        if (payload.clarification_options && payload.clarification_options.length > 0) {
-          clarificationText += "\n\n추천 옵션:\n" + payload.clarification_options.map(opt => `• ${opt}`).join("\n");
-        }
-        setChatMessages((prev) => [
-          ...prev,
-          {
-            id: `clarify-${Date.now()}`,
-            type: "assistant",
-            content: clarificationText,
-            timestamp: new Date(),
-          },
-        ]);
-      } else if (payload.note) {
-        // 일반 노트 메시지
-        setChatMessages((prev) => [
-          ...prev,
-          {
-            id: `note-${Date.now()}`,
-            type: "assistant",
-            content: payload.note ?? "",
-            timestamp: new Date(),
-          },
-        ]);
-      }
-    } catch (err) {
-      // 에러 메시지를 채팅에 추가
-      const errorMessage = err instanceof Error ? err.message : "알 수 없는 오류가 발생했어요.";
-      setError(errorMessage);
-      setChatMessages((prev) => [
-        ...prev,
-        {
-          id: `error-${Date.now()}`,
-          type: "assistant",
-          content: errorMessage,
-          timestamp: new Date(),
-        },
-      ]);
-    } finally {
-      // 로딩 상태 해제
-      setLoading(false);
-    }
+  // 사용자 메시지 추가
+  const userMessage: ChatMessage = {
+    id: `user-${Date.now()}`,
+    type: "user",
+    content: trimmedQuery,
+    timestamp: new Date(),
   };
+  setChatMessages((prev) => [...prev, userMessage]);
 
-  /**
-   * 추천 결과에 대한 만족도 피드백 전송
-   * @param preference - 만족도 (GOOD, BAD)
-   * 
-   * 처리 흐름:
-   * 1. 추천 결과 및 상태 검증
-   * 2. 회원 ID 검증
-   * 3. 피드백 API 호출
-   * 4. 결과 저장 및 채팅 메시지 업데이트
-   */
-  const sendFeedback = async (preference: "GOOD" | "BAD") => {
-    // 추천 결과 존재 확인
-    const candidate = result?.recommendation;
-    if (!candidate) {
-      return;
-    }
+  // 입력창 초기화 및 상태 초기화
+  setQueryText("");
+  setLoading(true);
+  setError(null);
+  setResult(null);
+  setFeedbackStatus(null);
+  setFeedbackSaving(false);
+  setFeedbackLocked(false);
 
-    // 중복 저장 방지
-    if (feedbackLocked || feedbackSaving) {
-      return;
-    }
-
-    // 로컬 스토리지에서 회원 ID 추출 및 로그인 상태 확인
+  try {
+    // 로컬 스토리지에서 회원 ID 추출
     const currentMemberId = getMemberId(session?.user?.id);
-    if (!currentMemberId) {
-      const loginMessage = TEXT_MESSAGES.FEEDBACK_LOGIN_REQUIRED;
-      setFeedbackStatus(loginMessage);
+
+    // 레이어링 분석 API 호출
+    const response = await fetch(`${apiBase}/analyze`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        user_text: trimmedQuery,
+        member_id: currentMemberId,
+        context_recommended_perfume_id: contextRecommendedId,
+        save_recommendations: true,  // 추천 결과 저장 여부
+        save_my_perfume: false,      // 내 향수로 저장 여부
+      }),
+    });
+
+    // 응답 오류 처리
+    if (!response.ok) {
+      const errorMessage = await parseErrorResponse(response);
+      throw new Error(errorMessage);
+    }
+
+    // 응답 데이터 파싱
+    let payload: UserQueryResponse;
+    try {
+      payload = (await response.json()) as UserQueryResponse;
+    } catch (parseError) {
+      throw new Error(defaultErrorMessage);
+    }
+
+    // 추천 결과 상태 업데이트
+    const recommendation = payload.recommendation ?? null;
+    const filteredRecommendation = isSamePerfume(payload.base_perfume, recommendation)
+      ? null
+      : recommendation;
+    const duplicateFiltered = Boolean(recommendation && !filteredRecommendation);
+    const resolvedNote = duplicateFiltered && !payload.note
+      ? "같은 이름의 향수는 추천에서 제외했어요."
+      : payload.note;
+    setResult({
+      ...payload,
+      recommendation: filteredRecommendation,
+      note: resolvedNote,
+    });
+
+    if (filteredRecommendation) {
+      setLastRecommendationId(filteredRecommendation.perfume_id);
+    } else if (payload.brand_best_perfume) {
+      setLastRecommendationId(payload.brand_best_perfume.perfume_id);
+    } else if (
+      (payload.similar_perfumes && payload.similar_perfumes.length > 0)
+      || payload.recommended_perfume_info
+    ) {
+      setLastRecommendationId(null);
+    }
+
+    // 추천 성공 메시지 추가
+    if (filteredRecommendation) {
       setChatMessages((prev) => [
         ...prev,
         {
-          id: `feedback-error-${Date.now()}`,
+          id: `rec-${Date.now()}`,
           type: "assistant",
-          content: loginMessage,
+          content: `추천 결과가 나왔어요! 👈 왼쪽에서 "${filteredRecommendation.perfume_name}" 향수를 확인해보세요.`,
+          timestamp: new Date(),
+          isRecommendation: true,
+        },
+        {
+          id: `feedback-${Date.now()}`,
+          type: "assistant",
+          content: "추천 결과가 마음에 드시나요? 아래에서 만족도를 알려주세요!",
           timestamp: new Date(),
         },
       ]);
-      return;
-    }
-
-    try {
-      // 저장 중 상태 표시
-      setFeedbackSaving(true);
-      setFeedbackStatus(TEXT_MESSAGES.FEEDBACK_SAVING);
-
-      // 피드백 API 호출
-      const response = await fetch(`${apiBase}/recommendation/feedback`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          member_id: currentMemberId,
-          perfume_id: candidate.perfume_id,
-          perfume_name: candidate.perfume_name,
-          preference,
-        }),
-      });
-
-      // 응답 오류 처리
-      if (!response.ok) {
-        const errorMessage = await parseErrorResponse(response);
-        throw new Error(errorMessage);
-      }
-
-      // 응답 데이터 파싱 및 결과 처리
-      const payload = (await response.json()) as FeedbackResponse;
-      if (payload.save_result?.saved) {
-        const successMessage = "만족도가 저장되었습니다. 소중한 의견 감사합니다! 😊";
-        setFeedbackStatus(TEXT_MESSAGES.FEEDBACK_SAVED);
-        setFeedbackLocked(true);  // 저장 완료 후 잠금 처리
-
-        // 성공 메시지를 채팅에 추가
-        setChatMessages((prev) => [
-          ...prev,
-          {
-            id: `feedback-success-${Date.now()}`,
-            type: "assistant",
-            content: successMessage,
-            timestamp: new Date(),
-          },
-        ]);
-      } else if (preference === "BAD") {
-        const ackMessage = "불만족 의견을 남겨주셔서 감사합니다. 다음 추천에 반영할게요.";
-        setFeedbackStatus(ackMessage);
-        setFeedbackLocked(true);
-        setChatMessages((prev) => [
-          ...prev,
-          {
-            id: `feedback-bad-${Date.now()}`,
-            type: "assistant",
-            content: ackMessage,
-            timestamp: new Date(),
-          },
-        ]);
-      } else {
-        const failMessage = payload.save_result?.message ?? TEXT_MESSAGES.FEEDBACK_FAILED;
-        setFeedbackStatus(failMessage);
-        setChatMessages((prev) => [
-          ...prev,
-          {
-            id: `feedback-fail-${Date.now()}`,
-            type: "assistant",
-            content: failMessage,
-            timestamp: new Date(),
-          },
-        ]);
-      }
-    } catch (err) {
-      // 에러 메시지 설정 및 채팅에 추가
-      const errorMessage = err instanceof Error ? err.message : TEXT_MESSAGES.FEEDBACK_FAILED;
-      setFeedbackStatus(errorMessage);
+    } else if (duplicateFiltered) {
       setChatMessages((prev) => [
         ...prev,
         {
-          id: `feedback-error-${Date.now()}`,
+          id: `dup-${Date.now()}`,
           type: "assistant",
-          content: errorMessage,
+          content: resolvedNote ?? "같은 이름의 향수는 추천에서 제외했어요.",
           timestamp: new Date(),
         },
       ]);
-    } finally {
-      // 저장 중 상태 해제
-      setFeedbackSaving(false);
-    }
-  };
-
-  /**
-   * 향수 정보 모달에서 아카이브 저장 (만족/불만족)
-   */
-  const handleArchiveFeedback = async (preference: "GOOD" | "BAD") => {
-    const perfume = infoModalData;
-    if (!perfume) {
-      return;
-    }
-
-    if (archiveFeedbackLocked || archiveFeedbackSaving) {
-      return;
-    }
-
-    if (!memberId) {
-      setArchiveFeedbackStatus(TEXT_MESSAGES.ARCHIVE_LOGIN_REQUIRED);
-      return;
-    }
-
-    const perfumeId = Number(perfume.perfume_id);
-    if (!Number.isFinite(perfumeId)) {
-      setArchiveFeedbackStatus(TEXT_MESSAGES.ARCHIVE_ID_ERROR);
-      return;
-    }
-
-    try {
-      setArchiveFeedbackSaving(true);
-      setArchiveFeedbackStatus(TEXT_MESSAGES.ARCHIVE_SAVING);
-
-      const response = await fetch(`/api/users/${memberId}/perfumes`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          perfume_id: perfumeId,
-          perfume_name: perfume.perfume_name,
-          register_status: "RECOMMENDED",
-          preference,
-        }),
-      });
-
-      if (!response.ok) {
-        const errorText = await response.text().catch(() => "");
-        throw new Error(errorText || TEXT_MESSAGES.ARCHIVE_FAILED);
+    } else if (payload.similar_perfumes && payload.similar_perfumes.length > 0) {
+      const similarList = payload.similar_perfumes
+        .map((item) => `${item.perfume_name} (${item.perfume_brand})`)
+        .join("\n");
+      setChatMessages((prev) => [
+        ...prev,
+        {
+          id: `similar-${Date.now()}`,
+          type: "assistant",
+          content: `비슷한 느낌의 향수 후보를 골라봤어요.\n\n${similarList}`,
+          timestamp: new Date(),
+          similarPerfumes: payload.similar_perfumes,
+        },
+      ]);
+    } else if (payload.brand_best_perfume) {
+      const brandName = payload.brand_name ?? payload.brand_best_perfume.perfume_brand;
+      setChatMessages((prev) => [
+        ...prev,
+        {
+          id: `brand-${Date.now()}`,
+          type: "assistant",
+          content: `${brandName} 브랜드에서 어디에나 레이어링하기 좋은 향수를 골라드렸어요. 👈 왼쪽 카드에서 "${payload.brand_best_perfume.perfume_name}"을 확인해보세요.`,
+          timestamp: new Date(),
+        },
+      ]);
+    } else if (payload.clarification_prompt) {
+      // 명확화 요청 메시지 (옵션 포함)
+      let clarificationText = payload.clarification_prompt;
+      if (payload.clarification_options && payload.clarification_options.length > 0) {
+        clarificationText += "\n\n추천 옵션:\n" + payload.clarification_options.map(opt => `• ${opt}`).join("\n");
       }
-
-      setArchiveFeedbackLocked(true);
-      setArchiveFeedbackStatus(TEXT_MESSAGES.ARCHIVE_SAVED);
-    } catch (err) {
-      const errorMessage = err instanceof Error ? err.message : TEXT_MESSAGES.ARCHIVE_FAILED;
-      setArchiveFeedbackStatus(errorMessage);
-    } finally {
-      setArchiveFeedbackSaving(false);
+      setChatMessages((prev) => [
+        ...prev,
+        {
+          id: `clarify-${Date.now()}`,
+          type: "assistant",
+          content: clarificationText,
+          timestamp: new Date(),
+        },
+      ]);
+    } else if (payload.note) {
+      // 일반 노트 메시지
+      setChatMessages((prev) => [
+        ...prev,
+        {
+          id: `note-${Date.now()}`,
+          type: "assistant",
+          content: payload.note ?? "",
+          timestamp: new Date(),
+        },
+      ]);
     }
-  };
-
-  const resetChat = () => {
-    setChatMessages(createWelcomeMessages());
-    setQueryText("");
-    setResult(null);
-    setError(null);
-    setFeedbackStatus(null);
-    setFeedbackSaving(false);
-    setFeedbackLocked(false);
-    setLastRecommendationId(null);
+  } catch (err) {
+    // 에러 메시지를 채팅에 추가
+    const errorMessage = err instanceof Error ? err.message : "알 수 없는 오류가 발생했어요.";
+    setError(errorMessage);
+    setChatMessages((prev) => [
+      ...prev,
+      {
+        id: `error-${Date.now()}`,
+        type: "assistant",
+        content: errorMessage,
+        timestamp: new Date(),
+      },
+    ]);
+  } finally {
+    // 로딩 상태 해제
     setLoading(false);
-  };
+  }
+};
 
-  // ==================== 렌더링 데이터 준비 ====================
+/**
+ * 추천 결과에 대한 만족도 피드백 전송
+ * @param preference - 만족도 (GOOD, BAD)
+ * 
+ * 처리 흐름:
+ * 1. 추천 결과 및 상태 검증
+ * 2. 회원 ID 검증
+ * 3. 피드백 API 호출
+ * 4. 결과 저장 및 채팅 메시지 업데이트
+ */
+const sendFeedback = async (preference: "GOOD" | "BAD") => {
+  // 추천 결과 존재 확인
+  const candidate = result?.recommendation;
+  if (!candidate) {
+    return;
+  }
 
-  /** 추천된 향수 후보 */
-  const candidate = result?.recommendation ?? null;
-  const basePerfume = result?.base_perfume ?? null;
-  const perfumeInfo = result?.recommended_perfume_info ?? null;
-  const brandBestPerfume = result?.brand_best_perfume ?? null;
-  const brandBestScore = result?.brand_best_score ?? null;
-  const brandBestReason = result?.brand_best_reason ?? null;
+  // 중복 저장 방지
+  if (feedbackLocked || feedbackSaving) {
+    return;
+  }
 
-  /** 
-   * 레이어링 결과의 어코드 벡터 및 유효성 검증
-   * 메모이제이션을 통해 불필요한 재계산 방지
-   */
-  const { vector, vectorReady } = useMemo(() => {
-    const vec = candidate?.layered_vector ?? [];
-    const ready =
-      vec.length === BACKEND_ACCORDS.length &&
-      vec.every((value) => Number.isFinite(value));
+  // 로컬 스토리지에서 회원 ID 추출 및 로그인 상태 확인
+  const currentMemberId = getMemberId(session?.user?.id);
+  if (!currentMemberId) {
+    const loginMessage = TEXT_MESSAGES.FEEDBACK_LOGIN_REQUIRED;
+    setFeedbackStatus(loginMessage);
+    setChatMessages((prev) => [
+      ...prev,
+      {
+        id: `feedback-error-${Date.now()}`,
+        type: "assistant",
+        content: loginMessage,
+        timestamp: new Date(),
+      },
+    ]);
+    return;
+  }
 
-    return { vector: vec, vectorReady: ready };
-  }, [candidate]);
+  try {
+    // 저장 중 상태 표시
+    setFeedbackSaving(true);
+    setFeedbackStatus(TEXT_MESSAGES.FEEDBACK_SAVING);
 
-  /** 
-   * 분사 순서 배열 유효성 검증
-   */
-  const hasSprayOrder = useMemo(() =>
-    candidate?.spray_order &&
-    Array.isArray(candidate.spray_order) &&
-    candidate.spray_order.length > 0,
-    [candidate]
-  );
+    // 피드백 API 호출
+    const response = await fetch(`${apiBase}/recommendation/feedback`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        member_id: currentMemberId,
+        perfume_id: candidate.perfume_id,
+        perfume_name: candidate.perfume_name,
+        preference,
+      }),
+    });
 
-  /** 
-   * 추천 점수 포맷팅 (소수점 3자리)
-   * 유효하지 않은 경우 "-" 표시
-   */
-  const totalScore = useMemo(() =>
-    Number.isFinite(candidate?.total_score)
-      ? candidate?.total_score.toFixed(3)
-      : "-",
-    [candidate]
-  );
-
-  /**
-   * 점수 평가 정보 메모이제이션
-   * JSX 내부에서 반복 계산되는 것을 방지
-   */
-  const scoreEvaluation = useMemo(() => {
-    if (!candidate) return null;
-    return getScoreEvaluation(candidate.total_score);
-  }, [candidate]);
-
-  const infoSections = useMemo(() => {
-    if (!perfumeInfo) return [];
-    return [
-      { label: "어코드", items: perfumeInfo.accords },
-      { label: "탑 노트", items: perfumeInfo.top_notes },
-      { label: "미들 노트", items: perfumeInfo.middle_notes },
-      { label: "베이스 노트", items: perfumeInfo.base_notes },
-      { label: "계절", items: perfumeInfo.seasons },
-      { label: "상황", items: perfumeInfo.occasions },
-    ].filter((section) => section.items && section.items.length > 0);
-  }, [perfumeInfo]);
-
-  const handleOpenPerfumeInfo = async (perfumeId?: string | null, label?: string) => {
-    if (!perfumeId) return;
-    setInfoModalOpen(true);
-    setInfoModalLoading(true);
-    setInfoModalError(null);
-    setInfoModalData(null);
-    setInfoModalLabel(label ?? "향수");
-    setArchiveFeedbackStatus(null);
-    setArchiveFeedbackSaving(false);
-    setArchiveFeedbackLocked(false);
-
-    try {
-      const currentMemberId = getMemberId(session?.user?.id);
-      const response = await fetch(`${apiBase}/analyze`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          user_text: "향수 정보",
-          member_id: currentMemberId,
-          context_recommended_perfume_id: perfumeId,
-          save_recommendations: false,
-          save_my_perfume: false,
-        }),
-      });
-
-      if (!response.ok) {
-        const errorMessage = await parseErrorResponse(response);
-        throw new Error(errorMessage);
-      }
-
-      const payload = (await response.json()) as UserQueryResponse;
-      if (!payload.recommended_perfume_info) {
-        throw new Error("향수 정보를 불러오지 못했어요.");
-      }
-      setInfoModalData(payload.recommended_perfume_info);
-    } catch (err) {
-      const errorMessage = err instanceof Error ? err.message : "향수 정보를 불러오지 못했어요.";
-      setInfoModalError(errorMessage);
-    } finally {
-      setInfoModalLoading(false);
+    // 응답 오류 처리
+    if (!response.ok) {
+      const errorMessage = await parseErrorResponse(response);
+      throw new Error(errorMessage);
     }
-  };
 
-  return (
-    <PageLayout subTitle="Layering">
+    // 응답 데이터 파싱 및 결과 처리
+    const payload = (await response.json()) as FeedbackResponse;
+    if (payload.save_result?.saved) {
+      const successMessage = "만족도가 저장되었습니다. 소중한 의견 감사합니다! 😊";
+      setFeedbackStatus(TEXT_MESSAGES.FEEDBACK_SAVED);
+      setFeedbackLocked(true);  // 저장 완료 후 잠금 처리
 
-      <div className="max-w-5xl mx-auto px-6 pt-[120px] pb-12">
+      // 성공 메시지를 채팅에 추가
+      setChatMessages((prev) => [
+        ...prev,
+        {
+          id: `feedback-success-${Date.now()}`,
+          type: "assistant",
+          content: successMessage,
+          timestamp: new Date(),
+        },
+      ]);
+    } else if (preference === "BAD") {
+      const ackMessage = "불만족 의견을 남겨주셔서 감사합니다. 다음 추천에 반영할게요.";
+      setFeedbackStatus(ackMessage);
+      setFeedbackLocked(true);
+      setChatMessages((prev) => [
+        ...prev,
+        {
+          id: `feedback-bad-${Date.now()}`,
+          type: "assistant",
+          content: ackMessage,
+          timestamp: new Date(),
+        },
+      ]);
+    } else {
+      const failMessage = payload.save_result?.message ?? TEXT_MESSAGES.FEEDBACK_FAILED;
+      setFeedbackStatus(failMessage);
+      setChatMessages((prev) => [
+        ...prev,
+        {
+          id: `feedback-fail-${Date.now()}`,
+          type: "assistant",
+          content: failMessage,
+          timestamp: new Date(),
+        },
+      ]);
+    }
+  } catch (err) {
+    // 에러 메시지 설정 및 채팅에 추가
+    const errorMessage = err instanceof Error ? err.message : TEXT_MESSAGES.FEEDBACK_FAILED;
+    setFeedbackStatus(errorMessage);
+    setChatMessages((prev) => [
+      ...prev,
+      {
+        id: `feedback-error-${Date.now()}`,
+        type: "assistant",
+        content: errorMessage,
+        timestamp: new Date(),
+      },
+    ]);
+  } finally {
+    // 저장 중 상태 해제
+    setFeedbackSaving(false);
+  }
+};
+
+/**
+ * 향수 정보 모달에서 아카이브 저장 (만족/불만족)
+ */
+const handleArchiveFeedback = async (preference: "GOOD" | "BAD") => {
+  const perfume = infoModalData;
+  if (!perfume) {
+    return;
+  }
+
+  if (archiveFeedbackLocked || archiveFeedbackSaving) {
+    return;
+  }
+
+  if (!memberId) {
+    setArchiveFeedbackStatus(TEXT_MESSAGES.ARCHIVE_LOGIN_REQUIRED);
+    return;
+  }
+
+  const perfumeId = Number(perfume.perfume_id);
+  if (!Number.isFinite(perfumeId)) {
+    setArchiveFeedbackStatus(TEXT_MESSAGES.ARCHIVE_ID_ERROR);
+    return;
+  }
+
+  try {
+    setArchiveFeedbackSaving(true);
+    setArchiveFeedbackStatus(TEXT_MESSAGES.ARCHIVE_SAVING);
+
+    const response = await fetch(`/api/users/${memberId}/perfumes`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        perfume_id: perfumeId,
+        perfume_name: perfume.perfume_name,
+        register_status: "RECOMMENDED",
+        preference,
+      }),
+    });
+
+    if (!response.ok) {
+      const errorText = await response.text().catch(() => "");
+      throw new Error(errorText || TEXT_MESSAGES.ARCHIVE_FAILED);
+    }
+
+    setArchiveFeedbackLocked(true);
+    setArchiveFeedbackStatus(TEXT_MESSAGES.ARCHIVE_SAVED);
+  } catch (err) {
+    const errorMessage = err instanceof Error ? err.message : TEXT_MESSAGES.ARCHIVE_FAILED;
+    setArchiveFeedbackStatus(errorMessage);
+  } finally {
+    setArchiveFeedbackSaving(false);
+  }
+};
+
+const resetChat = () => {
+  setChatMessages(createWelcomeMessages());
+  setQueryText("");
+  setResult(null);
+  setError(null);
+  setFeedbackStatus(null);
+  setFeedbackSaving(false);
+  setFeedbackLocked(false);
+  setLastRecommendationId(null);
+  setLoading(false);
+};
+
+// ==================== 렌더링 데이터 준비 ====================
+
+/** 추천된 향수 후보 */
+const candidate = result?.recommendation ?? null;
+const basePerfume = result?.base_perfume ?? null;
+const perfumeInfo = result?.recommended_perfume_info ?? null;
+const brandBestPerfume = result?.brand_best_perfume ?? null;
+const brandBestScore = result?.brand_best_score ?? null;
+const brandBestReason = result?.brand_best_reason ?? null;
+
+/** 
+ * 레이어링 결과의 어코드 벡터 및 유효성 검증
+ * 메모이제이션을 통해 불필요한 재계산 방지
+ */
+const { vector, vectorReady } = useMemo(() => {
+  const vec = candidate?.layered_vector ?? [];
+  const ready =
+    vec.length === BACKEND_ACCORDS.length &&
+    vec.every((value) => Number.isFinite(value));
+
+  return { vector: vec, vectorReady: ready };
+}, [candidate]);
+
+/** 
+ * 분사 순서 배열 유효성 검증
+ */
+const hasSprayOrder = useMemo(() =>
+  candidate?.spray_order &&
+  Array.isArray(candidate.spray_order) &&
+  candidate.spray_order.length > 0,
+  [candidate]
+);
+
+/** 
+ * 추천 점수 포맷팅 (소수점 3자리)
+ * 유효하지 않은 경우 "-" 표시
+ */
+const totalScore = useMemo(() =>
+  Number.isFinite(candidate?.total_score)
+    ? candidate?.total_score.toFixed(3)
+    : "-",
+  [candidate]
+);
+
+/**
+ * 점수 평가 정보 메모이제이션
+ * JSX 내부에서 반복 계산되는 것을 방지
+ */
+const scoreEvaluation = useMemo(() => {
+  if (!candidate) return null;
+  return getScoreEvaluation(candidate.total_score);
+}, [candidate]);
+
+const infoSections = useMemo(() => {
+  if (!perfumeInfo) return [];
+  return [
+    { label: "어코드", items: perfumeInfo.accords },
+    { label: "탑 노트", items: perfumeInfo.top_notes },
+    { label: "미들 노트", items: perfumeInfo.middle_notes },
+    { label: "베이스 노트", items: perfumeInfo.base_notes },
+    { label: "계절", items: perfumeInfo.seasons },
+    { label: "상황", items: perfumeInfo.occasions },
+  ].filter((section) => section.items && section.items.length > 0);
+}, [perfumeInfo]);
+
+const handleOpenPerfumeInfo = async (perfumeId?: string | null, label?: string) => {
+  if (!perfumeId) return;
+  setInfoModalOpen(true);
+  setInfoModalLoading(true);
+  setInfoModalError(null);
+  setInfoModalData(null);
+  setInfoModalLabel(label ?? "향수");
+  setArchiveFeedbackStatus(null);
+  setArchiveFeedbackSaving(false);
+  setArchiveFeedbackLocked(false);
+
+  try {
+    const currentMemberId = getMemberId(session?.user?.id);
+    const response = await fetch(`${apiBase}/analyze`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        user_text: "향수 정보",
+        member_id: currentMemberId,
+        context_recommended_perfume_id: perfumeId,
+        save_recommendations: false,
+        save_my_perfume: false,
+      }),
+    });
+
+    if (!response.ok) {
+      const errorMessage = await parseErrorResponse(response);
+      throw new Error(errorMessage);
+    }
+
+    const payload = (await response.json()) as UserQueryResponse;
+    if (!payload.recommended_perfume_info) {
+      throw new Error("향수 정보를 불러오지 못했어요.");
+    }
+    setInfoModalData(payload.recommended_perfume_info);
+  } catch (err) {
+    const errorMessage = err instanceof Error ? err.message : "향수 정보를 불러오지 못했어요.";
+    setInfoModalError(errorMessage);
+  } finally {
+    setInfoModalLoading(false);
+  }
+};
+
+return (
+
+  { isNavOpen && (
+    <div
+      className="fixed inset-0 bg-transparent z-40"
+      onClick={() => setIsNavOpen(false)}
+    />
+  )}
+
+{/* [STANDARD HEADER] Perfume Wiki와 동일한 스펙 (z-30, hover effect) */ }
+      <header className="fixed top-0 left-0 right-0 z-30 flex flex-wrap items-center justify-between gap-3 px-4 sm:px-6 md:px-10 py-4 sm:py-5 bg-[#FDFBF8] border-b border-[#F0F0F0]">
+        {/* 로고 영역: Wiki와 동일하게 div로 감싸 구조 통일 */}
+        <div className="flex items-center gap-4">
+          <Link href="/" className="text-lg font-bold text-black tracking-[0.15em] uppercase hover:opacity-70 transition">
+            SCENTENCE
+          </Link>
+        </div>
+
+        {/* 우측 상단 UI: 로그인 상태 및 사이드바 토글 버튼 (표준) */}
+        {/* 우측 상단 UI: Perfume Wiki와 동일하게 통일 */}
+        <div className="flex items-center gap-4">
+          {!isLoggedIn ? (
+            <div className="flex items-center gap-2 text-sm font-medium text-gray-400">
+              <Link href="/login" className="hover:text-black transition-colors">Sign in</Link>
+              <span className="text-gray-300">|</span>
+              <Link href="/signup" className="hover:text-black transition-colors">Sign up</Link>
+            </div>
+          ) : (
+            <div className="flex items-center gap-3">
+              <button
+                id="profile-menu-toggle"
+                onClick={() => setIsProfileMenuOpen(!isProfileMenuOpen)}
+                className="block w-9 h-9 rounded-full overflow-hidden border border-gray-100 shadow-sm hover:opacity-80 transition-opacity"
+              >
+                <img
+                  src={profileImageUrl || "/default_profile.png"}
+                  alt="Profile"
+                  className="w-full h-full object-cover"
+                  onError={(e) => { e.currentTarget.src = "/default_profile.png"; }}
+                />
+              </button>
+              <UserProfileMenu
+                isOpen={isProfileMenuOpen}
+                onClose={() => setIsProfileMenuOpen(false)}
+              />
+            </div>
+          )}
+
+          <button
+            id="global-menu-toggle"
+            onClick={() => setIsNavOpen(!isNavOpen)}
+            className="w-9 h-9 flex items-center justify-center rounded-full hover:bg-gray-100 transition-colors"
+          >
+            {isNavOpen ? (
+              <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" className="w-8 h-8 text-[#555]">
+                <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
+              </svg>
+            ) : (
+              <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" className="w-8 h-8 text-[#555]">
+                <path strokeLinecap="round" strokeLinejoin="round" d="M3.75 9h16.5m-16.5 6.75h16.5" />
+              </svg>
+            )}
+          </button>
+        </div>
+      </header>
+
+
+      <div className="max-w-5xl mx-auto px-4 sm:px-6 pt-[96px] sm:pt-[120px] pb-12">
         {/* ==================== 페이지 헤더 (본문 타이틀) ==================== */}
-        <div className="flex items-center justify-between mb-8">
+        <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between mb-8">
           <div className="space-y-3">
             {/* 영문 서브 타이틀 */}
             <p className="text-xs uppercase tracking-[0.3em] text-[#7A6B57] font-medium">
@@ -921,12 +1062,12 @@ export default function LayeringPage() {
             </p>
 
             {/* 메인 타이틀 */}
-            <h1 className="text-3xl font-semibold text-[#2E2B28]">
+            <h1 className="text-2xl sm:text-3xl font-semibold text-[#2E2B28]">
               레이어링 어코드 원판
             </h1>
 
             {/* 설명 텍스트 */}
-            <p className="text-sm text-[#5C5448] leading-relaxed">
+            <p className="text-xs sm:text-sm text-[#5C5448] leading-relaxed">
               자연어 질문으로 향수 레이어링을 추천받고,<br />
               21개 어코드의 강도를 원형 그래픽으로 확인하세요.
             </p>
@@ -935,10 +1076,10 @@ export default function LayeringPage() {
           {/* 홈 버튼 */}
           <Link
             href="/"
-            className="p-3 bg-white/70 hover:bg-white rounded-full transition-all shadow-sm hover:shadow-md text-[#7A6B57] hover:text-[#5C5448]"
+            className="p-2.5 sm:p-3 bg-white/70 hover:bg-white rounded-full transition-all shadow-sm hover:shadow-md text-[#7A6B57] hover:text-[#5C5448]"
             aria-label="홈으로 이동"
           >
-            <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" className="w-6 h-6">
+            <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" className="w-5 h-5 sm:w-6 sm:h-6">
               <path strokeLinecap="round" strokeLinejoin="round" d="m2.25 12 8.954-8.955c.44-.439 1.152-.439 1.591 0L21.75 12M4.5 9.75v10.125c0 .621.504 1.125 1.125 1.125H9.75v-4.875c0-.621.504-1.125 1.125-1.125h2.25c.621 0 1.125.504 1.125 1.125V21h4.125c.621 0 1.125-.504 1.125-1.125V9.75M8.25 21h8.25" />
             </svg>
           </Link>
@@ -946,7 +1087,7 @@ export default function LayeringPage() {
 
         {/* ==================== 메인 콘텐츠 그리드 ==================== */}
         <section className="grid gap-6 lg:grid-cols-[1fr_1.2fr]">
-          <div className="rounded-3xl bg-white/90 border border-[#E2D7C5] p-6 shadow-sm">
+          <div className="rounded-3xl bg-white/90 border border-[#E2D7C5] p-4 sm:p-6 shadow-sm">
             {/* 시각화 섹션 헤더 */}
             <h2 className="text-sm font-semibold text-[#7A6B57]">레이어링 시각화</h2>
 
@@ -1039,7 +1180,7 @@ export default function LayeringPage() {
               {vectorReady ? (
                 <AccordWheel vector={vector} />
               ) : (
-                <div className="h-[360px] w-[360px] flex flex-col items-center justify-center rounded-full border-2 border-dashed border-[#D7CDBD] text-xs text-[#7A6B57] gap-2 bg-[#FDFBF9]">
+                <div className="w-full max-w-[360px] aspect-square flex flex-col items-center justify-center rounded-full border-2 border-dashed border-[#D7CDBD] text-xs text-[#7A6B57] gap-2 bg-[#FDFBF9]">
                   <svg className="w-12 h-12 text-[#D7CDBD]" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z" />
                   </svg>
@@ -1069,7 +1210,7 @@ export default function LayeringPage() {
                   </div>
 
                   {/* 메인 콘텐츠 */}
-                  <div className="p-5 space-y-4 max-h-[360px] overflow-y-auto">
+                  <div className="p-4 sm:p-5 space-y-4 max-h-[320px] sm:max-h-[360px] overflow-y-auto">
                     {/* 향수 이름과 브랜드 */}
                     <div className="flex items-center gap-4">
                       <button
@@ -1205,7 +1346,7 @@ export default function LayeringPage() {
                       </span>
                     </div>
                   </div>
-                  <div className="p-5 space-y-4 max-h-[360px] overflow-y-auto">
+                  <div className="p-4 sm:p-5 space-y-4 max-h-[320px] sm:max-h-[360px] overflow-y-auto">
                     <div className="flex items-center gap-4">
                       {perfumeInfo.image_url ? (
                         <img
@@ -1262,9 +1403,9 @@ export default function LayeringPage() {
           </div>
 
           {/* ==================== 채팅 영역 ==================== */}
-          <div className="min-h-[700px] h-full rounded-3xl bg-white/80 border border-[#E2D7C5] shadow-sm flex flex-col overflow-hidden">
+          <div className="min-h-[560px] sm:min-h-[640px] lg:min-h-[700px] h-full rounded-3xl bg-white/80 border border-[#E2D7C5] shadow-sm flex flex-col overflow-hidden">
             {/* 채팅 헤더 */}
-            <div className="bg-gradient-to-r from-[#F8F4EC] to-[#F0EAE0] px-6 py-4 border-b border-[#E2D7C5]">
+            <div className="bg-gradient-to-r from-[#F8F4EC] to-[#F0EAE0] px-4 sm:px-6 py-4 border-b border-[#E2D7C5]">
               <div className="flex items-start justify-between gap-4">
                 <div>
                   <h2 className="text-sm font-semibold text-[#7A6B57]">레이어링 어시스턴트</h2>
@@ -1281,7 +1422,7 @@ export default function LayeringPage() {
             </div>
 
             {/* 채팅 메시지 영역 - 스크롤 가능 */}
-            <div className="flex-1 overflow-y-auto px-6 py-4 space-y-4">
+            <div className="flex-1 overflow-y-auto px-4 sm:px-6 py-4 space-y-4">
               {chatMessages.map((message) => (
                 <div
                   key={message.id}
@@ -1363,7 +1504,7 @@ export default function LayeringPage() {
 
             {/* 만족도 피드백 영역 - 추천 결과가 있을 때만 표시 */}
             {candidate && !feedbackLocked && (
-              <div className="px-6 py-3 bg-[#FDFBF7] border-t border-[#E6DDCF]">
+              <div className="px-4 sm:px-6 py-3 bg-[#FDFBF7] border-t border-[#E6DDCF]">
                 <div className="flex gap-2">
                   <button
                     type="button"
@@ -1394,64 +1535,68 @@ export default function LayeringPage() {
             )}
 
             {/* 입력창 영역 - 하단 고정 */}
-            <div className="px-6 py-4 bg-white border-t border-[#E2D7C5]">
+            <div className="px-4 sm:px-6 py-4 bg-white border-t border-[#E2D7C5]">
               <div className="flex flex-col gap-2">
-                <div className="flex gap-2 items-center w-full">
-                  {/* [추가] 내 향수 선택 팝오버 */}
-                  <LayeringPerfumePicker
-                    memberId={memberId}
-                    onSelect={(name) => {
-                      const newText = queryText + (queryText ? " " : "") + name;
-                      setQueryText(newText);
-                      // 향수 선택 후 입력창에 자동 포커스 및 커서를 맨 뒤로 이동
-                      setTimeout(() => {
-                        if (textareaRef.current) {
-                          textareaRef.current.focus();
-                          textareaRef.current.setSelectionRange(newText.length, newText.length);
+                <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
+                  <div className="flex gap-2">
+                    {/* [추가] 내 향수 선택 팝오버 */}
+                    <LayeringPerfumePicker
+                      memberId={memberId}
+                      onSelect={(name) => {
+                        const newText = queryText + (queryText ? " " : "") + name;
+                        setQueryText(newText);
+                        // 향수 선택 후 입력창에 자동 포커스 및 커서를 맨 뒤로 이동
+                        setTimeout(() => {
+                          if (textareaRef.current) {
+                            textareaRef.current.focus();
+                            textareaRef.current.setSelectionRange(newText.length, newText.length);
+                          }
+                        }, 0);
+                      }}
+                    />
+
+                    <button
+                      type="button"
+                      onClick={() => setSearchModalOpen(true)}
+                      className="w-12 h-12 sm:w-[72px] sm:h-[72px] flex items-center justify-center rounded-xl text-gray-400 hover:text-[#C5A55D] hover:bg-[#F5F2EA] transition-all"
+                      title="향수 검색"
+                      aria-label="향수 검색"
+                    >
+                      <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" className="w-6 h-6 sm:w-7 sm:h-7">
+                        <path strokeLinecap="round" strokeLinejoin="round" d="M21 21l-4.35-4.35m1.1-4.4a7.5 7.5 0 11-15 0 7.5 7.5 0 0115 0z" />
+                      </svg>
+                    </button>
+                  </div>
+
+                  <div className="flex flex-1 gap-2">
+                    <textarea
+                      ref={textareaRef}
+                      value={queryText}
+                      onChange={(event) => setQueryText(event.target.value)}
+                      onKeyDown={(event) => {
+                        // Enter 키로 전송 (Shift+Enter는 줄바꿈)
+                        if (event.key === "Enter" && !event.shiftKey) {
+                          event.preventDefault();
+                          handleAnalyze();
                         }
-                      }, 0);
-                    }}
-                  />
-
-                  <button
-                    type="button"
-                    onClick={() => setSearchModalOpen(true)}
-                    className="w-[72px] h-[72px] flex items-center justify-center rounded-xl text-gray-400 hover:text-[#C5A55D] hover:bg-[#F5F2EA] transition-all"
-                    title="향수 검색"
-                    aria-label="향수 검색"
-                  >
-                    <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" className="w-7 h-7">
-                      <path strokeLinecap="round" strokeLinejoin="round" d="M21 21l-4.35-4.35m1.1-4.4a7.5 7.5 0 11-15 0 7.5 7.5 0 0115 0z" />
-                    </svg>
-                  </button>
-
-                  <textarea
-                    ref={textareaRef}
-                    value={queryText}
-                    onChange={(event) => setQueryText(event.target.value)}
-                    onKeyDown={(event) => {
-                      // Enter 키로 전송 (Shift+Enter는 줄바꿈)
-                      if (event.key === "Enter" && !event.shiftKey) {
-                        event.preventDefault();
-                        handleAnalyze();
-                      }
-                    }}
-                    spellCheck={false}
-                    className="flex-1 rounded-xl border border-[#E1D7C8] bg-white px-4 py-3 text-sm resize-none focus:outline-none focus:ring-2 focus:ring-[#7A6B57]/30 focus:border-[#7A6B57] transition-all h-[72px]"
-                    placeholder="예: CK One이 있는데 더 시트러스하고 시원한 느낌이 나게 하려면?"
-                    disabled={loading}
-                    aria-label="레이어링 질문 입력"
-                  />
-                  <button
-                    onClick={handleAnalyze}
-                    className="rounded-xl bg-[#2E2B28] px-3 text-sm font-semibold text-white transition-all hover:bg-[#1E1C1A] disabled:opacity-50 disabled:cursor-not-allowed h-[72px] w-[72px] flex items-center justify-center flex-shrink-0"
-                    disabled={loading || !queryText.trim()}
-                    aria-label="메시지 전송"
-                  >
-                    <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 11.5L21 3l-6.8 18-3.6-7.2L3 11.5z" />
-                    </svg>
-                  </button>
+                      }}
+                      spellCheck={false}
+                      className="flex-1 rounded-xl border border-[#E1D7C8] bg-white px-4 py-3 text-sm resize-none focus:outline-none focus:ring-2 focus:ring-[#7A6B57]/30 focus:border-[#7A6B57] transition-all h-12 sm:h-[72px]"
+                      placeholder="예: CK One이 있는데 더 시트러스하고 시원한 느낌이 나게 하려면?"
+                      disabled={loading}
+                      aria-label="레이어링 질문 입력"
+                    />
+                    <button
+                      onClick={handleAnalyze}
+                      className="rounded-xl bg-[#2E2B28] px-3 text-sm font-semibold text-white transition-all hover:bg-[#1E1C1A] disabled:opacity-50 disabled:cursor-not-allowed h-12 w-12 sm:h-[72px] sm:w-[72px] flex items-center justify-center flex-shrink-0"
+                      disabled={loading || !queryText.trim()}
+                      aria-label="메시지 전송"
+                    >
+                      <svg className="w-5 h-5 sm:w-6 sm:h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 11.5L21 3l-6.8 18-3.6-7.2L3 11.5z" />
+                      </svg>
+                    </button>
+                  </div>
                 </div>
                 <p className="text-[10px] text-[#8A7F73]">
                   Enter로 전송, Shift+Enter로 줄바꿈
@@ -1487,6 +1632,6 @@ export default function LayeringPage() {
           }, 0);
         }}
       />
-    </PageLayout>
-  );
+  </PageLayout >
+);
 }

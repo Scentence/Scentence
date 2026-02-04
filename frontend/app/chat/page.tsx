@@ -75,6 +75,7 @@ export default function ChatPage() {
         }
 
         setMemberId(parseInt(currentId, 10));
+
     }, [localUser, session]);
 
     const displayName = session?.user?.name || localUser?.nickname || localUser?.email?.split('@')[0] || "Guest";

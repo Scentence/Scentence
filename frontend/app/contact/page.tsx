@@ -10,6 +10,7 @@ export default function ContactPage() {
     const { data: session } = useSession();
     const [copied, setCopied] = useState<string | null>(null);
 
+
     const handleCopy = (text: string, type: string) => {
         navigator.clipboard.writeText(text);
         setCopied(type);

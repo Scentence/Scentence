@@ -101,11 +101,6 @@ export default function ArchivesPage() {
         }
     }, [session]);
 
-    // if (typeof window === "undefined") return; // <- [삭제] Hydration Mismatch의 주범
-
-    // [기존 코드 주석 처리]
-    // const apiBaseUrl = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000";
-
 
 
     const displayName = session?.user?.name || localUser?.nickname || localUser?.email?.split('@')[0] || "Guest";

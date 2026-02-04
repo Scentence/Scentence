@@ -16,9 +16,6 @@ export default function NMapPage() {
   const [localUser, setLocalUser] = useState<any>(null); // [Fix] Missing state declaration
   const [isMounted, setIsMounted] = useState(false);
 
-  // API 호출 경로 설정
-  const API_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000";
-
   useEffect(() => {
     setIsMounted(true);
   }, []);

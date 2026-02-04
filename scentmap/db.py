@@ -25,6 +25,7 @@ DB_CONFIG = {
 
 _pg_pool = None
 _recom_pg_pool = None
+_nmap_pg_pool = None  # [개선] 향수지도 전용 Connection Pool (다른 API 격리)
 
 
 def initialize_pool():
@@ -86,6 +87,43 @@ def close_recom_pool():
         logger.info("🛑 Recom DB Connection Pool closed")
 
 
+# [개선] 향수지도 전용 Connection Pool (다른 API와 격리)
+def initialize_nmap_pool():
+    """향수지도 전용 DB Connection Pool 초기화 (EC2 프로덕션 최적화)"""
+    global _nmap_pg_pool
+    try:
+        if not _nmap_pg_pool:
+            # [개선] EC2 배포: 싱글 워커 환경에 맞춰 보수적 설정
+            minconn = int(os.getenv("NMAP_POOL_MIN", "1"))  # 기본 1
+            maxconn = int(os.getenv("NMAP_POOL_MAX", "3"))  # 기본 3 (5→3)
+            
+            if DATABASE_URL:
+                logger.info(f"🗺️ [NMap] Connecting via PERFUME_DATABASE_URL... (min:{minconn}, max:{maxconn})")
+                _nmap_pg_pool = psycopg2.pool.ThreadedConnectionPool(
+                    minconn=minconn,
+                    maxconn=maxconn,  # [개선] 프로덕션: 3개로 축소
+                    dsn=DATABASE_URL
+                )
+            else:
+                logger.info(f"🗺️ [NMap] Connecting via DB_CONFIG... (min:{minconn}, max:{maxconn})")
+                _nmap_pg_pool = psycopg2.pool.ThreadedConnectionPool(
+                    minconn=minconn,
+                    maxconn=maxconn,  # [개선] 프로덕션: 3개로 축소
+                    **DB_CONFIG
+                )
+            logger.info(f"✅ [NMap] 향수지도 전용 Connection Pool 생성 완료 (max: {maxconn})")
+    except (Exception, psycopg2.DatabaseError) as error:
+        logger.error(f"❌ [NMap] Connection Pool 생성 실패: {error}")
+
+
+def close_nmap_pool():
+    """향수지도 전용 Connection Pool 종료"""
+    global _nmap_pg_pool
+    if _nmap_pg_pool:
+        _nmap_pg_pool.closeall()
+        logger.info("🛑 [NMap] 향수지도 Connection Pool closed")
+
+
 @contextmanager
 def get_db_connection():
     global _pg_pool
@@ -108,6 +146,20 @@ def get_recom_db_connection():
         yield conn
     finally:
         _recom_pg_pool.putconn(conn)
+
+
+# [개선] 향수지도 전용 DB Connection (다른 API와 완전 격리)
+@contextmanager
+def get_nmap_db_connection():
+    """향수지도 전용 DB Connection (다른 페이지 영향 방지)"""
+    global _nmap_pg_pool
+    if not _nmap_pg_pool:
+        initialize_nmap_pool()
+    conn = _nmap_pg_pool.getconn()
+    try:
+        yield conn
+    finally:
+        _nmap_pg_pool.putconn(conn)
 
 
 # [추가됨] 테이블 자동 생성 함수

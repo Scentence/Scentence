@@ -65,7 +65,7 @@ export default function LayeringPerfumePicker({ memberId, onSelect }: Props) {
                         animate={{ opacity: 1, scale: 1, y: -10 }}
                         exit={{ opacity: 0, scale: 0.9, y: 10 }}
                         transition={{ type: "spring", duration: 0.3 }}
-                        className="absolute bottom-full left-0 mb-2 w-72 bg-white/90 backdrop-blur-md border border-[#E6DDCF] rounded-2xl shadow-xl overflow-hidden z-50 origin-bottom-left"
+                        className="absolute bottom-full left-0 mb-2 w-72 max-w-[85vw] bg-white/90 backdrop-blur-md border border-[#E6DDCF] rounded-2xl shadow-xl overflow-hidden z-50 origin-bottom-left"
                     >
                         <div className="p-3 bg-[#FDFBF8] border-b border-[#E6DDCF] flex justify-between items-center">
                             <span className="text-xs font-bold text-[#7A6B57]">MY PERFUME ({perfumes.length})</span>
@@ -109,7 +109,7 @@ export default function LayeringPerfumePicker({ memberId, onSelect }: Props) {
             {/* 트리거 버튼 (입력창 옆에 보일 아이콘) */}
             <button
                 onClick={() => setIsOpen(!isOpen)}
-                className={`w-[72px] h-[72px] flex items-center justify-center rounded-xl transition-all ${isOpen ? 'bg-[#C5A55D] text-white shadow-md' : 'text-gray-400 hover:text-[#C5A55D] hover:bg-[#F5F2EA]'}`}
+                className={`w-12 h-12 sm:w-[72px] sm:h-[72px] flex items-center justify-center rounded-xl transition-all ${isOpen ? 'bg-[#C5A55D] text-white shadow-md' : 'text-gray-400 hover:text-[#C5A55D] hover:bg-[#F5F2EA]'}`}
                 title="내 향수 불러오기"
             >
                 <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" className="w-7 h-7">

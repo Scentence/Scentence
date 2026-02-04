@@ -12,10 +12,11 @@ const handler = NextAuth({
         async signIn({ user, account }) {
             if (account?.provider === 'kakao') {
                 try {
+                    // Docker Compose 환경을 기본값으로 사용 (서비스명 기반 통신)
                     const BACKEND_URL =
                         process.env.BACKEND_INTERNAL_URL ??
                         process.env.NEXT_PUBLIC_API_URL ??
-                        "http://backend:8000";
+                        "http://backend:8000";  // Docker Compose 서비스명
 
                     const response = await fetch(`${BACKEND_URL}/users/login`, {
                         method: 'POST',

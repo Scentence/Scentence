@@ -63,6 +63,7 @@ const AnimateOnScroll = ({ children, delay = 0, className = "" }: { children: Re
 export default function AboutPage() {
     const { data: session } = useSession();
 
+
     // [Parallax Scroll Logic]
     const { scrollY } = useScroll();
     const y1 = useTransform(scrollY, [0, 1000], [0, 200]);   // "SCENT" moves slightly down

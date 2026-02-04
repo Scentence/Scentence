@@ -28,7 +28,9 @@ export default function LandingPage() {
     }
   }, []);
 
+
   if (!mounted) return null; // Prevent hydration errors
+
 
   return (
     <div className="bg-[#FDFBF8] text-[#1a1a1a] font-sans selection:bg-[#FF6B6B] selection:text-white overflow-x-hidden">

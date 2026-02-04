@@ -39,7 +39,6 @@ export default function UserProfileMenu({ isOpen, onClose }: UserProfileMenuProp
     const { data: session } = useSession();
     const [localUser, setLocalUser] = useState<{ roleType?: string | null; isAdmin?: boolean } | null>(null);
     const [profileRoleType, setProfileRoleType] = useState<string | null>(null);
-    const apiBaseUrl = process.env.NEXT_PUBLIC_API_URL || "";
 
     // [AUTH CHECK] 권한 확인 로직
     useEffect(() => {
@@ -57,7 +56,7 @@ export default function UserProfileMenu({ isOpen, onClose }: UserProfileMenuProp
         const memberId = session?.user?.id || (localUser as any)?.memberId;
         if (!memberId) return;
 
-        fetch(`${apiBaseUrl}/users/profile/${memberId}`)
+        fetch(`/api/users/profile/${memberId}`)
             .then((res) => (res.ok ? res.json() : null))
             .then((data) => {
                 if (data?.role_type) setProfileRoleType(data.role_type);

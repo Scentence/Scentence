@@ -56,7 +56,7 @@ export default function MyPage() {
 
   // [표준화] 이미지 경로 결정 로직 수정
   // 1. 이미 http로 시작하는 전체 경로(S3, 카카오 등)라면 그대로 사용합니다.
-  // 2. /uploads/로 시작하는 상대 경로라면, 도메인을 붙이지 않고 그대로 사용합니다. (Next.js rewrites 활용)
+  // 2. /uploads/로 시작하는 상대 경로라면 그대로 사용합니다. (Next.js rewrites 활용)
   // 3. 사진이 없는 경우 기본 이미지를 보여줍니다.
   // 4. [변경점] apiBaseUrl 대신 /api 프록시를 사용하거나 상대 경로를 유지하여 호환성을 높입니다.
   const resolvedProfileImageUrl = profileImageUrl

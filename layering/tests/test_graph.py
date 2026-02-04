@@ -1,12 +1,17 @@
-import pytest
+from typing import cast
 
+import pytest  # type: ignore[import-not-found]
+
+from agent.constants import ACCORDS
 from agent.database import PerfumeRepository
 from agent.graph import (
+    _filter_detected_perfumes,
     _normalize_keywords,
     _split_query_segments,
     analyze_user_input,
     analyze_user_query,
 )
+from agent.schemas import DetectedPerfume, PerfumeVector
 
 
 def test_analyze_user_input_heuristics(monkeypatch):
@@ -197,3 +202,90 @@ def test_similarity_query_prioritizes_explicit_target():
 
     assert analysis.detected_perfumes
     assert analysis.detected_perfumes[0].perfume_id == base_id
+
+
+def _make_vector(perfume_id: str, name: str, brand: str, concentration: str | None) -> PerfumeVector:
+    return PerfumeVector(
+        perfume_id=perfume_id,
+        perfume_name=name,
+        perfume_brand=brand,
+        concentration=concentration,
+        image_url=None,
+        vector=[0.0] * len(ACCORDS),
+        total_intensity=0.0,
+        persistence_score=0.0,
+        dominant_accords=[],
+        base_notes=[],
+    )
+
+
+def test_filter_detected_perfumes_removes_same_name_variants():
+    base = _make_vector("1", "Coco Noir", "Chanel", "Eau de Parfum")
+    candidate = _make_vector("2", "Coco Noir", "Chanel", "Extrait de Parfum")
+
+    class DummyRepo:
+        def __init__(self, vectors: list[PerfumeVector]):
+            self._vectors = {item.perfume_id: item for item in vectors}
+
+        def get_perfume(self, perfume_id: str) -> PerfumeVector:
+            return self._vectors[perfume_id]
+
+    detected = [
+        DetectedPerfume(
+            perfume_id=base.perfume_id,
+            perfume_name=base.perfume_name,
+            perfume_brand=base.perfume_brand,
+            match_score=1.0,
+            matched_text="coco noir",
+        ),
+        DetectedPerfume(
+            perfume_id=candidate.perfume_id,
+            perfume_name=candidate.perfume_name,
+            perfume_brand=candidate.perfume_brand,
+            match_score=0.95,
+            matched_text="coco noir",
+        ),
+    ]
+
+    filtered = _filter_detected_perfumes(
+        detected,
+        cast(PerfumeRepository, DummyRepo([base, candidate])),
+    )
+
+    assert len(filtered) == 1
+
+
+def test_filter_detected_perfumes_keeps_distinct_names():
+    base = _make_vector("1", "Coco Mademoiselle", "Chanel", None)
+    candidate = _make_vector("2", "Chance", "Chanel", None)
+
+    class DummyRepo:
+        def __init__(self, vectors: list[PerfumeVector]):
+            self._vectors = {item.perfume_id: item for item in vectors}
+
+        def get_perfume(self, perfume_id: str) -> PerfumeVector:
+            return self._vectors[perfume_id]
+
+    detected = [
+        DetectedPerfume(
+            perfume_id=base.perfume_id,
+            perfume_name=base.perfume_name,
+            perfume_brand=base.perfume_brand,
+            match_score=1.0,
+            matched_text="coco mademoiselle",
+        ),
+        DetectedPerfume(
+            perfume_id=candidate.perfume_id,
+            perfume_name=candidate.perfume_name,
+            perfume_brand=candidate.perfume_brand,
+            match_score=0.8,
+            matched_text="chance",
+        ),
+    ]
+
+    filtered = _filter_detected_perfumes(
+        detected,
+        cast(PerfumeRepository, DummyRepo([base, candidate])),
+    )
+
+    assert len(filtered) == 2
