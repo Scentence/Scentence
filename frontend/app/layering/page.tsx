@@ -3,6 +3,8 @@
 import { useState, useMemo, useRef, useEffect } from "react";
 import { useSession } from "next-auth/react"; // 카카오 로그인 세션
 import Link from "next/link";
+import Sidebar from "@/components/common/sidebar"; // [Fix] Import added
+import UserProfileMenu from "@/components/common/UserProfileMenu"; // [Fix] Import added
 import AccordWheel from "@/components/layering/AccordWheel";
 import { BACKEND_ACCORDS, ACCORD_LABELS } from "@/lib/accords";
 import LayeringPerfumePicker from "@/components/layering/LayeringPerfumePicker"; // 내 향수 불러오기
@@ -465,536 +467,579 @@ export default function LayeringPage() {
 
   // [Fix] Hydration mismatch 해결을 위한 mounted 상태
   const [isMounted, setIsMounted] = useState(false);
+  const [isNavOpen, setIsNavOpen] = useState(false); // [Fix] Missing state
+  const [isProfileMenuOpen, setIsProfileMenuOpen] = useState(false); // [Fix] Missing state
+
   useEffect(() => {
     setIsMounted(true);
+    const stored = localStorage.getItem("localAuth");
+    if (stored) {
+      try {
+        setLocalUser(JSON.parse(stored));
+      } catch {
+        setLocalUser(null);
+      }
+    }
   }, []);
 
+  const [profileImageUrl, setProfileImageUrl] = useState<string | null>(null); // [Fix] Missing state
 
-}, [session, localUser?.memberId]);
-
-const displayName = session?.user?.name || localUser?.nickname || localUser?.email?.split('@')[0] || "Guest";
-const isLoggedIn = !!(session || localUser);
-
-/**
- * 채팅 메시지가 업데이트될 때마다 자동으로 스크롤
- */
-useEffect(() => {
-  chatEndRef.current?.scrollIntoView({ behavior: "smooth" });
-}, [chatMessages, loading]);
-
-useEffect(() => {
-  setMemberId(getMemberId(session?.user?.id));
-}, [session?.user?.id]);
-
-/**
- * 자연어 질문 분석 및 레이어링 추천 요청
- * - 사용자 입력 검증
- * - 채팅 메시지 추가
- * - 로컬 스토리지에서 회원 ID 추출
- * - API 호출 및 결과 처리
- * - 에러 핸들링
- */
-const handleAnalyze = async () => {
-  // 입력값 검증
-  const trimmedQuery = queryText.trim();
-  if (!trimmedQuery) {
-    // 빈 입력 오류 메시지를 채팅에 추가
-    setChatMessages((prev) => [
-      ...prev,
-      {
-        id: `error-${Date.now()}`,
-        type: "assistant",
-        content: TEXT_MESSAGES.EMPTY_QUERY_ERROR,
-        timestamp: new Date(),
-      },
-    ]);
-    return;
-  }
-
-  const contextRecommendedId = lastRecommendationId ?? result?.recommendation?.perfume_id ?? null;
-
-  // 사용자 메시지 추가
-  const userMessage: ChatMessage = {
-    id: `user-${Date.now()}`,
-    type: "user",
-    content: trimmedQuery,
-    timestamp: new Date(),
-  };
-  setChatMessages((prev) => [...prev, userMessage]);
-
-  // 입력창 초기화 및 상태 초기화
-  setQueryText("");
-  setLoading(true);
-  setError(null);
-  setResult(null);
-  setFeedbackStatus(null);
-  setFeedbackSaving(false);
-  setFeedbackLocked(false);
-
-  try {
-    // 로컬 스토리지에서 회원 ID 추출
-    const currentMemberId = getMemberId(session?.user?.id);
-
-    // 레이어링 분석 API 호출
-    const response = await fetch(`${apiBase}/analyze`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        user_text: trimmedQuery,
-        member_id: currentMemberId,
-        context_recommended_perfume_id: contextRecommendedId,
-        save_recommendations: true,  // 추천 결과 저장 여부
-        save_my_perfume: false,      // 내 향수로 저장 여부
-      }),
-    });
-
-    // 응답 오류 처리
-    if (!response.ok) {
-      const errorMessage = await parseErrorResponse(response);
-      throw new Error(errorMessage);
+  useEffect(() => {
+    const currentMemberId = session?.user?.id || localUser?.memberId;
+    if (!currentMemberId) {
+      setProfileImageUrl(null);
+      return;
     }
 
-    // 응답 데이터 파싱
-    let payload: UserQueryResponse;
-    try {
-      payload = (await response.json()) as UserQueryResponse;
-    } catch (parseError) {
-      throw new Error(defaultErrorMessage);
+    fetch(`/api/users/profile/${currentMemberId}`)
+      .then((res) => (res.ok ? res.json() : null))
+      .then((data) => {
+        if (data?.profile_image_url) {
+          const rawUrl = data.profile_image_url;
+          const finalUrl = (rawUrl.startsWith("http") || rawUrl.startsWith("/uploads"))
+            ? rawUrl
+            : `/api${rawUrl}`;
+          setProfileImageUrl(finalUrl);
+        }
+      })
+      .catch(() => setProfileImageUrl(null));
+  }, [session, localUser]);
+
+
+
+  const displayName = session?.user?.name || localUser?.nickname || localUser?.email?.split('@')[0] || "Guest";
+  const isLoggedIn = !!(session || localUser);
+
+  /**
+   * 채팅 메시지가 업데이트될 때마다 자동으로 스크롤
+   */
+  useEffect(() => {
+    chatEndRef.current?.scrollIntoView({ behavior: "smooth" });
+  }, [chatMessages, loading]);
+
+  useEffect(() => {
+    setMemberId(getMemberId(session?.user?.id));
+  }, [session?.user?.id]);
+
+  /**
+   * 자연어 질문 분석 및 레이어링 추천 요청
+   * - 사용자 입력 검증
+   * - 채팅 메시지 추가
+   * - 로컬 스토리지에서 회원 ID 추출
+   * - API 호출 및 결과 처리
+   * - 에러 핸들링
+   */
+  const handleAnalyze = async () => {
+    // 입력값 검증
+    const trimmedQuery = queryText.trim();
+    if (!trimmedQuery) {
+      // 빈 입력 오류 메시지를 채팅에 추가
+      setChatMessages((prev) => [
+        ...prev,
+        {
+          id: `error-${Date.now()}`,
+          type: "assistant",
+          content: TEXT_MESSAGES.EMPTY_QUERY_ERROR,
+          timestamp: new Date(),
+        },
+      ]);
+      return;
     }
 
-    // 추천 결과 상태 업데이트
-    const recommendation = payload.recommendation ?? null;
-    const filteredRecommendation = isSamePerfume(payload.base_perfume, recommendation)
-      ? null
-      : recommendation;
-    const duplicateFiltered = Boolean(recommendation && !filteredRecommendation);
-    const resolvedNote = duplicateFiltered && !payload.note
-      ? "같은 이름의 향수는 추천에서 제외했어요."
-      : payload.note;
-    setResult({
-      ...payload,
-      recommendation: filteredRecommendation,
-      note: resolvedNote,
-    });
+    const contextRecommendedId = lastRecommendationId ?? result?.recommendation?.perfume_id ?? null;
 
-    if (filteredRecommendation) {
-      setLastRecommendationId(filteredRecommendation.perfume_id);
-    } else if (payload.brand_best_perfume) {
-      setLastRecommendationId(payload.brand_best_perfume.perfume_id);
-    } else if (
-      (payload.similar_perfumes && payload.similar_perfumes.length > 0)
-      || payload.recommended_perfume_info
-    ) {
-      setLastRecommendationId(null);
-    }
+    // 사용자 메시지 추가
+    const userMessage: ChatMessage = {
+      id: `user-${Date.now()}`,
+      type: "user",
+      content: trimmedQuery,
+      timestamp: new Date(),
+    };
+    setChatMessages((prev) => [...prev, userMessage]);
 
-    // 추천 성공 메시지 추가
-    if (filteredRecommendation) {
-      setChatMessages((prev) => [
-        ...prev,
-        {
-          id: `rec-${Date.now()}`,
-          type: "assistant",
-          content: `추천 결과가 나왔어요! 👈 왼쪽에서 "${filteredRecommendation.perfume_name}" 향수를 확인해보세요.`,
-          timestamp: new Date(),
-          isRecommendation: true,
-        },
-        {
-          id: `feedback-${Date.now()}`,
-          type: "assistant",
-          content: "추천 결과가 마음에 드시나요? 아래에서 만족도를 알려주세요!",
-          timestamp: new Date(),
-        },
-      ]);
-    } else if (duplicateFiltered) {
-      setChatMessages((prev) => [
-        ...prev,
-        {
-          id: `dup-${Date.now()}`,
-          type: "assistant",
-          content: resolvedNote ?? "같은 이름의 향수는 추천에서 제외했어요.",
-          timestamp: new Date(),
-        },
-      ]);
-    } else if (payload.similar_perfumes && payload.similar_perfumes.length > 0) {
-      const similarList = payload.similar_perfumes
-        .map((item) => `${item.perfume_name} (${item.perfume_brand})`)
-        .join("\n");
-      setChatMessages((prev) => [
-        ...prev,
-        {
-          id: `similar-${Date.now()}`,
-          type: "assistant",
-          content: `비슷한 느낌의 향수 후보를 골라봤어요.\n\n${similarList}`,
-          timestamp: new Date(),
-          similarPerfumes: payload.similar_perfumes,
-        },
-      ]);
-    } else if (payload.brand_best_perfume) {
-      const brandName = payload.brand_name ?? payload.brand_best_perfume.perfume_brand;
-      setChatMessages((prev) => [
-        ...prev,
-        {
-          id: `brand-${Date.now()}`,
-          type: "assistant",
-          content: `${brandName} 브랜드에서 어디에나 레이어링하기 좋은 향수를 골라드렸어요. 👈 왼쪽 카드에서 "${payload.brand_best_perfume.perfume_name}"을 확인해보세요.`,
-          timestamp: new Date(),
-        },
-      ]);
-    } else if (payload.clarification_prompt) {
-      // 명확화 요청 메시지 (옵션 포함)
-      let clarificationText = payload.clarification_prompt;
-      if (payload.clarification_options && payload.clarification_options.length > 0) {
-        clarificationText += "\n\n추천 옵션:\n" + payload.clarification_options.map(opt => `• ${opt}`).join("\n");
-      }
-      setChatMessages((prev) => [
-        ...prev,
-        {
-          id: `clarify-${Date.now()}`,
-          type: "assistant",
-          content: clarificationText,
-          timestamp: new Date(),
-        },
-      ]);
-    } else if (payload.note) {
-      // 일반 노트 메시지
-      setChatMessages((prev) => [
-        ...prev,
-        {
-          id: `note-${Date.now()}`,
-          type: "assistant",
-          content: payload.note ?? "",
-          timestamp: new Date(),
-        },
-      ]);
-    }
-  } catch (err) {
-    // 에러 메시지를 채팅에 추가
-    const errorMessage = err instanceof Error ? err.message : "알 수 없는 오류가 발생했어요.";
-    setError(errorMessage);
-    setChatMessages((prev) => [
-      ...prev,
-      {
-        id: `error-${Date.now()}`,
-        type: "assistant",
-        content: errorMessage,
-        timestamp: new Date(),
-      },
-    ]);
-  } finally {
-    // 로딩 상태 해제
-    setLoading(false);
-  }
-};
-
-/**
- * 추천 결과에 대한 만족도 피드백 전송
- * @param preference - 만족도 (GOOD, BAD)
- * 
- * 처리 흐름:
- * 1. 추천 결과 및 상태 검증
- * 2. 회원 ID 검증
- * 3. 피드백 API 호출
- * 4. 결과 저장 및 채팅 메시지 업데이트
- */
-const sendFeedback = async (preference: "GOOD" | "BAD") => {
-  // 추천 결과 존재 확인
-  const candidate = result?.recommendation;
-  if (!candidate) {
-    return;
-  }
-
-  // 중복 저장 방지
-  if (feedbackLocked || feedbackSaving) {
-    return;
-  }
-
-  // 로컬 스토리지에서 회원 ID 추출 및 로그인 상태 확인
-  const currentMemberId = getMemberId(session?.user?.id);
-  if (!currentMemberId) {
-    const loginMessage = TEXT_MESSAGES.FEEDBACK_LOGIN_REQUIRED;
-    setFeedbackStatus(loginMessage);
-    setChatMessages((prev) => [
-      ...prev,
-      {
-        id: `feedback-error-${Date.now()}`,
-        type: "assistant",
-        content: loginMessage,
-        timestamp: new Date(),
-      },
-    ]);
-    return;
-  }
-
-  try {
-    // 저장 중 상태 표시
-    setFeedbackSaving(true);
-    setFeedbackStatus(TEXT_MESSAGES.FEEDBACK_SAVING);
-
-    // 피드백 API 호출
-    const response = await fetch(`${apiBase}/recommendation/feedback`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        member_id: currentMemberId,
-        perfume_id: candidate.perfume_id,
-        perfume_name: candidate.perfume_name,
-        preference,
-      }),
-    });
-
-    // 응답 오류 처리
-    if (!response.ok) {
-      const errorMessage = await parseErrorResponse(response);
-      throw new Error(errorMessage);
-    }
-
-    // 응답 데이터 파싱 및 결과 처리
-    const payload = (await response.json()) as FeedbackResponse;
-    if (payload.save_result?.saved) {
-      const successMessage = "만족도가 저장되었습니다. 소중한 의견 감사합니다! 😊";
-      setFeedbackStatus(TEXT_MESSAGES.FEEDBACK_SAVED);
-      setFeedbackLocked(true);  // 저장 완료 후 잠금 처리
-
-      // 성공 메시지를 채팅에 추가
-      setChatMessages((prev) => [
-        ...prev,
-        {
-          id: `feedback-success-${Date.now()}`,
-          type: "assistant",
-          content: successMessage,
-          timestamp: new Date(),
-        },
-      ]);
-    } else if (preference === "BAD") {
-      const ackMessage = "불만족 의견을 남겨주셔서 감사합니다. 다음 추천에 반영할게요.";
-      setFeedbackStatus(ackMessage);
-      setFeedbackLocked(true);
-      setChatMessages((prev) => [
-        ...prev,
-        {
-          id: `feedback-bad-${Date.now()}`,
-          type: "assistant",
-          content: ackMessage,
-          timestamp: new Date(),
-        },
-      ]);
-    } else {
-      const failMessage = payload.save_result?.message ?? TEXT_MESSAGES.FEEDBACK_FAILED;
-      setFeedbackStatus(failMessage);
-      setChatMessages((prev) => [
-        ...prev,
-        {
-          id: `feedback-fail-${Date.now()}`,
-          type: "assistant",
-          content: failMessage,
-          timestamp: new Date(),
-        },
-      ]);
-    }
-  } catch (err) {
-    // 에러 메시지 설정 및 채팅에 추가
-    const errorMessage = err instanceof Error ? err.message : TEXT_MESSAGES.FEEDBACK_FAILED;
-    setFeedbackStatus(errorMessage);
-    setChatMessages((prev) => [
-      ...prev,
-      {
-        id: `feedback-error-${Date.now()}`,
-        type: "assistant",
-        content: errorMessage,
-        timestamp: new Date(),
-      },
-    ]);
-  } finally {
-    // 저장 중 상태 해제
+    // 입력창 초기화 및 상태 초기화
+    setQueryText("");
+    setLoading(true);
+    setError(null);
+    setResult(null);
+    setFeedbackStatus(null);
     setFeedbackSaving(false);
-  }
-};
+    setFeedbackLocked(false);
 
-/**
- * 향수 정보 모달에서 아카이브 저장 (만족/불만족)
- */
-const handleArchiveFeedback = async (preference: "GOOD" | "BAD") => {
-  const perfume = infoModalData;
-  if (!perfume) {
-    return;
-  }
+    try {
+      // 로컬 스토리지에서 회원 ID 추출
+      const currentMemberId = getMemberId(session?.user?.id);
 
-  if (archiveFeedbackLocked || archiveFeedbackSaving) {
-    return;
-  }
+      // 레이어링 분석 API 호출
+      const response = await fetch(`${apiBase}/analyze`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          user_text: trimmedQuery,
+          member_id: currentMemberId,
+          context_recommended_perfume_id: contextRecommendedId,
+          save_recommendations: true,  // 추천 결과 저장 여부
+          save_my_perfume: false,      // 내 향수로 저장 여부
+        }),
+      });
 
-  if (!memberId) {
-    setArchiveFeedbackStatus(TEXT_MESSAGES.ARCHIVE_LOGIN_REQUIRED);
-    return;
-  }
+      // 응답 오류 처리
+      if (!response.ok) {
+        const errorMessage = await parseErrorResponse(response);
+        throw new Error(errorMessage);
+      }
 
-  const perfumeId = Number(perfume.perfume_id);
-  if (!Number.isFinite(perfumeId)) {
-    setArchiveFeedbackStatus(TEXT_MESSAGES.ARCHIVE_ID_ERROR);
-    return;
-  }
+      // 응답 데이터 파싱
+      let payload: UserQueryResponse;
+      try {
+        payload = (await response.json()) as UserQueryResponse;
+      } catch (parseError) {
+        throw new Error(defaultErrorMessage);
+      }
 
-  try {
-    setArchiveFeedbackSaving(true);
-    setArchiveFeedbackStatus(TEXT_MESSAGES.ARCHIVE_SAVING);
+      // 추천 결과 상태 업데이트
+      const recommendation = payload.recommendation ?? null;
+      const filteredRecommendation = isSamePerfume(payload.base_perfume, recommendation)
+        ? null
+        : recommendation;
+      const duplicateFiltered = Boolean(recommendation && !filteredRecommendation);
+      const resolvedNote = duplicateFiltered && !payload.note
+        ? "같은 이름의 향수는 추천에서 제외했어요."
+        : payload.note;
+      setResult({
+        ...payload,
+        recommendation: filteredRecommendation,
+        note: resolvedNote,
+      });
 
-    const response = await fetch(`/api/users/${memberId}/perfumes`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        perfume_id: perfumeId,
-        perfume_name: perfume.perfume_name,
-        register_status: "RECOMMENDED",
-        preference,
-      }),
-    });
+      if (filteredRecommendation) {
+        setLastRecommendationId(filteredRecommendation.perfume_id);
+      } else if (payload.brand_best_perfume) {
+        setLastRecommendationId(payload.brand_best_perfume.perfume_id);
+      } else if (
+        (payload.similar_perfumes && payload.similar_perfumes.length > 0)
+        || payload.recommended_perfume_info
+      ) {
+        setLastRecommendationId(null);
+      }
 
-    if (!response.ok) {
-      const errorText = await response.text().catch(() => "");
-      throw new Error(errorText || TEXT_MESSAGES.ARCHIVE_FAILED);
+      // 추천 성공 메시지 추가
+      if (filteredRecommendation) {
+        setChatMessages((prev) => [
+          ...prev,
+          {
+            id: `rec-${Date.now()}`,
+            type: "assistant",
+            content: `추천 결과가 나왔어요! 👈 왼쪽에서 "${filteredRecommendation.perfume_name}" 향수를 확인해보세요.`,
+            timestamp: new Date(),
+            isRecommendation: true,
+          },
+          {
+            id: `feedback-${Date.now()}`,
+            type: "assistant",
+            content: "추천 결과가 마음에 드시나요? 아래에서 만족도를 알려주세요!",
+            timestamp: new Date(),
+          },
+        ]);
+      } else if (duplicateFiltered) {
+        setChatMessages((prev) => [
+          ...prev,
+          {
+            id: `dup-${Date.now()}`,
+            type: "assistant",
+            content: resolvedNote ?? "같은 이름의 향수는 추천에서 제외했어요.",
+            timestamp: new Date(),
+          },
+        ]);
+      } else if (payload.similar_perfumes && payload.similar_perfumes.length > 0) {
+        const similarList = payload.similar_perfumes
+          .map((item) => `${item.perfume_name} (${item.perfume_brand})`)
+          .join("\n");
+        setChatMessages((prev) => [
+          ...prev,
+          {
+            id: `similar-${Date.now()}`,
+            type: "assistant",
+            content: `비슷한 느낌의 향수 후보를 골라봤어요.\n\n${similarList}`,
+            timestamp: new Date(),
+            similarPerfumes: payload.similar_perfumes,
+          },
+        ]);
+      } else if (payload.brand_best_perfume) {
+        const brandName = payload.brand_name ?? payload.brand_best_perfume.perfume_brand;
+        setChatMessages((prev) => [
+          ...prev,
+          {
+            id: `brand-${Date.now()}`,
+            type: "assistant",
+            content: `${brandName} 브랜드에서 어디에나 레이어링하기 좋은 향수를 골라드렸어요. 👈 왼쪽 카드에서 "${payload.brand_best_perfume.perfume_name}"을 확인해보세요.`,
+            timestamp: new Date(),
+          },
+        ]);
+      } else if (payload.clarification_prompt) {
+        // 명확화 요청 메시지 (옵션 포함)
+        let clarificationText = payload.clarification_prompt;
+        if (payload.clarification_options && payload.clarification_options.length > 0) {
+          clarificationText += "\n\n추천 옵션:\n" + payload.clarification_options.map(opt => `• ${opt}`).join("\n");
+        }
+        setChatMessages((prev) => [
+          ...prev,
+          {
+            id: `clarify-${Date.now()}`,
+            type: "assistant",
+            content: clarificationText,
+            timestamp: new Date(),
+          },
+        ]);
+      } else if (payload.note) {
+        // 일반 노트 메시지
+        setChatMessages((prev) => [
+          ...prev,
+          {
+            id: `note-${Date.now()}`,
+            type: "assistant",
+            content: payload.note ?? "",
+            timestamp: new Date(),
+          },
+        ]);
+      }
+    } catch (err) {
+      // 에러 메시지를 채팅에 추가
+      const errorMessage = err instanceof Error ? err.message : "알 수 없는 오류가 발생했어요.";
+      setError(errorMessage);
+      setChatMessages((prev) => [
+        ...prev,
+        {
+          id: `error-${Date.now()}`,
+          type: "assistant",
+          content: errorMessage,
+          timestamp: new Date(),
+        },
+      ]);
+    } finally {
+      // 로딩 상태 해제
+      setLoading(false);
+    }
+  };
+
+  /**
+   * 추천 결과에 대한 만족도 피드백 전송
+   * @param preference - 만족도 (GOOD, BAD)
+   * 
+   * 처리 흐름:
+   * 1. 추천 결과 및 상태 검증
+   * 2. 회원 ID 검증
+   * 3. 피드백 API 호출
+   * 4. 결과 저장 및 채팅 메시지 업데이트
+   */
+  const sendFeedback = async (preference: "GOOD" | "BAD") => {
+    // 추천 결과 존재 확인
+    const candidate = result?.recommendation;
+    if (!candidate) {
+      return;
     }
 
-    setArchiveFeedbackLocked(true);
-    setArchiveFeedbackStatus(TEXT_MESSAGES.ARCHIVE_SAVED);
-  } catch (err) {
-    const errorMessage = err instanceof Error ? err.message : TEXT_MESSAGES.ARCHIVE_FAILED;
-    setArchiveFeedbackStatus(errorMessage);
-  } finally {
-    setArchiveFeedbackSaving(false);
-  }
-};
+    // 중복 저장 방지
+    if (feedbackLocked || feedbackSaving) {
+      return;
+    }
 
-const resetChat = () => {
-  setChatMessages(createWelcomeMessages());
-  setQueryText("");
-  setResult(null);
-  setError(null);
-  setFeedbackStatus(null);
-  setFeedbackSaving(false);
-  setFeedbackLocked(false);
-  setLastRecommendationId(null);
-  setLoading(false);
-};
-
-// ==================== 렌더링 데이터 준비 ====================
-
-/** 추천된 향수 후보 */
-const candidate = result?.recommendation ?? null;
-const basePerfume = result?.base_perfume ?? null;
-const perfumeInfo = result?.recommended_perfume_info ?? null;
-const brandBestPerfume = result?.brand_best_perfume ?? null;
-const brandBestScore = result?.brand_best_score ?? null;
-const brandBestReason = result?.brand_best_reason ?? null;
-
-/** 
- * 레이어링 결과의 어코드 벡터 및 유효성 검증
- * 메모이제이션을 통해 불필요한 재계산 방지
- */
-const { vector, vectorReady } = useMemo(() => {
-  const vec = candidate?.layered_vector ?? [];
-  const ready =
-    vec.length === BACKEND_ACCORDS.length &&
-    vec.every((value) => Number.isFinite(value));
-
-  return { vector: vec, vectorReady: ready };
-}, [candidate]);
-
-/** 
- * 분사 순서 배열 유효성 검증
- */
-const hasSprayOrder = useMemo(() =>
-  candidate?.spray_order &&
-  Array.isArray(candidate.spray_order) &&
-  candidate.spray_order.length > 0,
-  [candidate]
-);
-
-/** 
- * 추천 점수 포맷팅 (소수점 3자리)
- * 유효하지 않은 경우 "-" 표시
- */
-const totalScore = useMemo(() =>
-  Number.isFinite(candidate?.total_score)
-    ? candidate?.total_score.toFixed(3)
-    : "-",
-  [candidate]
-);
-
-/**
- * 점수 평가 정보 메모이제이션
- * JSX 내부에서 반복 계산되는 것을 방지
- */
-const scoreEvaluation = useMemo(() => {
-  if (!candidate) return null;
-  return getScoreEvaluation(candidate.total_score);
-}, [candidate]);
-
-const infoSections = useMemo(() => {
-  if (!perfumeInfo) return [];
-  return [
-    { label: "어코드", items: perfumeInfo.accords },
-    { label: "탑 노트", items: perfumeInfo.top_notes },
-    { label: "미들 노트", items: perfumeInfo.middle_notes },
-    { label: "베이스 노트", items: perfumeInfo.base_notes },
-    { label: "계절", items: perfumeInfo.seasons },
-    { label: "상황", items: perfumeInfo.occasions },
-  ].filter((section) => section.items && section.items.length > 0);
-}, [perfumeInfo]);
-
-const handleOpenPerfumeInfo = async (perfumeId?: string | null, label?: string) => {
-  if (!perfumeId) return;
-  setInfoModalOpen(true);
-  setInfoModalLoading(true);
-  setInfoModalError(null);
-  setInfoModalData(null);
-  setInfoModalLabel(label ?? "향수");
-  setArchiveFeedbackStatus(null);
-  setArchiveFeedbackSaving(false);
-  setArchiveFeedbackLocked(false);
-
-  try {
+    // 로컬 스토리지에서 회원 ID 추출 및 로그인 상태 확인
     const currentMemberId = getMemberId(session?.user?.id);
-    const response = await fetch(`${apiBase}/analyze`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        user_text: "향수 정보",
-        member_id: currentMemberId,
-        context_recommended_perfume_id: perfumeId,
-        save_recommendations: false,
-        save_my_perfume: false,
-      }),
-    });
-
-    if (!response.ok) {
-      const errorMessage = await parseErrorResponse(response);
-      throw new Error(errorMessage);
+    if (!currentMemberId) {
+      const loginMessage = TEXT_MESSAGES.FEEDBACK_LOGIN_REQUIRED;
+      setFeedbackStatus(loginMessage);
+      setChatMessages((prev) => [
+        ...prev,
+        {
+          id: `feedback-error-${Date.now()}`,
+          type: "assistant",
+          content: loginMessage,
+          timestamp: new Date(),
+        },
+      ]);
+      return;
     }
 
-    const payload = (await response.json()) as UserQueryResponse;
-    if (!payload.recommended_perfume_info) {
-      throw new Error("향수 정보를 불러오지 못했어요.");
+    try {
+      // 저장 중 상태 표시
+      setFeedbackSaving(true);
+      setFeedbackStatus(TEXT_MESSAGES.FEEDBACK_SAVING);
+
+      // 피드백 API 호출
+      const response = await fetch(`${apiBase}/recommendation/feedback`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          member_id: currentMemberId,
+          perfume_id: candidate.perfume_id,
+          perfume_name: candidate.perfume_name,
+          preference,
+        }),
+      });
+
+      // 응답 오류 처리
+      if (!response.ok) {
+        const errorMessage = await parseErrorResponse(response);
+        throw new Error(errorMessage);
+      }
+
+      // 응답 데이터 파싱 및 결과 처리
+      const payload = (await response.json()) as FeedbackResponse;
+      if (payload.save_result?.saved) {
+        const successMessage = "만족도가 저장되었습니다. 소중한 의견 감사합니다! 😊";
+        setFeedbackStatus(TEXT_MESSAGES.FEEDBACK_SAVED);
+        setFeedbackLocked(true);  // 저장 완료 후 잠금 처리
+
+        // 성공 메시지를 채팅에 추가
+        setChatMessages((prev) => [
+          ...prev,
+          {
+            id: `feedback-success-${Date.now()}`,
+            type: "assistant",
+            content: successMessage,
+            timestamp: new Date(),
+          },
+        ]);
+      } else if (preference === "BAD") {
+        const ackMessage = "불만족 의견을 남겨주셔서 감사합니다. 다음 추천에 반영할게요.";
+        setFeedbackStatus(ackMessage);
+        setFeedbackLocked(true);
+        setChatMessages((prev) => [
+          ...prev,
+          {
+            id: `feedback-bad-${Date.now()}`,
+            type: "assistant",
+            content: ackMessage,
+            timestamp: new Date(),
+          },
+        ]);
+      } else {
+        const failMessage = payload.save_result?.message ?? TEXT_MESSAGES.FEEDBACK_FAILED;
+        setFeedbackStatus(failMessage);
+        setChatMessages((prev) => [
+          ...prev,
+          {
+            id: `feedback-fail-${Date.now()}`,
+            type: "assistant",
+            content: failMessage,
+            timestamp: new Date(),
+          },
+        ]);
+      }
+    } catch (err) {
+      // 에러 메시지 설정 및 채팅에 추가
+      const errorMessage = err instanceof Error ? err.message : TEXT_MESSAGES.FEEDBACK_FAILED;
+      setFeedbackStatus(errorMessage);
+      setChatMessages((prev) => [
+        ...prev,
+        {
+          id: `feedback-error-${Date.now()}`,
+          type: "assistant",
+          content: errorMessage,
+          timestamp: new Date(),
+        },
+      ]);
+    } finally {
+      // 저장 중 상태 해제
+      setFeedbackSaving(false);
     }
-    setInfoModalData(payload.recommended_perfume_info);
-  } catch (err) {
-    const errorMessage = err instanceof Error ? err.message : "향수 정보를 불러오지 못했어요.";
-    setInfoModalError(errorMessage);
-  } finally {
-    setInfoModalLoading(false);
-  }
-};
+  };
 
-return (
+  /**
+   * 향수 정보 모달에서 아카이브 저장 (만족/불만족)
+   */
+  const handleArchiveFeedback = async (preference: "GOOD" | "BAD") => {
+    const perfume = infoModalData;
+    if (!perfume) {
+      return;
+    }
 
-  { isNavOpen && (
-    <div
-      className="fixed inset-0 bg-transparent z-40"
-      onClick={() => setIsNavOpen(false)}
-    />
-  )}
+    if (archiveFeedbackLocked || archiveFeedbackSaving) {
+      return;
+    }
 
-{/* [STANDARD HEADER] Perfume Wiki와 동일한 스펙 (z-30, hover effect) */ }
+    if (!memberId) {
+      setArchiveFeedbackStatus(TEXT_MESSAGES.ARCHIVE_LOGIN_REQUIRED);
+      return;
+    }
+
+    const perfumeId = Number(perfume.perfume_id);
+    if (!Number.isFinite(perfumeId)) {
+      setArchiveFeedbackStatus(TEXT_MESSAGES.ARCHIVE_ID_ERROR);
+      return;
+    }
+
+    try {
+      setArchiveFeedbackSaving(true);
+      setArchiveFeedbackStatus(TEXT_MESSAGES.ARCHIVE_SAVING);
+
+      const response = await fetch(`/api/users/${memberId}/perfumes`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          perfume_id: perfumeId,
+          perfume_name: perfume.perfume_name,
+          register_status: "RECOMMENDED",
+          preference,
+        }),
+      });
+
+      if (!response.ok) {
+        const errorText = await response.text().catch(() => "");
+        throw new Error(errorText || TEXT_MESSAGES.ARCHIVE_FAILED);
+      }
+
+      setArchiveFeedbackLocked(true);
+      setArchiveFeedbackStatus(TEXT_MESSAGES.ARCHIVE_SAVED);
+    } catch (err) {
+      const errorMessage = err instanceof Error ? err.message : TEXT_MESSAGES.ARCHIVE_FAILED;
+      setArchiveFeedbackStatus(errorMessage);
+    } finally {
+      setArchiveFeedbackSaving(false);
+    }
+  };
+
+  const resetChat = () => {
+    setChatMessages(createWelcomeMessages());
+    setQueryText("");
+    setResult(null);
+    setError(null);
+    setFeedbackStatus(null);
+    setFeedbackSaving(false);
+    setFeedbackLocked(false);
+    setLastRecommendationId(null);
+    setLoading(false);
+  };
+
+  // ==================== 렌더링 데이터 준비 ====================
+
+  /** 추천된 향수 후보 */
+  const candidate = result?.recommendation ?? null;
+  const basePerfume = result?.base_perfume ?? null;
+  const perfumeInfo = result?.recommended_perfume_info ?? null;
+  const brandBestPerfume = result?.brand_best_perfume ?? null;
+  const brandBestScore = result?.brand_best_score ?? null;
+  const brandBestReason = result?.brand_best_reason ?? null;
+
+  /** 
+   * 레이어링 결과의 어코드 벡터 및 유효성 검증
+   * 메모이제이션을 통해 불필요한 재계산 방지
+   */
+  const { vector, vectorReady } = useMemo(() => {
+    const vec = candidate?.layered_vector ?? [];
+    const ready =
+      vec.length === BACKEND_ACCORDS.length &&
+      vec.every((value) => Number.isFinite(value));
+
+    return { vector: vec, vectorReady: ready };
+  }, [candidate]);
+
+  /** 
+   * 분사 순서 배열 유효성 검증
+   */
+  const hasSprayOrder = useMemo(() =>
+    candidate?.spray_order &&
+    Array.isArray(candidate.spray_order) &&
+    candidate.spray_order.length > 0,
+    [candidate]
+  );
+
+  /** 
+   * 추천 점수 포맷팅 (소수점 3자리)
+   * 유효하지 않은 경우 "-" 표시
+   */
+  const totalScore = useMemo(() =>
+    Number.isFinite(candidate?.total_score)
+      ? candidate?.total_score.toFixed(3)
+      : "-",
+    [candidate]
+  );
+
+  /**
+   * 점수 평가 정보 메모이제이션
+   * JSX 내부에서 반복 계산되는 것을 방지
+   */
+  const scoreEvaluation = useMemo(() => {
+    if (!candidate) return null;
+    return getScoreEvaluation(candidate.total_score);
+  }, [candidate]);
+
+  const infoSections = useMemo(() => {
+    if (!perfumeInfo) return [];
+    return [
+      { label: "어코드", items: perfumeInfo.accords },
+      { label: "탑 노트", items: perfumeInfo.top_notes },
+      { label: "미들 노트", items: perfumeInfo.middle_notes },
+      { label: "베이스 노트", items: perfumeInfo.base_notes },
+      { label: "계절", items: perfumeInfo.seasons },
+      { label: "상황", items: perfumeInfo.occasions },
+    ].filter((section) => section.items && section.items.length > 0);
+  }, [perfumeInfo]);
+
+  const handleOpenPerfumeInfo = async (perfumeId?: string | null, label?: string) => {
+    if (!perfumeId) return;
+    setInfoModalOpen(true);
+    setInfoModalLoading(true);
+    setInfoModalError(null);
+    setInfoModalData(null);
+    setInfoModalLabel(label ?? "향수");
+    setArchiveFeedbackStatus(null);
+    setArchiveFeedbackSaving(false);
+    setArchiveFeedbackLocked(false);
+
+    try {
+      const currentMemberId = getMemberId(session?.user?.id);
+      const response = await fetch(`${apiBase}/analyze`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          user_text: "향수 정보",
+          member_id: currentMemberId,
+          context_recommended_perfume_id: perfumeId,
+          save_recommendations: false,
+          save_my_perfume: false,
+        }),
+      });
+
+      if (!response.ok) {
+        const errorMessage = await parseErrorResponse(response);
+        throw new Error(errorMessage);
+      }
+
+      const payload = (await response.json()) as UserQueryResponse;
+      if (!payload.recommended_perfume_info) {
+        throw new Error("향수 정보를 불러오지 못했어요.");
+      }
+      setInfoModalData(payload.recommended_perfume_info);
+    } catch (err) {
+      const errorMessage = err instanceof Error ? err.message : "향수 정보를 불러오지 못했어요.";
+      setInfoModalError(errorMessage);
+    } finally {
+      setInfoModalLoading(false);
+    }
+  };
+
+  return (
+    <>
+      <Sidebar
+        isOpen={isNavOpen}
+        onClose={() => setIsNavOpen(false)}
+        context="home"
+      />
+      <UserProfileMenu
+        isOpen={isProfileMenuOpen}
+        onClose={() => setIsProfileMenuOpen(false)}
+      />
+
+      {isNavOpen && (
+        <div
+          className="fixed inset-0 bg-transparent z-40"
+          onClick={() => setIsNavOpen(false)}
+        />
+      )}
+
+      {/* [STANDARD HEADER] Perfume Wiki와 동일한 스펙 (z-30, hover effect) */}
       <header className="fixed top-0 left-0 right-0 z-30 flex flex-wrap items-center justify-between gap-3 px-4 sm:px-6 md:px-10 py-4 sm:py-5 bg-[#FDFBF8] border-b border-[#F0F0F0]">
         {/* 로고 영역: Wiki와 동일하게 div로 감싸 구조 통일 */}
         <div className="flex items-center gap-4">
@@ -1016,7 +1061,10 @@ return (
             <div className="flex items-center gap-3">
               <button
                 id="profile-menu-toggle"
-                onClick={() => setIsProfileMenuOpen(!isProfileMenuOpen)}
+                onClick={() => {
+                  if (!isProfileMenuOpen) setIsNavOpen(false);
+                  setIsProfileMenuOpen(!isProfileMenuOpen);
+                }}
                 className="block w-9 h-9 rounded-full overflow-hidden border border-gray-100 shadow-sm hover:opacity-80 transition-opacity"
               >
                 <img
@@ -1026,16 +1074,16 @@ return (
                   onError={(e) => { e.currentTarget.src = "/default_profile.png"; }}
                 />
               </button>
-              <UserProfileMenu
-                isOpen={isProfileMenuOpen}
-                onClose={() => setIsProfileMenuOpen(false)}
-              />
+
             </div>
           )}
 
           <button
             id="global-menu-toggle"
-            onClick={() => setIsNavOpen(!isNavOpen)}
+            onClick={() => {
+              if (!isNavOpen) setIsProfileMenuOpen(false);
+              setIsNavOpen(!isNavOpen);
+            }}
             className="w-9 h-9 flex items-center justify-center rounded-full hover:bg-gray-100 transition-colors"
           >
             {isNavOpen ? (
@@ -1632,6 +1680,6 @@ return (
           }, 0);
         }}
       />
-  </PageLayout >
-);
+    </>
+  );
 }

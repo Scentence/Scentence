@@ -7,11 +7,13 @@ import { useSession } from "next-auth/react";
 import { motion, useScroll, useTransform, useSpring, useInView, AnimatePresence, wrap } from "framer-motion";
 import Sidebar from "@/components/common/sidebar";
 import Header from "@/components/common/Header";
+import UserProfileMenu from "@/components/common/UserProfileMenu"; // New import
 
 export default function LandingPage() {
   const router = useRouter();
   const { data: session } = useSession();
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
+  const [isProfileMenuOpen, setIsProfileMenuOpen] = useState(false); // New state
   const [localUser, setLocalUser] = useState<{ memberId?: string | null; email?: string | null; nickname?: string | null } | null>(null);
 
   // Hydration Fix
@@ -35,9 +37,23 @@ export default function LandingPage() {
   return (
     <div className="bg-[#FDFBF8] text-[#1a1a1a] font-sans selection:bg-[#FF6B6B] selection:text-white overflow-x-hidden">
       <Sidebar isOpen={isSidebarOpen} onClose={() => setIsSidebarOpen(false)} context="home" />
+      {/* Profile Menu lifted out of Header */}
+      <UserProfileMenu
+        isOpen={isProfileMenuOpen}
+        onClose={() => setIsProfileMenuOpen(false)}
+      />
+
       <Header
-        onToggleSidebar={() => setIsSidebarOpen(!isSidebarOpen)}
+        onToggleSidebar={() => {
+          if (!isSidebarOpen) setIsProfileMenuOpen(false);
+          setIsSidebarOpen(!isSidebarOpen);
+        }}
         isSidebarOpen={isSidebarOpen}
+        onToggleProfile={() => {
+          if (!isProfileMenuOpen) setIsSidebarOpen(false);
+          setIsProfileMenuOpen(!isProfileMenuOpen);
+        }}
+        isProfileMenuOpen={isProfileMenuOpen}
         showGreeting={true}
         isTransparent={true}
         theme="light"

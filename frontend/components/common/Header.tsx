@@ -3,11 +3,13 @@
 import Link from "next/link";
 import { useState, useEffect } from "react";
 import { useSession } from "next-auth/react";
-import UserProfileMenu from "@/components/common/UserProfileMenu";
+
 
 interface HeaderProps {
     onToggleSidebar: () => void;
     isSidebarOpen: boolean;
+    onToggleProfile?: () => void; // New prop
+    isProfileMenuOpen?: boolean;  // New prop
     subTitle?: string;
     showGreeting?: boolean;
     className?: string;
@@ -18,6 +20,8 @@ interface HeaderProps {
 export default function Header({
     onToggleSidebar,
     isSidebarOpen,
+    onToggleProfile,       // New prop destructuring
+    isProfileMenuOpen,     // New prop destructuring
     subTitle,
     showGreeting = false,
     className = "",
@@ -25,7 +29,7 @@ export default function Header({
     theme = "light",
 }: HeaderProps) {
     const { data: session } = useSession();
-    const [isProfileMenuOpen, setIsProfileMenuOpen] = useState(false);
+    // Removed internal state: const [isProfileMenuOpen, setIsProfileMenuOpen] = useState(false);
 
     // Profile Logic (moved from individual pages)
     const [localUser, setLocalUser] = useState<{ memberId?: string | null; email?: string | null; nickname?: string | null } | null>(null);
@@ -109,7 +113,7 @@ export default function Header({
                         )}
                         <button
                             id="profile-menu-toggle"
-                            onClick={() => setIsProfileMenuOpen(!isProfileMenuOpen)}
+                            onClick={onToggleProfile} // Updated onClick
                             className="w-8 h-8 md:w-10 md:h-10 flex items-center justify-center rounded-full p-0.5 transform-gpu bg-gradient-to-br from-white/20 to-transparent border border-white/40 shadow-sm will-change-transform transition-all hover:scale-105 active:scale-95 overflow-hidden"
                         >
                             <img
@@ -126,10 +130,7 @@ export default function Header({
                                 }}
                             />
                         </button>
-                        <UserProfileMenu
-                            isOpen={isProfileMenuOpen}
-                            onClose={() => setIsProfileMenuOpen(false)}
-                        />
+                        {/* UserProfileMenu removed from here */}
                     </div>
                 )}
 

@@ -10,6 +10,7 @@ import ChatSidebar from "../../components/Chat/Sidebar"; // 좌측 채팅 기록
 import NavSidebar from "../../components/common/sidebar"; // 우측 내비게이션 팝오버
 import MagneticButton from "../../components/common/MagneticButton"; // [NEW] 마그네틱 버튼 추가
 import Header from "@/components/common/Header";
+import UserProfileMenu from "@/components/common/UserProfileMenu"; // New import
 import { SavedPerfumesProvider } from "../../contexts/SavedPerfumesContext";
 
 const API_URL = "/api/chat";
@@ -19,6 +20,7 @@ export default function ChatPage() {
     const router = useRouter();
     const [isSidebarOpen, setIsSidebarOpen] = useState(false); // 좌측 채팅 내역 사이드바
     const [isNavOpen, setIsNavOpen] = useState(false); // 우측 내비게이션 팝오버
+    const [isProfileMenuOpen, setIsProfileMenuOpen] = useState(false); // New state
 
     const [messages, setMessages] = useState<Message[]>([]);
     const [inputValue, setInputValue] = useState("");
@@ -266,14 +268,29 @@ export default function ChatPage() {
                 <NavSidebar
                     isOpen={isNavOpen}
                     onClose={() => setIsNavOpen(false)}
-                    context="home"
+                    context="chat"
+                />
+
+                {/* Profile Menu lifted out of Header */}
+                <UserProfileMenu
+                    isOpen={isProfileMenuOpen}
+                    onClose={() => setIsProfileMenuOpen(false)}
                 />
 
                 <Header
-                    onToggleSidebar={() => setIsNavOpen(!isNavOpen)}
+                    onToggleSidebar={() => {
+                        if (!isNavOpen) setIsProfileMenuOpen(false);
+                        setIsNavOpen(!isNavOpen);
+                    }}
                     isSidebarOpen={isNavOpen}
-                    isTransparent={true}
-                    subTitle="AI CHAT"
+                    onToggleProfile={() => {
+                        if (!isProfileMenuOpen) setIsNavOpen(false);
+                        setIsProfileMenuOpen(!isProfileMenuOpen);
+                    }}
+                    isProfileMenuOpen={isProfileMenuOpen}
+                    subTitle="AI Perfume Advisor"
+                    showGreeting={true}
+                    className="border-b border-[#EAE6DF]"
                 />
 
                 {/* 3. Content Wrapper (Sidebar + Main) */}
@@ -419,6 +436,6 @@ export default function ChatPage() {
 
                 </div>
             </div>
-        </SavedPerfumesProvider>
+        </SavedPerfumesProvider >
     );
 }
