@@ -46,6 +46,7 @@ class AgentState(Dict):
 
     # [★추가] 추천 개수 요청
     recommended_count: Optional[int]
+    is_count_explicit: Optional[bool]  # 사용자가 명시적으로 개수를 요청했는지
 
     # [★추가] 프레임 컨텍스트/제약 메타데이터
     frame_id: str | None = None
@@ -56,6 +57,9 @@ class AgentState(Dict):
     chat_outcome_status: Optional[Literal["OK","NO_RESULTS","ERROR"]]
     chat_outcome_reason_code: Optional[str]  # 예: "partial_results", "tool_error", "no_candidates"
     chat_outcome_reason_detail: Optional[str]  # 사용자 노출 금지, 로그/테스트용
+
+    # [★추가] DB 백업을 위한 스레드 ID
+    thread_id: Optional[str]
 
 
 # =================================================================

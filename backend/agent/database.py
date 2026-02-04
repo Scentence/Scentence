@@ -575,3 +575,105 @@ def lookup_note_by_vector(keyword: str) -> List[str]:
     finally:
         cur.close()
         release_db_connection(conn)
+
+
+# ==========================================
+# 6. Recommended History 관리
+# ==========================================
+def update_recommended_history(thread_id: str, perfume_ids: List[int], max_size: int = 100):
+    """
+    스레드의 recommended_history 업데이트 (중복 제거 + 크기 제한)
+
+    Args:
+        thread_id: 채팅 스레드 ID
+        perfume_ids: 추가할 향수 ID 리스트
+        max_size: 최대 히스토리 크기 (기본값: 100)
+    """
+    if not thread_id or not perfume_ids:
+        return
+
+    conn = get_recom_db_connection()
+    try:
+        cur = conn.cursor()
+        # 기존 히스토리와 새 ID 병합 후 중복 제거, 최근 max_size개만 유지
+        cur.execute("""
+            UPDATE TB_CHAT_THREAD_T
+            SET RECOMMENDED_HISTORY = (
+                SELECT ARRAY(
+                    SELECT DISTINCT id FROM (
+                        SELECT unnest(COALESCE(RECOMMENDED_HISTORY, '{}') || %s::INTEGER[]) AS id
+                    ) sub
+                    ORDER BY id DESC
+                    LIMIT %s
+                )
+            )
+            WHERE THREAD_ID = %s
+        """, (perfume_ids, max_size, thread_id))
+        conn.commit()
+        print(f"   💾 [DB] Updated recommended_history for thread {thread_id[:8]}... (+{len(perfume_ids)} IDs)", flush=True)
+    except Exception as e:
+        print(f"   ⚠️ [DB] Failed to update recommended_history: {e}", flush=True)
+        conn.rollback()
+    finally:
+        cur.close()
+        release_recom_db_connection(conn)
+
+
+def get_recommended_history(thread_id: str) -> List[int]:
+    """
+    스레드의 recommended_history 조회
+
+    Args:
+        thread_id: 채팅 스레드 ID
+
+    Returns:
+        향수 ID 리스트
+    """
+    if not thread_id:
+        return []
+
+    conn = get_recom_db_connection()
+    try:
+        cur = conn.cursor()
+        cur.execute(
+            "SELECT RECOMMENDED_HISTORY FROM TB_CHAT_THREAD_T WHERE THREAD_ID = %s",
+            (thread_id,)
+        )
+        row = cur.fetchone()
+        history = list(row[0]) if row and row[0] else []
+        if history:
+            print(f"   📖 [DB] Loaded recommended_history for thread {thread_id[:8]}... ({len(history)} IDs)", flush=True)
+        return history
+    except Exception as e:
+        print(f"   ⚠️ [DB] Failed to load recommended_history: {e}", flush=True)
+        return []
+    finally:
+        cur.close()
+        release_recom_db_connection(conn)
+
+
+def clear_recommended_history(thread_id: str):
+    """
+    스레드의 recommended_history 초기화 (NEW_RECO/RESET 시)
+
+    Args:
+        thread_id: 채팅 스레드 ID
+    """
+    if not thread_id:
+        return
+
+    conn = get_recom_db_connection()
+    try:
+        cur = conn.cursor()
+        cur.execute(
+            "UPDATE TB_CHAT_THREAD_T SET RECOMMENDED_HISTORY = '{}' WHERE THREAD_ID = %s",
+            (thread_id,)
+        )
+        conn.commit()
+        print(f"   🗑️  [DB] Cleared recommended_history for thread {thread_id[:8]}...", flush=True)
+    except Exception as e:
+        print(f"   ⚠️ [DB] Failed to clear recommended_history: {e}", flush=True)
+        conn.rollback()
+    finally:
+        cur.close()
+        release_recom_db_connection(conn)

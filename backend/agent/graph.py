@@ -94,6 +94,38 @@ def log_filters(h_filters: dict, s_filters: dict):
     pass
 
 
+def generate_count_notice(
+    requested: int,
+    actual: int,
+    is_explicit: bool
+) -> str:
+    """
+    추천 개수 관련 안내 메시지를 생성합니다.
+
+    Args:
+        requested: 요청된 개수 (명시적 또는 디폴트)
+        actual: 실제 생성된 개수
+        is_explicit: 사용자가 명시적으로 개수를 요청했는지
+
+    Returns:
+        안내 메시지 (필요 없으면 빈 문자열)
+    """
+    MAX_COUNT = 5
+
+    # 케이스 1: 과다 요청 (명시적일 때만)
+    if is_explicit and requested > MAX_COUNT:
+        return (f"💡 안내: 한 번에 최대 {MAX_COUNT}개까지만 추천이 가능합니다. "
+                f"{MAX_COUNT}개의 향수를 엄선하여 추천드리겠습니다.\n\n")
+
+    # 케이스 2: 부분 실패 (명시적 요청일 때만!)
+    if is_explicit and actual < requested:
+        return (f"💡 안내: 요청하신 {requested}개 중 {actual}개의 향수를 찾았습니다. "
+                f"조건에 맞는 향수가 제한적이었습니다.\n\n")
+
+    # 케이스 3: 묵시적이거나 정상 → 아무 말 안 함
+    return ""
+
+
 async def smart_search_with_retry_async(
     h_filters: dict,
     s_filters: dict,
@@ -299,12 +331,14 @@ def interviewer_node(state: AgentState):
         current_frame_id = state.get("frame_id")
         if classification.intent in ["NEW_RECO", "RESET"]:
             frame_id = str(uuid.uuid4())
-            new_recommended_history = []
+            # [★수정] 히스토리는 유지 (세션 내내 누적)
+            new_recommended_history = None  # None = 기존 히스토리 유지
             print(
                 f"🔄 [Frame] New frame created: {frame_id[:8]}... (intent={classification.intent})",
                 flush=True,
             )
-            print("🗑️  [History] Recommended history cleared (new frame)", flush=True)
+            print("📚 [History] Recommended history maintained (session-level)", flush=True)
+            # [★제거] DB 클리어 안 함 - 세션 내내 유지
         else:
             frame_id = current_frame_id or str(uuid.uuid4())
             new_recommended_history = None
@@ -620,6 +654,8 @@ class RecoSearcher:
 
         try:
             exclude_ids = await self._snapshot_exclude_ids()
+            # 로그: 전략별 검색 시 사용되는 제외 ID
+            print(f"   🔍 [Strategy {priority}] Searching with {len(exclude_ids)} exclusions", flush=True)
             candidates, _match_type = await self._run_search(
                 h_filters,
                 s_filters,
@@ -647,9 +683,15 @@ class RecoSearcher:
 
         selected_perfume = await self._select_candidate(candidates)
 
+        # 로그: 선택된 향수
+        if selected_perfume:
+            print(f"   ✅ [Strategy {priority}] Selected perfume ID: {selected_perfume.get('id')}", flush=True)
+
         if not selected_perfume:
             try:
                 exclude_ids = await self._snapshot_exclude_ids()
+                # 로그: 재시도 시 제외 ID
+                print(f"   🔄 [Strategy {priority}] Retry with {len(exclude_ids)} exclusions", flush=True)
                 candidates, _match_type = await self._run_search(
                     h_filters,
                     s_filters,
@@ -666,6 +708,10 @@ class RecoSearcher:
                     "priority": priority,
                 }
             selected_perfume = await self._select_candidate(candidates)
+
+            # 로그: 재시도 후 선택된 향수
+            if selected_perfume:
+                print(f"   ✅ [Strategy {priority}] Selected perfume ID (retry): {selected_perfume.get('id')}", flush=True)
 
         if not selected_perfume:
             return {
@@ -904,11 +950,27 @@ async def parallel_reco_node(state: AgentState):
 
     session_exclude_ids: Set[int] = set(merged_history)
 
+    # 로그: 히스토리 기반 제외 ID
+    if session_exclude_ids:
+        print(f"🚫 [Exclude] History-based exclusions: {sorted(list(session_exclude_ids))}", flush=True)
+
     if use_case == "SELF":
+        disliked_ids = []
         for disliked in personalization.get("disliked_perfumes", []):
             perfume_id = disliked.get("id")
             if perfume_id:
                 session_exclude_ids.add(perfume_id)
+                disliked_ids.append(perfume_id)
+
+        # 로그: 싫어하는 향수 제외 ID
+        if disliked_ids:
+            print(f"🚫 [Exclude] Disliked perfumes: {sorted(disliked_ids)}", flush=True)
+
+    # 로그: 최종 제외 ID 총합
+    if session_exclude_ids:
+        print(f"🚫 [Exclude] Total session exclusions: {len(session_exclude_ids)} IDs", flush=True)
+    else:
+        print(f"✅ [Exclude] No exclusions for this session", flush=True)
 
     selection_lock = asyncio.Lock()
     batch_selected_ids: Set[int] = set()
@@ -1030,6 +1092,15 @@ async def parallel_reco_node(state: AgentState):
         for next_text in output_texts[1:]:
             next_text = _normalize_section_boundary(full_text, next_text)
             full_text = f"{full_text}\n\n{next_text}"
+
+        # [★추가] 개수 관련 안내 메시지 생성 및 추가
+        is_explicit = state.get("is_count_explicit", False)
+        actual_count = len(output_texts)
+        intro_notice = generate_count_notice(target_count, actual_count, is_explicit)
+
+        if intro_notice:
+            full_text = f"{intro_notice}{full_text}"
+            print(f"💬 [Notice] Added count notice to response", flush=True)
     else:
         fallback_messages = [
             SystemMessage(content=WRITER_FAILURE_PROMPT),
@@ -1067,7 +1138,25 @@ async def parallel_reco_node(state: AgentState):
         if perfume_id:
             current_batch_ids.append(perfume_id)
 
+    # 로그: 이번 배치에서 추천된 향수 ID들
+    if current_batch_ids:
+        print(f"✨ [Batch] Recommended perfume IDs in this batch: {current_batch_ids}", flush=True)
+
     updated_history = _merge_unique_ids(merged_history, current_batch_ids)
+
+    # 로그: 업데이트된 전체 히스토리
+    if updated_history != merged_history:
+        print(f"📚 [History] Updated total history: {len(updated_history)} IDs", flush=True)
+
+    # [★추가] DB에 recommended_history 저장 (thread_id 안전성 검증)
+    thread_id = state.get("thread_id")
+    if thread_id and current_batch_ids:
+        from .database import update_recommended_history
+        try:
+            update_recommended_history(thread_id, current_batch_ids, max_size=100)
+        except Exception as e:
+            print(f"   ⚠️ [DB] Failed to save recommended_history: {e}", flush=True)
+            # DB 저장 실패해도 state의 recommended_history는 유지됨 (메모리 fallback)
 
     return {
         "messages": [AIMessage(content=full_text)],
