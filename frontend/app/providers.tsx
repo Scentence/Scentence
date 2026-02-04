@@ -40,7 +40,7 @@ function AuthSync({ children }: { children: React.ReactNode }) {
                 email: user.email || "",
                 nickname: user.name || "",
                 profileImage: user.image || "",
-                roleType: user.roleType || "USER",
+                // roleType removed for security
                 user_mode: user.userMode || "BEGINNER",
                 provider: "kakao",
                 loggedInAt: new Date().toISOString(),

@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react";
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import { useSession } from "next-auth/react";
 import PageLayout from "@/components/common/PageLayout";
 import { Crown } from "lucide-react";
@@ -19,60 +20,92 @@ const statusOptions = ["NORMAL", "LOCK", "DORMANT", "WITHDRAW_REQ", "WITHDRAW"] 
 
 export default function AdminPage() {
   const { data: session } = useSession();
+  const router = useRouter(); // Add useRouter
   const [memberId, setMemberId] = useState<string | null>(null);
-  const [roleType, setRoleType] = useState<string | null>(null);
+  const [verifiedRoleType, setVerifiedRoleType] = useState<string | null>(null);
+  const [isVerifying, setIsVerifying] = useState(true);
   const [members, setMembers] = useState<MemberRow[]>([]);
   const [message, setMessage] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(false);
   const apiBaseUrl = "/api";
+
+  // Step 1: Get Member ID from Session OR localStorage (Fallback)
   useEffect(() => {
+    // 1. Try NextAuth Session
     if (session?.user?.id) {
       setMemberId(String(session.user.id));
-      return;
+      return; // Found in session, done.
     }
-    if (typeof window === "undefined") return;
-    const stored = localStorage.getItem("localAuth");
-    if (!stored) return;
-    try {
-      const parsed = JSON.parse(stored);
-      if (parsed?.memberId) {
-        setMemberId(String(parsed.memberId));
+
+    // 2. Try LocalStorage (Legacy/Current Auth System)
+    // The current login page stores 'localAuth' in localStorage.
+    // We must read from here for users who logged in via the current system.
+    const localAuth = localStorage.getItem("localAuth");
+    if (localAuth) {
+      try {
+        const parsed = JSON.parse(localAuth);
+        if (parsed.memberId) {
+          setMemberId(String(parsed.memberId));
+          return; // Found in localStorage, done.
+        }
+      } catch (e) {
+        // ignore JSON parse error
       }
-      if (parsed?.roleType) {
-        setRoleType(parsed.roleType);
-      } else if (parsed?.isAdmin) {
-        setRoleType("ADMIN");
-      }
-    } catch (error) {
-      return;
+    }
+
+    // 3. If neither found, stop verifying (will be redirected to Home)
+    if (session === null) {
+      setIsVerifying(false);
     }
   }, [session]);
 
-  const isAdmin = (roleType || "").toUpperCase() === "ADMIN";
+  const isAdmin = (verifiedRoleType || "").toUpperCase() === "ADMIN";
 
+  // Redirect if not admin after verification
   useEffect(() => {
-    if (!memberId || roleType) return;
+    // Wait until verification is complete
+    if (isVerifying) return;
+
+    // If verification finished and NOT admin
+    if (!isAdmin) {
+      const timer = setTimeout(() => {
+        router.push("/");
+      }, 2000); // Redirect after 2s
+      return () => clearTimeout(timer);
+    }
+  }, [isVerifying, isAdmin, router]);
+
+  // Step 2: Verify Role from Server
+  useEffect(() => {
+    if (!memberId) return;
     const controller = new AbortController();
 
-    const loadRole = async () => {
+    const verifyRole = async () => {
+      setIsVerifying(true);
       try {
         const response = await fetch(`${apiBaseUrl}/users/profile/${memberId}`, {
           signal: controller.signal,
         });
-        if (!response.ok) return;
-        const data = await response.json().catch(() => null);
-        if (data?.role_type) {
-          setRoleType(data.role_type);
+        if (!response.ok) {
+          setVerifiedRoleType(null);
+          return;
         }
+        const data = await response.json().catch(() => null);
+        // Only trust the role returned from the fresh server call
+        setVerifiedRoleType(data?.role_type || "USER");
       } catch (error) {
-        return;
+        if ((error as Error).name !== 'AbortError') {
+          setVerifiedRoleType(null);
+        }
+      } finally {
+        setIsVerifying(false);
       }
     };
 
-    loadRole();
+    verifyRole();
 
     return () => controller.abort();
-  }, [apiBaseUrl, memberId, roleType]);
+  }, [apiBaseUrl, memberId]);
 
   useEffect(() => {
     if (!memberId || !isAdmin) return;
@@ -142,9 +175,9 @@ export default function AdminPage() {
       <PageLayout subTitle="ADMIN" className="min-h-screen bg-[#FDFBF8] text-black flex flex-col font-sans selection:bg-black selection:text-white">
 
         <main className="flex-1 px-5 py-12 w-full max-w-6xl mx-auto pt-[100px] space-y-10">
-          {!isAdmin && (
+          {!isAdmin && !isVerifying && (
             <div className={`${liquidGlassBlock} p-12 text-center text-gray-500 shadow-xl`}>
-              관리자 권한을 확인하고 있습니다...
+              접근 권한이 없습니다. 메인으로 이동합니다...
             </div>
           )}
 

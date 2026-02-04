@@ -64,7 +64,8 @@ export default function UserProfileMenu({ isOpen, onClose }: UserProfileMenuProp
             .catch(() => { });
     }, [isOpen, localUser, session]);
 
-    const resolvedRoleType = (localUser?.roleType || (localUser?.isAdmin ? "ADMIN" : "") || profileRoleType || "").toUpperCase();
+    // Resolve Role: Server Profile > Local Storage > Default
+    const resolvedRoleType = (profileRoleType || localUser?.roleType || (localUser?.isAdmin ? "ADMIN" : "") || "").toUpperCase();
     const isAdmin = resolvedRoleType === "ADMIN";
 
     // Outside Click Close
