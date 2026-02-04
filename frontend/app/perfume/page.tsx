@@ -212,20 +212,12 @@ export default function PerfumeDetailPage() {
                   </div>
                 </div>
               </div>
-<<<<<<< Updated upstream
             </>
           )}
         </div>
 
 
         <style jsx>{`
-=======
-            </div>
-          </>
-        )}
-      </div>
-      <style jsx>{`
->>>>>>> Stashed changes
         :global(body) {
           margin: 0;
           background-color: #f4f6f7;
@@ -451,11 +443,7 @@ export default function PerfumeDetailPage() {
           }
         }
       `}</style>
-<<<<<<< Updated upstream
       </div >
-=======
-    </div>
->>>>>>> Stashed changes
     </PageLayout>
   );
 }
