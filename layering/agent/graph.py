@@ -232,12 +232,18 @@ def _extract_perfume_query_llm(user_text: str) -> list[str]:
     return queries
 
 
+
 def _collect_perfume_candidates(
     user_text: str,
     repository: PerfumeRepository,
     limit: int = 6,
 ) -> list[tuple[Any, float, str]]:
     hits: list[tuple[Any, float, str]] = []
+    
+    # 1. Detect explicit brands from user text
+    detected_brands = set(repository.find_brand_candidates(user_text))
+    
+    # 2. Collect initial candidates
     hits.extend(repository.find_perfume_candidates(user_text, limit=limit))
 
     segments = _split_query_segments(user_text)
@@ -255,11 +261,43 @@ def _collect_perfume_candidates(
                     phrase = " ".join(tokens[idx : idx + size])
                     hits.extend(repository.find_perfume_candidates(phrase, limit=limit))
 
+    llm_queries = _extract_perfume_query_llm(user_text)
     if not hits:
-        for query in _extract_perfume_query_llm(user_text):
+        for query in llm_queries:
             hits.extend(repository.find_perfume_candidates(query, limit=limit))
+            
 
-    return _merge_candidate_hits(hits)
+
+    # [Start of Brand Bias Logic]
+    # If LLM found a brand, add it to detected brands
+    # (Note: _extract_perfume_query_llm returns strings like "Brand Name" or "Name". 
+    # capturing the brand separately would require changing that function, 
+    # but we can try to infer from the query or rely on find_brand_candidates)
+    
+    adjusted_hits = []
+    for perfume, score, matched_text in hits:
+        # Check if the perfume's brand matches any detected brand
+        perfume_brand_norm = perfume.perfume_brand.strip().lower()
+        
+        is_brand_match = False
+        for brand in detected_brands:
+            if brand.lower() in perfume_brand_norm or perfume_brand_norm in brand.lower():
+                is_brand_match = True
+                break
+        
+        # Apply strict boost/penalty
+        final_score = score
+        if detected_brands:
+            if is_brand_match:
+                # Boost significant brand matches
+                final_score *= 1.5 
+            else:
+                # Penalize non-matching brands when a brand is explicitly requested
+                final_score *= 0.5
+                
+        adjusted_hits.append((perfume, final_score, matched_text))
+        
+    return _merge_candidate_hits(adjusted_hits)
 
 
 def analyze_user_input(user_text: str) -> PreferenceSummary:

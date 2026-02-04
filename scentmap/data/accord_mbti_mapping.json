@@ -311,6 +311,16 @@
       "P": 35
     }
   },
+  "axis_descriptions": {
+    "E": { "description": "(외향) 공간을 채우는 강한 존재감과 눈에 띄는 첫인상" },
+    "I": { "description": "(내향) 피부에 밀착된 은은하고 깊은 여운" },
+    "S": { "description": "(감각) 원료가 생생하게 느껴지는 구체적이고 사실적인 향" },
+    "N": { "description": "(직관) 장면과 기억을 떠올리게 하는 이야기 같은 향" },
+    "T": { "description": "(사고) 차갑고 정돈된 시원하고 깔끔한 인상" },
+    "F": { "description": "(감정) 감성을 자극하는 부드럽고 따뜻한 인상" },
+    "J": { "description": "(판단) 균형 잡힌 익숙하고 클래식한 조화" },
+    "P": { "description": "(인식) 독특한 포인트가 있는 새롭고 개성 있는 감성" }
+  },
   "mbti_code_mapping": {
     "ESFJ": "ESFJ",
     "ESFP": "ESFP",

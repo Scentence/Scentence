@@ -13,7 +13,12 @@ from langchain_core.messages import HumanMessage, AIMessage
 from agent.schemas import ChatRequest
 from agent.graph import app_graph
 from agent.utils import parse_recommended_count, normalize_recommended_count
-from agent.database import save_chat_message, get_chat_history, get_user_chat_list
+from agent.database import (
+    save_chat_message,
+    get_chat_history,
+    get_user_chat_list,
+    get_recommended_history,
+)
 from routers import users, perfumes, archive # <--- ksu 추가
 
 app = FastAPI(title="Perfume Re-Act Chatbot")
@@ -43,13 +48,31 @@ app.add_middleware(
 )
 
 
-def resolve_recommended_count(user_query: str, explicit_count: int | None) -> int:
-    normalized_explicit = normalize_recommended_count(explicit_count)
-    if normalized_explicit is not None:
-        return normalized_explicit
-    parsed_count = parse_recommended_count(user_query)
-    return parsed_count or 3
+def resolve_recommended_count_with_flag(
+    user_query: str,
+    explicit_count: int | None
+) -> tuple[int, bool]:
+    """
+    추천 개수와 명시성 여부를 함께 반환합니다.
 
+    Returns:
+        (count, is_explicit)
+        - count: 추천 개수
+        - is_explicit: 사용자가 명시적으로 요청했는지 여부
+    """
+    # 케이스 1: API 파라미터로 명시적 전달
+    if explicit_count is not None:
+        normalized = normalize_recommended_count(explicit_count)
+        return (normalized, True)
+
+    # 케이스 2: 쿼리에서 개수 파싱 시도
+    parsed = parse_recommended_count(user_query)
+    if parsed is not None:
+        normalized = normalize_recommended_count(parsed)
+        return (normalized, True)  # 쿼리에 개수가 있으면 명시적
+
+    # 케이스 3: 디폴트
+    return (3, False)  # 디폴트는 묵시적
 async def stream_generator(
     user_query: str,
     thread_id: str,
@@ -87,6 +110,9 @@ async def stream_generator(
             else:
                 restored_messages.append(AIMessage(content=msg["text"]))
 
+        # [★추가] DB에서 recommended_history 복원
+        db_recommended_history = get_recommended_history(thread_id)
+
         # 첫 요청: DB 복원 메시지 + 새 메시지
         input_messages = restored_messages + [HumanMessage(content=user_query)]
         print(f"   📊 [History] Restored {len(restored_messages)} messages from DB")
@@ -96,14 +122,25 @@ async def stream_generator(
         existing_count = len(current_state.values.get("messages", []))
         print(f"   ✅ [History] Using checkpointer ({existing_count} existing messages)")
 
+        # [★추가] Checkpointer에 이미 recommended_history가 있으면 그것을 사용
+        db_recommended_history = current_state.values.get("recommended_history", [])
+
     normalized_mode = normalize_user_mode(user_mode)
+
+    # [★추가] 추천 개수와 명시성 여부 계산
+    resolved_count, is_explicit = resolve_recommended_count_with_flag(
+        user_query, recommended_count if recommended_count != 3 else None
+    )
 
     inputs = {
         "messages": input_messages,
         "member_id": member_id,
         "user_mode": normalized_mode,
         "user_query": user_query,
-        "recommended_count": recommended_count,
+        "recommended_count": resolved_count,
+        "is_count_explicit": is_explicit,  # [★추가] 명시성 플래그
+        "thread_id": thread_id,  # [★추가] DB 백업을 위한 thread_id
+        "recommended_history": db_recommended_history,  # [★추가] DB에서 복원한 히스토리
     }
 
     full_ai_response = ""
@@ -250,9 +287,7 @@ async def stream_generator(
 
 @app.post("/chat")
 async def chat_stream(request: ChatRequest):
-    recommended_count = resolve_recommended_count(
-        request.user_query, request.recommended_count
-    )
+    recommended_count = request.recommended_count or 3
     return StreamingResponse(
         stream_generator(
             request.user_query,
