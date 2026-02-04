@@ -331,18 +331,14 @@ def interviewer_node(state: AgentState):
         current_frame_id = state.get("frame_id")
         if classification.intent in ["NEW_RECO", "RESET"]:
             frame_id = str(uuid.uuid4())
-            new_recommended_history = []
+            # [★수정] 히스토리는 유지 (세션 내내 누적)
+            new_recommended_history = None  # None = 기존 히스토리 유지
             print(
                 f"🔄 [Frame] New frame created: {frame_id[:8]}... (intent={classification.intent})",
                 flush=True,
             )
-            print("🗑️  [History] Recommended history cleared (new frame)", flush=True)
-
-            # [★추가] DB도 클리어
-            thread_id = state.get("thread_id")
-            if thread_id:
-                from .database import clear_recommended_history
-                clear_recommended_history(thread_id)
+            print("📚 [History] Recommended history maintained (session-level)", flush=True)
+            # [★제거] DB 클리어 안 함 - 세션 내내 유지
         else:
             frame_id = current_frame_id or str(uuid.uuid4())
             new_recommended_history = None
