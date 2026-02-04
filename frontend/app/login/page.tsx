@@ -73,8 +73,8 @@ export default function LoginPage() {
             memberId: data?.member_id ?? null,
             email: loginId.trim(),
             nickname,
-            roleType: roleType,
-            user_mode: userMode, // [추가]
+            // roleType removed for security
+            user_mode: userMode,
             loggedInAt: new Date().toISOString(),
           })
         );

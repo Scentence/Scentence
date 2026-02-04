@@ -56,7 +56,8 @@ export default function UserProfileMenu({ isOpen, onClose }: UserProfileMenuProp
         const memberId = session?.user?.id || (localUser as any)?.memberId;
         if (!memberId) return;
 
-        fetch(`/api/users/profile/${memberId}`)
+        // [Admin Button Fix] Force fresh fetch to ensure role_type is up to date
+        fetch(`/api/users/profile/${memberId}`, { cache: 'no-store' })
             .then((res) => (res.ok ? res.json() : null))
             .then((data) => {
                 if (data?.role_type) setProfileRoleType(data.role_type);
@@ -64,7 +65,8 @@ export default function UserProfileMenu({ isOpen, onClose }: UserProfileMenuProp
             .catch(() => { });
     }, [isOpen, localUser, session]);
 
-    const resolvedRoleType = (localUser?.roleType || (localUser?.isAdmin ? "ADMIN" : "") || profileRoleType || "").toUpperCase();
+    // Resolve Role: Server Profile > Local Storage > Default
+    const resolvedRoleType = (profileRoleType || localUser?.roleType || (localUser?.isAdmin ? "ADMIN" : "") || "").toUpperCase();
     const isAdmin = resolvedRoleType === "ADMIN";
 
     // Outside Click Close

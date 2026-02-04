@@ -51,11 +51,23 @@ export default function NMapGraphSection({
   const [scriptReady, setScriptReady] = useState(false);
   const [freezeMotion, setFreezeMotion] = useState(false);
   const [hoveredSimilarPerfumeId, setHoveredSimilarPerfumeId] = useState<string | null>(null);
-  
+
+  // [Network Graph Refs]
+  // 그래프가 그려질 DOM 컨테이너와 Vis.js 네트워크 인스턴스, 데이터셋을 참조합니다.
   const containerRef = useRef<HTMLDivElement>(null);
   const networkRef = useRef<any>(null);
   const nodesDataRef = useRef<any>(null);
   const edgesDataRef = useRef<any>(null);
+
+  // [Fix] Vis.js 로드 상태 확인 (Client-Side Navigation 대응)
+  // 페이지를 새로고침하면 <Script> 태그의 onLoad가 발생하지만,
+  // 다른 페이지에서 링크를 타고 들어오면(SPA 네비게이션) 이미 스크립트가 로드되어 있어서 onLoad가 발생하지 않습니다.
+  // 따라서 window 객체에 vis가 이미 있는지 확인하여 scriptReady 상태를 강제로 true로 만들어줍니다.
+  useEffect(() => {
+    if ((window as any).vis || (window as any).visNetwork) {
+      setScriptReady(true);
+    }
+  }, []);
 
   const fmtAccord = (v: string) => {
     const trimmed = v.trim();
@@ -63,7 +75,7 @@ export default function NMapGraphSection({
     return labelsData?.accords[trimmed] || ACCORD_LABELS[trimmed] || v;
   };
   const fmtBrand = (v: string) => labelsData?.brands[v.trim()] || BRAND_LABELS[v.trim()] || v;
-  
+
   const getStatusBadge = (status?: string | null) => {
     if (!status) return null;
     const normalized = status.trim().toUpperCase();
@@ -88,10 +100,10 @@ export default function NMapGraphSection({
       if (selectedGenders.length > 0 && !selectedGenders.some(g => node.genders?.includes(g))) return false;
       return true;
     });
-    
+
     const visibleIds = new Set(visiblePerfumeNodes.map(n => n.id));
     const filteredEdges: NetworkEdge[] = [];
-    const accordMap = new Map<string, Array<{to: string, weight: number}>>();
+    const accordMap = new Map<string, Array<{ to: string, weight: number }>>();
 
     fullPayload.edges.forEach(edge => {
       if (edge.type === "SIMILAR_TO") {
@@ -108,7 +120,7 @@ export default function NMapGraphSection({
         .filter(acc => selectedAccordIds.has(acc.to))
         .forEach(acc => filteredEdges.push({ from: perfumeId, to: acc.to, type: "HAS_ACCORD", weight: acc.weight }));
     });
-    
+
     const activeAccordIds = new Set(filteredEdges.filter(e => e.type === "HAS_ACCORD").map(e => e.to));
     const finalNodes = fullPayload.nodes.filter(n => (n.type === "perfume" && visibleIds.has(n.id)) || (n.type === "accord" && activeAccordIds.has(n.id)));
     return { nodes: finalNodes, edges: filteredEdges, meta: fullPayload.meta };
@@ -213,7 +225,7 @@ export default function NMapGraphSection({
       const toRemove = (nodesDataRef.current.getIds() as string[]).filter(id => !nodes.some(n => n.id === id));
       if (toRemove.length > 0) nodesDataRef.current.remove(toRemove);
       edgesDataRef.current.clear(); edgesDataRef.current.add(edges);
-      if (selectedPerfumeId) try { networkRef.current.moveNode(selectedPerfumeId, 0, 0); } catch (e) {}
+      if (selectedPerfumeId) try { networkRef.current.moveNode(selectedPerfumeId, 0, 0); } catch (e) { }
       networkRef.current.setOptions({ physics: { enabled: !freezeMotion } });
     }
   }, [scriptReady, displayPayload, selectedPerfumeId, freezeMotion, hoveredSimilarPerfumeId]);
