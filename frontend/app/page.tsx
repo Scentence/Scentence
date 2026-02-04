@@ -14,6 +14,12 @@ export default function LandingPage() {
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
   const [localUser, setLocalUser] = useState<{ memberId?: string | null; email?: string | null; nickname?: string | null } | null>(null);
 
+  // Hydration Fix
+  const [mounted, setMounted] = useState(false);
+  useEffect(() => {
+    setMounted(true);
+  }, []);
+
   useEffect(() => {
     if (typeof window === "undefined") return;
     const stored = localStorage.getItem("localAuth");
@@ -21,6 +27,8 @@ export default function LandingPage() {
       try { setLocalUser(JSON.parse(stored)); } catch { setLocalUser(null); }
     }
   }, []);
+
+  if (!mounted) return null; // Prevent hydration errors
 
   return (
     <div className="bg-[#FDFBF8] text-[#1a1a1a] font-sans selection:bg-[#FF6B6B] selection:text-white overflow-x-hidden">
