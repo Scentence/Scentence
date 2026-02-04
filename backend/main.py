@@ -13,7 +13,12 @@ from langchain_core.messages import HumanMessage, AIMessage
 from agent.schemas import ChatRequest
 from agent.graph import app_graph
 from agent.utils import parse_recommended_count, normalize_recommended_count
-from agent.database import save_chat_message, get_chat_history, get_user_chat_list
+from agent.database import (
+    save_chat_message,
+    get_chat_history,
+    get_user_chat_list,
+    get_recommended_history,
+)
 from routers import users, perfumes, archive # <--- ksu 추가
 
 app = FastAPI(title="Perfume Re-Act Chatbot")
@@ -87,6 +92,9 @@ async def stream_generator(
             else:
                 restored_messages.append(AIMessage(content=msg["text"]))
 
+        # [★추가] DB에서 recommended_history 복원
+        db_recommended_history = get_recommended_history(thread_id)
+
         # 첫 요청: DB 복원 메시지 + 새 메시지
         input_messages = restored_messages + [HumanMessage(content=user_query)]
         print(f"   📊 [History] Restored {len(restored_messages)} messages from DB")
@@ -96,6 +104,9 @@ async def stream_generator(
         existing_count = len(current_state.values.get("messages", []))
         print(f"   ✅ [History] Using checkpointer ({existing_count} existing messages)")
 
+        # [★추가] Checkpointer에 이미 recommended_history가 있으면 그것을 사용
+        db_recommended_history = current_state.values.get("recommended_history", [])
+
     normalized_mode = normalize_user_mode(user_mode)
 
     inputs = {
@@ -104,6 +115,8 @@ async def stream_generator(
         "user_mode": normalized_mode,
         "user_query": user_query,
         "recommended_count": recommended_count,
+        "thread_id": thread_id,  # [★추가] DB 백업을 위한 thread_id
+        "recommended_history": db_recommended_history,  # [★추가] DB에서 복원한 히스토리
     }
 
     full_ai_response = ""

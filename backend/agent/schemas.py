@@ -57,6 +57,9 @@ class AgentState(Dict):
     chat_outcome_reason_code: Optional[str]  # 예: "partial_results", "tool_error", "no_candidates"
     chat_outcome_reason_detail: Optional[str]  # 사용자 노출 금지, 로그/테스트용
 
+    # [★추가] DB 백업을 위한 스레드 ID
+    thread_id: Optional[str]
+
 
 # =================================================================
 # 2. 인터뷰 및 라우팅 (Interviewer & Router)

@@ -231,7 +231,7 @@ def lookup_perfume_info_tool(user_input: str) -> Dict[str, Any] | List:
 
 
 @tool(args_schema=PerfumeIdSearchInput)
-async def lookup_perfume_by_id_tool(perfume_id: int) -> Dict[str, Any] | List:
+def lookup_perfume_by_id_tool(perfume_id: int) -> Dict[str, Any] | List:
     """
     perfume_id를 받아 향수 상세 정보를 반환합니다.
 
@@ -244,7 +244,7 @@ async def lookup_perfume_by_id_tool(perfume_id: int) -> Dict[str, Any] | List:
     conn = None
     cur = None
     try:
-        conn = await get_db_connection()
+        conn = get_db_connection()
         cur = conn.cursor(cursor_factory=RealDictCursor)
 
         sql = """

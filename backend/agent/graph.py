@@ -305,6 +305,12 @@ def interviewer_node(state: AgentState):
                 flush=True,
             )
             print("🗑️  [History] Recommended history cleared (new frame)", flush=True)
+
+            # [★추가] DB도 클리어
+            thread_id = state.get("thread_id")
+            if thread_id:
+                from .database import clear_recommended_history
+                clear_recommended_history(thread_id)
         else:
             frame_id = current_frame_id or str(uuid.uuid4())
             new_recommended_history = None
@@ -620,6 +626,8 @@ class RecoSearcher:
 
         try:
             exclude_ids = await self._snapshot_exclude_ids()
+            # 로그: 전략별 검색 시 사용되는 제외 ID
+            print(f"   🔍 [Strategy {priority}] Searching with {len(exclude_ids)} exclusions", flush=True)
             candidates, _match_type = await self._run_search(
                 h_filters,
                 s_filters,
@@ -647,9 +655,15 @@ class RecoSearcher:
 
         selected_perfume = await self._select_candidate(candidates)
 
+        # 로그: 선택된 향수
+        if selected_perfume:
+            print(f"   ✅ [Strategy {priority}] Selected perfume ID: {selected_perfume.get('id')}", flush=True)
+
         if not selected_perfume:
             try:
                 exclude_ids = await self._snapshot_exclude_ids()
+                # 로그: 재시도 시 제외 ID
+                print(f"   🔄 [Strategy {priority}] Retry with {len(exclude_ids)} exclusions", flush=True)
                 candidates, _match_type = await self._run_search(
                     h_filters,
                     s_filters,
@@ -666,6 +680,10 @@ class RecoSearcher:
                     "priority": priority,
                 }
             selected_perfume = await self._select_candidate(candidates)
+
+            # 로그: 재시도 후 선택된 향수
+            if selected_perfume:
+                print(f"   ✅ [Strategy {priority}] Selected perfume ID (retry): {selected_perfume.get('id')}", flush=True)
 
         if not selected_perfume:
             return {
@@ -904,11 +922,27 @@ async def parallel_reco_node(state: AgentState):
 
     session_exclude_ids: Set[int] = set(merged_history)
 
+    # 로그: 히스토리 기반 제외 ID
+    if session_exclude_ids:
+        print(f"🚫 [Exclude] History-based exclusions: {sorted(list(session_exclude_ids))}", flush=True)
+
     if use_case == "SELF":
+        disliked_ids = []
         for disliked in personalization.get("disliked_perfumes", []):
             perfume_id = disliked.get("id")
             if perfume_id:
                 session_exclude_ids.add(perfume_id)
+                disliked_ids.append(perfume_id)
+
+        # 로그: 싫어하는 향수 제외 ID
+        if disliked_ids:
+            print(f"🚫 [Exclude] Disliked perfumes: {sorted(disliked_ids)}", flush=True)
+
+    # 로그: 최종 제외 ID 총합
+    if session_exclude_ids:
+        print(f"🚫 [Exclude] Total session exclusions: {len(session_exclude_ids)} IDs", flush=True)
+    else:
+        print(f"✅ [Exclude] No exclusions for this session", flush=True)
 
     selection_lock = asyncio.Lock()
     batch_selected_ids: Set[int] = set()
@@ -1067,7 +1101,25 @@ async def parallel_reco_node(state: AgentState):
         if perfume_id:
             current_batch_ids.append(perfume_id)
 
+    # 로그: 이번 배치에서 추천된 향수 ID들
+    if current_batch_ids:
+        print(f"✨ [Batch] Recommended perfume IDs in this batch: {current_batch_ids}", flush=True)
+
     updated_history = _merge_unique_ids(merged_history, current_batch_ids)
+
+    # 로그: 업데이트된 전체 히스토리
+    if updated_history != merged_history:
+        print(f"📚 [History] Updated total history: {len(updated_history)} IDs", flush=True)
+
+    # [★추가] DB에 recommended_history 저장 (thread_id 안전성 검증)
+    thread_id = state.get("thread_id")
+    if thread_id and current_batch_ids:
+        from .database import update_recommended_history
+        try:
+            update_recommended_history(thread_id, current_batch_ids, max_size=100)
+        except Exception as e:
+            print(f"   ⚠️ [DB] Failed to save recommended_history: {e}", flush=True)
+            # DB 저장 실패해도 state의 recommended_history는 유지됨 (메모리 fallback)
 
     return {
         "messages": [AIMessage(content=full_text)],
