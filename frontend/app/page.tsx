@@ -1,367 +1,541 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef, useCallback } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
-import { useSession } from "next-auth/react"; // [Login Check]
-import MaximumCounter from "@/components/perfume-wiki/MaximumCounter"; // (만약 사용하는 경우 유지, 없으면 삭제 가능하지만 기존 import 유지)
+import { useSession } from "next-auth/react";
+import { motion, useScroll, useTransform, useSpring, useInView, AnimatePresence, wrap } from "framer-motion";
 import Sidebar from "@/components/common/sidebar";
-import UserProfileMenu from "@/components/common/UserProfileMenu";
+import Header from "@/components/common/Header";
+import UserProfileMenu from "@/components/common/UserProfileMenu"; // New import
 
 export default function LandingPage() {
   const router = useRouter();
-  const { data: session } = useSession(); // [Login Check]
+  const { data: session } = useSession();
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
-  const [isProfileMenuOpen, setIsProfileMenuOpen] = useState(false);
+  const [isProfileMenuOpen, setIsProfileMenuOpen] = useState(false); // New state
+  const [localUser, setLocalUser] = useState<{ memberId?: string | null; email?: string | null; nickname?: string | null } | null>(null);
 
-  // [Profile Logic] 로그인 사용자 정보 확인
-  const [localUser, setLocalUser] = useState<{ memberId?: string | null; email?: string | null; nickname?: string | null; roleType?: string | null; isAdmin?: boolean } | null>(null);
-  const [profileImageUrl, setProfileImageUrl] = useState<string | null>(null);
-
-  // 최신 닉네임을 저장할 State 추가
-  const [profileNickname, setProfileNickname] = useState<string | null>(null);
+  // Hydration Fix
+  const [mounted, setMounted] = useState(false);
+  useEffect(() => {
+    setMounted(true);
+  }, []);
 
   useEffect(() => {
     if (typeof window === "undefined") return;
     const stored = localStorage.getItem("localAuth");
     if (stored) {
-      try {
-        setLocalUser(JSON.parse(stored));
-      } catch (error) {
-        setLocalUser(null);
-      }
+      try { setLocalUser(JSON.parse(stored)); } catch { setLocalUser(null); }
     }
   }, []);
 
-  useEffect(() => {
-    if (typeof window === "undefined") return;
-    const memberId = session?.user?.id || localUser?.memberId;
 
-    if (!memberId) {
-      setProfileImageUrl(null);
-      return;
-    }
+  if (!mounted) return null; // Prevent hydration errors
 
-    fetch(`/api/users/profile/${memberId}`)
-      .then((res) => (res.ok ? res.json() : null))
-      .then((data) => {
-        // [사용자 정보 업데이트] 가져온 데이터에 닉네임이 있으면 저장하기
-        if (data?.nickname) {
-          setProfileNickname(data.nickname);
-        }
-
-        // [프로필 이미지 경로 처리 로직]
-        // 1. 이미 http로 시작하는 전체 경로(S3, 카카오 등)라면 그대로 사용합니다.
-        // 2. /uploads/로 시작하는 상대 경로라면, 도메인을 붙이지 않고 그대로 사용합니다.
-        //    (Next.js의 rewrites 설정 덕분에 브라우저가 알아서 현재 서버의 백엔드로 요청을 보냅니다.)
-        // 3. 이를 통해 'localhost'가 코드에 박히는 현상을 방지하여 팀원들 PC에서도 사진이 잘 나오게 합니다.
-        if (data?.profile_image_url) {
-          setProfileImageUrl(data.profile_image_url);
-        }
-      })
-      .catch(() => setProfileImageUrl(null));
-  }, [localUser, session]);
-
-  // [Display Name Logic]
-  const displayName = profileNickname || session?.user?.name || localUser?.nickname || localUser?.email?.split('@')[0] || "Guest";
-  const isLoggedIn = Boolean(session || localUser);
-
-  const handleNewChat = () => {
-    router.push("/chat");
-  };
-
-  const handleCreateScentCard = () => {
-    router.push("/scent-card");
-  };
 
   return (
-    <div className="flex h-screen bg-[#FDFBF8] overflow-hidden text-black relative font-sans">
-
-      {/* 1. 스마트 사이드바 (context="home") -> 이제 팝오버 메뉴 역할 */}
-      <Sidebar
-        isOpen={isSidebarOpen}
-        onClose={() => setIsSidebarOpen(false)}
-        context="home"
+    <div className="bg-[#FDFBF8] text-[#1a1a1a] font-sans selection:bg-[#FF6B6B] selection:text-white overflow-x-hidden">
+      <Sidebar isOpen={isSidebarOpen} onClose={() => setIsSidebarOpen(false)} context="home" />
+      {/* Profile Menu lifted out of Header */}
+      <UserProfileMenu
+        isOpen={isProfileMenuOpen}
+        onClose={() => setIsProfileMenuOpen(false)}
       />
 
-      <main className="flex-1 flex flex-col relative w-full h-full overflow-y-auto no-scrollbar pb-8 pt-[72px]">
-        {/* 사이드바 열렸을 때 배경 어둡게 처리 -> 팝오버로 변경되므로 제거할 수도 있지만, 모바일 고려해 투명 오버레이는 Sidebar 내부에서 처리하는 게 나을 수도 있음. 
-            기존 코드는 유지하되 Sidebar 컴포넌트가 알아서 처리하도록 둠. 
-            여기선 '모바일용 배경'은 팝오버 스타일엔 굳이 필요 없거나 투명하게 처리. 
-            일단 기존 배경 어둡게 처리는 유지 (Overlay 역할) 하거나, 
-            팝오버 스타일(모달성 아님)을 원하면 제거. 
-            사용자 요청 "팝오버"는 보통 모달 오버레이가 진하지 않음. 
-            여기서는 `z-40` 오버레이를 제거하고 Sidebar 컴포넌트 내부에서 처리하게 변경 권장.
-            하지만 안전하게 기존 코드 유지.
-        */}
+      <Header
+        onToggleSidebar={() => {
+          if (!isSidebarOpen) setIsProfileMenuOpen(false);
+          setIsSidebarOpen(!isSidebarOpen);
+        }}
+        isSidebarOpen={isSidebarOpen}
+        onToggleProfile={() => {
+          if (!isProfileMenuOpen) setIsSidebarOpen(false);
+          setIsProfileMenuOpen(!isProfileMenuOpen);
+        }}
+        isProfileMenuOpen={isProfileMenuOpen}
+        showGreeting={true}
+        isTransparent={true}
+        theme="light"
+      />
 
-
-        <header className="fixed top-0 left-0 right-0 z-30 flex items-center justify-between px-6 md:px-10 py-5 bg-[#FDFBF8] border-b border-[#F0F0F0]">
-          {/* 로고 영역: Wiki와 동일하게 div로 감싸 구조 통일 */}
-          <div className="flex items-center gap-4">
-            <Link href="/" className="text-lg font-bold text-black tracking-[0.15em] uppercase hover:opacity-70 transition">
-              SCENTENCE
-            </Link>
-          </div>
-
-          {/* 우측 상단 UI: Perfume Wiki와 동일하게 통일 (Welcome Msg 제거하여 위치 통일) */}
-          <div className="flex items-center gap-4">
-            {!isLoggedIn ? (
-              <div className="flex items-center gap-2 text-sm font-medium text-gray-400">
-                <Link href="/login" className="hover:text-black transition-colors">Sign in</Link>
-                <span className="text-gray-300">|</span>
-                <Link href="/signup" className="hover:text-black transition-colors">Sign up</Link>
-              </div>
-            ) : (
-              <div className="flex items-center gap-3">
-                <span className="hidden md:inline-block text-sm font-medium text-gray-600 mr-2">
-                  <strong className="font-bold text-gray-900">{displayName}</strong>님 반가워요!
-                </span>
-                <button
-                  id="profile-menu-toggle"
-                  onClick={() => setIsProfileMenuOpen(!isProfileMenuOpen)}
-                  className="block w-9 h-9 rounded-full overflow-hidden border border-gray-100 shadow-sm hover:opacity-80 transition-opacity"
-                >
-                  <img
-                    src={profileImageUrl || "/default_profile.png"}
-                    alt="Profile"
-                    className="w-full h-full object-cover"
-                    onError={(e) => { e.currentTarget.src = "/default_profile.png"; }}
-                  />
-                </button>
-                <UserProfileMenu
-                  isOpen={isProfileMenuOpen}
-                  onClose={() => setIsProfileMenuOpen(false)}
-                />
-              </div>
-            )}
-
-            <button
-              id="global-menu-toggle"
-              onClick={() => setIsSidebarOpen(!isSidebarOpen)}
-              className="w-9 h-9 flex items-center justify-center rounded-full hover:bg-gray-100 transition-colors"
-            >
-              {isSidebarOpen ? (
-                <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" className="w-8 h-8 text-[#555]">
-                  <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
-                </svg>
-              ) : (
-                <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" className="w-8 h-8 text-[#555]">
-                  <path strokeLinecap="round" strokeLinejoin="round" d="M3.75 9h16.5m-16.5 6.75h16.5" />
-                </svg>
-              )}
-            </button>
-          </div>
-        </header>
-
-        <div className="px-5 space-y-8 mt-6 w-full max-w-3xl mx-auto">
-          {/* 3. HERO CAROUSEL */}
-          <section className="relative w-full aspect-[4/3.5] bg-[#E0E0E0] rounded-2xl overflow-hidden group">
-            <div
-              className="flex w-full h-full overflow-x-auto snap-x snap-mandatory no-scrollbar"
-              id="hero-carousel"
-              style={{ scrollBehavior: 'smooth' }}
-            >
-              {[1, 2, 3].map((num) => (
-                <div key={num} className="snap-center shrink-0 w-full h-full relative">
-                  <img
-                    src={`/perfumes/news${num}.png`}
-                    alt={`News ${num}`}
-                    className="w-full h-full object-cover"
-                  />
-                  <div className="absolute inset-0 bg-gradient-to-t from-black/50 via-transparent to-transparent opacity-60" />
-                </div>
-              ))}
-            </div>
-            <div className="absolute bottom-4 right-4 bg-black/60 backdrop-blur-sm text-white text-xs px-3 py-1 rounded-full font-medium z-10">
-              News
-            </div>
-          </section>
-
-          {/* 자동 스크롤 스크립트 실행 */}
-          <AutoScrollScript />
-
-          {/* 4. QUICK MENU BUTTONS */}
-          {/* 버튼 반응 추가 */}
-          <section className="flex gap-4">
-            <button className="flex-1 bg-[#C8A24D] py-4 rounded-xl text-center text-sm font-bold text-white transition-transform active:scale-95 duration-200 shadow-[0_6px_16px_rgba(200,162,77,0.35)] hover:bg-[#B89138]">
-              향수 백과
-            </button>
-            <button
-              onClick={handleNewChat}
-              className="flex-1 bg-[#C8A24D] py-4 rounded-xl text-center text-sm font-bold text-white transition-transform active:scale-95 duration-200 shadow-[0_6px_16px_rgba(200,162,77,0.35)] hover:bg-[#B89138]"
-            >
-              향수 추천
-            </button>
-          </section>
-
-          {/* 5. SCENTENCE PICK */}
-          <section className="space-y-4">
-            <h3 className="text-lg font-bold text-black">Scentence Pick</h3>
-            <div className="flex gap-4 overflow-x-auto no-scrollbar pb-2">
-              {[
-                { file: "Angels Share Paradis By Kilian (unisex).png", name: "Angels' Share", brand: "By Kilian" },
-                { file: "Angham Lattafa Perfumes (unisex).png", name: "Angham", brand: "Lattafa Perfumes" },
-                { file: "BaldAfrique Absolu Byredo (unisex).png", name: "Bal d'Afrique Absolu", brand: "Byredo" },
-                { file: "Fleur de Peau Eau de Toilette Diptyque (unisex).png", name: "Fleur de Peau", brand: "Diptyque" },
-                { file: "Guidance 46 Amouage (unisex).png", name: "Guidance 46", brand: "Amouage" },
-                { file: "Shalimar_L_Essence Guerlain (female).png", name: "Shalimar L'Essence", brand: "Guerlain" },
-                { file: "Tilia Marc-Antoine Barrois (unisex).png", name: "Tilia", brand: "Marc-Antoine Barrois" },
-                { file: "Valaya Exclusif Parfums de Marly (female).png", name: "Valaya Exclusif", brand: "Parfums de Marly" },
-                { file: "Yum Boujee Marshmallow_81 Kayali Fragrances (female).png", name: "Yum Boujee Marshmallow", brand: "Kayali" }
-              ].map((item, idx) => (
-                <div key={idx} className="shrink-0 w-32 flex flex-col gap-2">
-                  <div className="w-32 h-32 bg-[#E0E0E0] rounded-2xl overflow-hidden">
-                    <img src={`/perfumes/${item.file}`} alt={item.name} className="w-full h-full object-cover" />
-                  </div>
-                  <div className="text-xs text-center">
-                    <p className="font-bold text-[#333] truncate">{item.name}</p>
-                    <p className="text-[#666] truncate">{item.brand}</p>
-                  </div>
-                </div>
-              ))}
-            </div>
-          </section>
-
-          {/* 6. SCENTENCE 어떠신가요? --> 나만의 향기 카드 */}
-          <section className="space-y-4">
-            <div className="flex items-center justify-between">
-              <div>
-                <h3 className="text-lg font-bold text-black">나만의 향기 카드</h3>
-                <p className="text-xs text-[#666]">사용자들이 공유한 향기 카드를 둘러보세요</p>
-              </div>
-              {/* <button className="hidden sm:inline-flex items-center gap-2 px-3 py-2 rounded-full border border-[#D9B45A] text-[#8C6A1D] bg-[#FFF7E1] text-xs font-semibold hover:bg-[#FFEFC3] transition">
-                공유 피드
-              </button> */}
-            </div>
-
-            <div className="flex gap-4 overflow-x-auto no-scrollbar snap-x snap-mandatory pb-2">
-              {[
-                {
-                  serial: "SC-001",
-                  imageLabel: "향 캐릭터 이름",
-                  mood: "#데이트 #무드",
-                  title: "비 오는 날의 홍차",
-                  user: "@minji"
-                },
-                {
-                  serial: "SC-GUEST",
-                  imageLabel: "향 캐릭터 이름",
-                  mood: "#랜덤 #체험",
-                  title: "어코드 표현 문장",
-                  user: "@GUEST"
-                },
-                {
-                  serial: "SC-026",
-                  imageLabel: "향 캐릭터 이름",
-                  mood: "#휴일 #산책",
-                  title: "어코드 표현 문장",
-                  user: "@yuna"
-                },
-                {
-                  serial: "SC-041",
-                  imageLabel: "향 캐릭터 이름",
-                  mood: "#집중 #야간",
-                  title: "어코드 표현 문장",
-                  user: "@junseo"
-                },
-
-              ].map((card, idx) => (
-                <article
-                  key={idx}
-                  className="snap-start shrink-0 w-[240px] rounded-2xl bg-white border border-[#EAD7A1] shadow-[0_6px_18px_rgba(140,106,29,0.12)]"
-                >
-                  <div className="relative m-3 rounded-xl overflow-hidden aspect-[4/5] bg-gradient-to-br from-[#FFF0C7] via-[#F6D88C] to-[#D7B05E]">
-                    <div className="absolute inset-0 bg-black/10" />
-                    <div className="absolute top-3 left-3 right-3 flex items-center justify-between text-[10px] font-semibold text-[#8C6A1D]">
-                      <span className="px-2 py-1 rounded-full bg-white/85">SCENTENCE CARD</span>
-                      {/* serial: 카드드생성번호 */}
-                      <span className="px-2 py-1 rounded-full bg-white/85">{card.serial}</span>
-                    </div>
-                    <div className="absolute inset-0">
-                      <div className="absolute -top-6 -right-4 w-24 h-24 rounded-full bg-white/25 blur-[2px]" />
-                      <div className="absolute bottom-6 left-3 w-16 h-16 rounded-full bg-white/25 blur-[1px]" />
-                      <div className="absolute bottom-16 right-6 w-10 h-10 rounded-full bg-white/35" />
-                    </div>
-                    <div className="absolute bottom-4 left-4 right-4 text-white">
-                      {/* imageLabel: 카드 이미지 라벨=향 캐릭터 이름 */}
-                      <p className="text-base font-bold leading-snug">{card.imageLabel}</p>
-                      {/* mood: 카드 무드=향 캐릭터 무드 */}
-                      <p className="text-[11px] opacity-90 mt-1">{card.mood}</p>
-                    </div>
-                  </div>
-
-                  <div className="px-4 pb-4 space-y-3">
-                    <div>
-                      {/* title: 카드 제목=대표 어코드 표현 문장 */}
-                      <p className="text-sm font-bold text-[#2B2B2B]">“{card.title}”</p>
-                    </div>
-
-                    <div className="flex items-center gap-2">
-                      <div className="w-6 h-6 rounded-full bg-[#F1E3C2] text-[#8C6A1D] text-[10px] font-bold flex items-center justify-center">
-                        {card.user[1]}
-                      </div>
-                      <div className="text-xs">
-                        {/* handle: 카드 생성자 닉네임 */}
-                        <p className="text-[#777]">{card.user}</p>
-                      </div>
-                    </div>
-
-                  </div>
-                </article>
-              ))}
-            </div>
-
-            <button
-              onClick={handleCreateScentCard}
-              className="w-full py-3 rounded-xl bg-[#C8A24D] text-white font-bold shadow-[0_6px_16px_rgba(200,162,77,0.35)] hover:bg-[#B89138] transition"
-            >
-              나도 향수 카드 만들러가기
-            </button>
-          </section>
-        </div>
-
+      <main className="w-full">
+        <HeroSection />
+        <LayeringSection />
+        <ArchiveGalaxySection />
+        <NetworkSection />
+        <WikiSection />
+        <BrandStorySection />
+        <FooterSection />
       </main>
-
     </div>
   );
 }
 
-// 자동 스크롤 기능 컴포넌트 (그대로 유지)
-function AutoScrollScript() {
+// --- 1. HERO: The Atmosphere (Capsula Style with Draggable Carousel) ---
+const HERO_IMAGES = [
+  "/hero_1.png", // Flowers
+  "/hero_2.png", // Rainy City
+  "/hero_3.png", // Metasequoia
+  "/hero_4.png", // Library
+  "/hero_5.png", // Ocean
+];
+
+const variants = {
+  enter: (direction: number) => {
+    return {
+      x: direction > 0 ? 1000 : -1000,
+      opacity: 0
+    };
+  },
+  center: {
+    zIndex: 1,
+    x: 0,
+    opacity: 1
+  },
+  exit: (direction: number) => {
+    return {
+      zIndex: 0,
+      x: direction < 0 ? 1000 : -1000,
+      opacity: 0
+    };
+  }
+};
+
+const swipeConfidenceThreshold = 10000;
+const swipePower = (offset: number, velocity: number) => {
+  return Math.abs(offset) * velocity;
+};
+
+function HeroSection() {
+  const { scrollY } = useScroll();
+  const router = useRouter();
+
+  const [[page, direction], setPage] = useState([0, 0]);
+  const imageIndex = wrap(0, HERO_IMAGES.length, page);
+
+  const paginate = useCallback((newDirection: number) => {
+    setPage([page + newDirection, newDirection]);
+  }, [page]);
+
   useEffect(() => {
-    const carousel = document.getElementById('hero-carousel');
-    if (!carousel) return;
+    const interval = setInterval(() => {
+      paginate(1);
+    }, 5000);
+    return () => clearInterval(interval);
+  }, [paginate]);
 
-    let interval: NodeJS.Timeout; // https://developers.kakao.com/docs/latest/ko/getting-started/app#test-app
-    const startAutoScroll = () => {
-      interval = setInterval(() => {
-        const nextScroll = carousel.scrollLeft + carousel.clientWidth;
-        if (nextScroll >= carousel.scrollWidth) {
-          carousel.scrollTo({ left: 0, behavior: 'smooth' });
-        } else {
-          carousel.scrollTo({ left: nextScroll, behavior: 'smooth' });
-        }
-      }, 4000);
-    };
+  const imageY = useTransform(scrollY, [0, 800], [0, 100]);
+  const stickerY_1 = useTransform(scrollY, [0, 800], [0, -150]);
+  const stickerY_2 = useTransform(scrollY, [0, 800], [0, -80]);
+  const stickerY_3 = useTransform(scrollY, [0, 800], [0, -200]);
 
-    const stopAutoScroll = () => clearInterval(interval);
+  return (
+    <section className="relative min-h-screen w-full flex items-center justify-center bg-[#FDFBF8] pt-24 pb-12 md:pt-0 md:pb-0 overflow-hidden">
+      <div className="container mx-auto px-6 grid md:grid-cols-2 gap-12 md:gap-24 items-center h-full">
 
-    carousel.addEventListener('touchstart', stopAutoScroll);
-    carousel.addEventListener('touchend', startAutoScroll);
-    carousel.addEventListener('mouseenter', stopAutoScroll);
-    carousel.addEventListener('mouseleave', startAutoScroll);
+        {/* LEFT: Text Content */}
+        <div className="relative z-10 flex flex-col items-start text-left space-y-8 order-2 md:order-1">
+          <motion.div
+            initial={{ scale: 0 }} animate={{ scale: 1 }} transition={{ duration: 0.5 }}
+            className="w-6 h-6 rounded-full bg-[#FF6B6B]"
+          />
+          <h1 className="text-5xl md:text-8xl font-sans font-bold tracking-tighter text-[#1a1a1a] leading-[0.9]">
+            FIND <br /> YOUR <br /> SIGNATURE.
+          </h1>
+          <p className="text-lg md:text-xl text-[#555] font-medium max-w-md">
+            {/* 당신의 언어는 향기가 된다. <br /> */}
+            향기로 기억되는 순간. <br />
+            당신의 분위기를 완성하는 향수를 찾아보세요.
+          </p>
+          <motion.button
+            onClick={() => router.push('/chat')}
+            initial="initial"
+            whileHover="hover"
+            className="group relative px-8 py-4 rounded-[2rem] border-2 border-[#1a1a1a] text-[#1a1a1a] bg-transparent hover:bg-[#1a1a1a] hover:text-white transition-all text-sm font-bold uppercase tracking-widest overflow-hidden"
+          >
+            <span className="relative z-10 block group-hover:hidden">AI 향수 추천</span>
+            <span className="relative z-10 hidden group-hover:block">START JOURNEY</span>
+          </motion.button>
+        </div>
 
-    startAutoScroll();
+        {/* RIGHT: Image Carousel & Stickers */}
+        <div className="relative h-[50vh] md:h-[80vh] w-full order-1 md:order-2 flex items-center justify-center">
+          <motion.div
+            style={{ y: imageY }}
+            initial={{ opacity: 0, scale: 0.9, borderRadius: "100%" }}
+            animate={{ opacity: 1, scale: 1, borderRadius: "3rem" }}
+            transition={{ duration: 1.2, ease: "easeOut" }}
+            className="w-full h-full max-h-[800px] overflow-hidden relative shadow-2xl z-10 flex items-center justify-center bg-gray-100 cursor-grab active:cursor-grabbing"
+          >
+            <AnimatePresence initial={false} custom={direction} mode="popLayout">
+              <motion.img
+                key={page}
+                src={HERO_IMAGES[imageIndex]}
+                custom={direction}
+                variants={variants}
+                initial="enter"
+                animate="center"
+                exit="exit"
+                transition={{
+                  x: { type: "spring", stiffness: 300, damping: 30 },
+                  opacity: { duration: 0.2 }
+                }}
+                drag="x"
+                dragConstraints={{ left: 0, right: 0 }}
+                dragElastic={1}
+                onDragEnd={(e, { offset, velocity }) => {
+                  const swipe = swipePower(offset.x, velocity.x);
+                  if (swipe < -swipeConfidenceThreshold) paginate(1);
+                  else if (swipe > swipeConfidenceThreshold) paginate(-1);
+                }}
+                className="absolute inset-0 w-full h-full object-cover"
+                draggable={false}
+              />
+            </AnimatePresence>
+          </motion.div>
 
-    return () => {
-      stopAutoScroll();
-      carousel.removeEventListener('touchstart', stopAutoScroll);
-      carousel.removeEventListener('touchend', startAutoScroll);
-      carousel.removeEventListener('mouseenter', stopAutoScroll);
-      carousel.removeEventListener('mouseleave', startAutoScroll);
-    };
-  }, []);
+          {/* Floating Stickers */}
+          <motion.div
+            style={{ y: stickerY_1, rotate: -12 }}
+            initial={{ opacity: 0, x: -100 }}
+            animate={{ opacity: 1, x: 0 }}
+            transition={{ delay: 0.5, type: "spring" }}
+            className="absolute top-[5%] md:top-[10%] left-[-5%] md:left-[-15%] bg-[#FF8F8F] text-[#1a1a1a] px-6 py-3 md:px-10 md:py-6 rounded-full shadow-[0_10px_30px_rgba(255,143,143,0.4)] z-20 border-2 border-[#1a1a1a]"
+          >
+            <span className="text-xl md:text-4xl font-bold tracking-tight font-sans">ATMOSPHERE</span>
+          </motion.div>
+          <motion.div
+            style={{ y: stickerY_2, rotate: 8 }}
+            initial={{ opacity: 0, x: 100 }}
+            animate={{ opacity: 1, x: 0 }}
+            transition={{ delay: 0.7, type: "spring" }}
+            className="absolute bottom-[20%] md:bottom-[30%] right-[-5%] md:right-[-12%] bg-[#FFAB76] text-[#1a1a1a] px-6 py-3 md:px-10 md:py-6 rounded-full shadow-[0_10px_30px_rgba(255,171,118,0.4)] z-20 border-2 border-[#1a1a1a]"
+          >
+            <span className="text-xl md:text-4xl font-bold tracking-tight font-sans">EMOTIONS</span>
+          </motion.div>
+          <motion.div
+            style={{ y: stickerY_3, rotate: -5 }}
+            initial={{ opacity: 0, y: 100 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ delay: 0.9, type: "spring" }}
+            className="absolute bottom-[-5%] md:bottom-[5%] left-[10%] md:left-[0%] bg-[#FFCB74] text-[#1a1a1a] px-5 py-2 md:px-12 md:py-5 rounded-full shadow-[0_10px_30px_rgba(255,203,116,0.4)] z-20 border-2 border-[#1a1a1a]"
+          >
+            <span className="text-lg md:text-3xl font-bold tracking-tight font-sans">& MEMORIES</span>
+          </motion.div>
+        </div>
+      </div>
+    </section>
+  );
+}
 
-  return null;
+// --- 2. ABOUT: Brand Story (The Invisible Language) ---
+function BrandStorySection() {
+  const router = useRouter();
+  const ref = useRef(null);
+  const isInView = useInView(ref, { margin: "-20% 0px -20% 0px" });
+
+  return (
+    <section ref={ref} className="relative min-h-[80vh] flex items-center justify-center bg-[#FDFBF8] py-24 overflow-hidden">
+      <div className="container mx-auto px-6 grid md:grid-cols-2 gap-12 md:gap-24 items-center">
+
+        {/* Visual: Abstract AI with Stickers */}
+        <div className="relative order-1 md:order-1 flex justify-center">
+          <motion.div
+            initial={{ opacity: 0, scale: 0.8, borderRadius: "50%" }}
+            whileInView={{ opacity: 1, scale: 1, borderRadius: "3rem" }}
+            viewport={{ once: true }}
+            transition={{ duration: 1 }}
+            className="w-full max-w-[700px] aspect-video overflow-hidden shadow-2xl relative bg-[#EAD7A1] hover:scale-105 transition-transform duration-500 ease-out"
+          >
+            <img src="/team_5s.png" alt="Scentence Philosophy" className="w-full h-full object-cover opacity-90" />
+          </motion.div>
+
+          {/* Sticker: PHILOSOPHY */}
+          <motion.div
+            initial={{ scale: 0, rotate: -15 }}
+            whileInView={{ scale: 1, rotate: -15 }}
+            transition={{ delay: 0.3, type: "spring" }}
+            className="absolute top-[-5%] right-[-5%] bg-[#A8E6CF] text-[#1a1a1a] px-8 py-4 rounded-full border-2 border-[#1a1a1a] shadow-lg z-20"
+          >
+            <span className="text-2xl font-bold font-sans">PHILOSOPHY</span>
+          </motion.div>
+          {/* Sticker: NARRATIVE */}
+          <motion.div
+            initial={{ scale: 0, rotate: 10 }}
+            whileInView={{ scale: 1, rotate: 10 }}
+            transition={{ delay: 0.5, type: "spring" }}
+            className="absolute bottom-[10%] left-[-10%] bg-[#FDFFAB] text-[#1a1a1a] px-8 py-4 rounded-full border-2 border-[#1a1a1a] shadow-lg z-20"
+          >
+            <span className="text-2xl font-bold font-sans">NARRATIVE</span>
+          </motion.div>
+        </div>
+
+        {/* Text Content */}
+        <motion.div
+          initial={{ opacity: 0, x: -50 }}
+          whileInView={{ opacity: 1, x: 0 }}
+          transition={{ duration: 0.8 }}
+          className="flex flex-col items-start text-left space-y-8 order-2 md:order-2"
+        >
+          <div className="w-4 h-4 rounded-full bg-[#C3AED6] shadow-[0_0_15px_rgba(195,174,214,0.5)]" />
+          <h2 className="text-5xl md:text-7xl font-sans font-bold tracking-tighter text-[#1a1a1a] leading-[0.9]">
+            ABOUT <br /> SCENTENCE.
+          </h2>
+          <p className="text-lg text-[#555] font-medium max-w-sm">
+            향기는 보이지 않는 언어입니다. <br />
+            SCENTENCE는 당신의 언어를 <br />향기로 번역합니다.
+          </p>
+          <div className="flex gap-4">
+            <motion.button
+              onClick={() => router.push('/about')}
+              initial="initial"
+              whileHover="hover"
+              className="group relative px-8 py-3 rounded-full border-2 border-[#1a1a1a] text-[#1a1a1a] bg-transparent hover:bg-[#1a1a1a] hover:text-white transition-all text-sm font-bold uppercase tracking-wide overflow-hidden"
+            >
+              <span className="relative z-10 block group-hover:hidden">TEAM. 5S 소개</span>
+              <span className="relative z-10 hidden group-hover:block">ABOUT SCENTENCE</span>
+            </motion.button>
+          </div>
+        </motion.div>
+      </div>
+    </section>
+  );
+}
+
+// --- 3. LAYERING LAB: The Alchemist (Unified Design) ---
+function LayeringSection() {
+  const router = useRouter();
+  const ref = useRef(null);
+
+  return (
+    <section ref={ref} className="relative min-h-[80vh] flex items-center justify-center bg-[#FDFBF8] py-24 overflow-hidden border-t border-gray-100">
+      <div className="container mx-auto px-6 grid md:grid-cols-2 gap-12 md:gap-24 items-center">
+
+        {/* Visual */}
+        <div className="relative order-1 md:order-1 flex justify-center">
+          <motion.div
+            initial={{ opacity: 0, scale: 0.8 }}
+            whileInView={{ opacity: 1, scale: 1 }}
+            transition={{ duration: 1 }}
+            className="w-full max-w-[500px] aspect-[4/5] rounded-[3rem] overflow-hidden shadow-2xl relative border-2 border-[#1a1a1a]"
+          >
+            <img src="/section_layering.png" alt="Layering Lab" className="w-full h-full object-cover hover:scale-110 transition-transform duration-700" />
+          </motion.div>
+
+          {/* Stickers */}
+          <motion.div
+            initial={{ scale: 0, rotate: 5 }}
+            whileInView={{ scale: 1, rotate: 5 }}
+            transition={{ delay: 0.3, type: "spring" }}
+            className="absolute top-[10%] left-[-5%] bg-[#FFD3B6] text-[#1a1a1a] px-6 py-3 rounded-full border-2 border-[#1a1a1a] shadow-lg z-20"
+          >
+            <span className="text-xl font-bold font-sans">ALCHEMY</span>
+          </motion.div>
+          <motion.div
+            initial={{ scale: 0, rotate: -8 }}
+            whileInView={{ scale: 1, rotate: -8 }}
+            transition={{ delay: 0.5, type: "spring" }}
+            className="absolute bottom-[-2%] right-[5%] bg-[#D4F0F0] text-[#1a1a1a] px-6 py-3 rounded-full border-2 border-[#1a1a1a] shadow-lg z-20"
+          >
+            <span className="text-xl font-bold font-sans">UNIQUE</span>
+          </motion.div>
+        </div>
+
+        {/* Text Content */}
+        <motion.div
+          initial={{ opacity: 0, x: 50 }}
+          whileInView={{ opacity: 1, x: 0 }}
+          transition={{ duration: 0.8 }}
+          className="flex flex-col items-start text-left space-y-8 order-2 md:order-2"
+        >
+          <div className="w-4 h-4 rounded-full bg-[#FFCB74] shadow-[0_0_15px_rgba(255,203,116,0.5)]" />
+          <h2 className="text-5xl md:text-7xl font-sans font-bold tracking-tighter text-[#1a1a1a] leading-[0.9]">
+            SCENT <br /> MIXOLOGY.
+          </h2>
+          <p className="text-lg text-[#555] font-medium max-w-sm">
+            A + B = ∞ <br />
+            서로 다른 노트를 섞어 만드는 나만의 무드. <br />
+            레이어링 랩에서 실험해보세요.
+          </p>
+          <motion.button
+            onClick={() => router.push('/layering')}
+            initial="initial"
+            whileHover="hover"
+            className="group relative px-8 py-3 rounded-full border-2 border-[#1a1a1a] text-[#1a1a1a] bg-transparent hover:bg-[#1a1a1a] hover:text-white transition-all text-sm font-bold uppercase tracking-wide overflow-hidden"
+          >
+            <span className="relative z-10 block group-hover:hidden">레이어링 랩</span>
+            <span className="relative z-10 hidden group-hover:block">GO TO LAYERING</span>
+          </motion.button>
+        </motion.div>
+
+      </div>
+    </section>
+  );
+}
+
+// --- 4. ARCHIVE & GALAXY: The Universe (Unified Dark Mode Card) ---
+function ArchiveGalaxySection() {
+  const router = useRouter();
+  return (
+    <section className="relative min-h-[90vh] bg-[#FDFBF8] flex items-center justify-center py-20">
+      {/* Dark Mode Card Container */}
+      <div className="container mx-auto px-6">
+        <div className="bg-[#1a1a1a] rounded-[3rem] p-8 md:p-20 relative overflow-hidden text-white shadow-2xl">
+          {/* Background */}
+          <div className="absolute inset-0 z-0 opacity-60">
+            <img src="/section_archive.png" alt="Galaxy" className="w-full h-full object-cover" />
+          </div>
+
+          <div className="relative z-10 grid md:grid-cols-2 gap-12 items-center">
+            <div className="space-y-8">
+              <span className="text-[#A8E6CF] font-bold tracking-widest uppercase bg-white/10 px-4 py-1 rounded-full text-xs">Private Collection</span>
+              <h2 className="text-5xl md:text-7xl font-sans font-bold tracking-tighter leading-[0.9]">
+                YOUR <br /> ARCHIVE.
+              </h2>
+              <p className="text-white/70 text-lg font-medium max-w-sm">
+                당신이 수집한 향기들. <br />
+                나만의 보관함에서 당신만의 향수를 만나보세요.
+              </p>
+              <motion.button
+                onClick={() => router.push('/archives')}
+                initial="initial"
+                whileHover="hover"
+                className="group relative px-8 py-3 rounded-full border-2 border-white/20 bg-white text-[#1a1a1a] hover:bg-[#1a1a1a] hover:text-white hover:border-[#1a1a1a] transition-all text-sm font-bold uppercase tracking-wide overflow-hidden shadow-lg"
+              >
+                <span className="relative z-10 block group-hover:hidden">나만의 보관함</span>
+                <span className="relative z-10 hidden group-hover:block">MY COLLECTION</span>
+              </motion.button>
+            </div>
+
+            {/* Visual: Spinning Galaxy */}
+            <div className="relative flex justify-center items-center">
+              <motion.div
+                animate={{ rotate: 360 }}
+                transition={{ repeat: Infinity, duration: 60, ease: "linear" }}
+                className="w-[300px] h-[300px] md:w-[450px] md:h-[450px] relative"
+              >
+                {/* Image Mask - Rotates with parent, clips scaled image */}
+                <div className="w-full h-full rounded-full overflow-hidden border-4 border-white/20">
+                  <img src="/section_archive.png" className="w-full h-full object-cover scale-150" alt="Galaxy Planet" />
+                </div>
+
+                {/* Orbit Sticker - Rotates with parent (orbit) & Counter-rotates (stay upright) + Bounce */}
+                <motion.div
+                  className="absolute top-0 left-[50%] -translate-x-1/2 -translate-y-1/2 bg-[#FF6B6B] text-[#1a1a1a] px-4 py-2 rounded-full font-bold text-xs shadow-lg z-20"
+                  animate={{ rotate: -360, scale: [1, 1.1, 1] }}
+                  transition={{
+                    rotate: { repeat: Infinity, duration: 60, ease: "linear" },
+                    scale: { repeat: Infinity, duration: 2, ease: "easeInOut" }
+                  }}
+                >
+                  COLLECTION
+                </motion.div>
+              </motion.div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </section>
+  );
+}
+
+// --- 5. PERFUME NETWORK & WIKI: Unified Design ---
+function NetworkSection() {
+  const router = useRouter();
+  return (
+    <section className="relative min-h-[80vh] bg-[#FDFBF8] py-24 flex items-center">
+      <div className="container mx-auto px-6 grid md:grid-cols-2 gap-12 md:gap-24 items-center">
+        {/* Text */}
+        <div className="order-1 md:order-1 space-y-6">
+          <div className="w-4 h-4 rounded-full bg-[#A8E6CF] shadow-[0_0_15px_rgba(168,230,207,0.5)]" />
+          <h2 className="text-5xl md:text-7xl font-sans font-bold tracking-tighter text-[#1a1a1a] leading-[0.9]">
+            SCENT <br /> MAPPING.
+          </h2>
+          <p className="text-lg text-[#555] font-medium">
+            향수 데이터의 거대한 연결망. <br />
+            노트와 브랜드의 관계를 시각적으로 탐험하세요.
+          </p>
+          <motion.button
+            onClick={() => router.push('/perfume-network/nmap')}
+            initial="initial"
+            whileHover="hover"
+            className="group relative px-8 py-3 rounded-full border-2 border-[#1a1a1a] text-[#1a1a1a] bg-transparent hover:bg-[#1a1a1a] hover:text-white transition-all text-sm font-bold uppercase tracking-wide overflow-hidden"
+          >
+            <span className="relative z-10 block group-hover:hidden">향수 지도</span>
+            <span className="relative z-10 hidden group-hover:block">PERFUME NETWORK</span>
+          </motion.button>
+        </div>
+
+        {/* Visual */}
+        <div className="relative order-2 md:order-2">
+          <motion.div
+            whileHover={{ scale: 1.02 }}
+            className="w-full aspect-video rounded-[3rem] overflow-hidden border-2 border-[#1a1a1a] bg-black relative group cursor-pointer"
+            onClick={() => router.push('/perfume-network/nmap')}
+          >
+            <img src="/section_network.png" alt="Network" className="w-full h-full object-cover opacity-80" />
+          </motion.div>
+
+          {/* Stickers */}
+          <motion.div
+            className="absolute -top-6 -left-6 bg-[#FFAA1D] text-[#1a1a1a] px-6 py-3 rounded-full border-2 border-[#1a1a1a] z-20 font-bold transform -rotate-6"
+            whileInView={{ scale: [0, 1] }}
+          >
+            PERFUME NETWORK
+          </motion.div>
+        </div>
+      </div>
+    </section>
+  );
+}
+
+function WikiSection() {
+  const router = useRouter();
+  return (
+    <section className="relative min-h-[60vh] bg-[#FDFBF8] py-24 flex items-center border-t border-gray-100">
+      <div className="container mx-auto px-6 flex flex-col items-center text-center space-y-8">
+        <motion.div
+          initial={{ scale: 0.9, opacity: 0 }}
+          whileInView={{ scale: 1, opacity: 1 }}
+          className="relative w-full max-w-4xl aspect-[3/1] rounded-[3rem] overflow-hidden border-2 border-[#1a1a1a]"
+        >
+          <img src="/section_wiki.png" alt="Library" className="w-full h-full object-cover" />
+          <div className="absolute inset-0 bg-black/40 flex flex-col items-center justify-center text-white p-8">
+            <h2 className="text-4xl md:text-7xl font-sans font-bold tracking-tighter leading-[0.9] mb-4">
+              KNOWLEDGE BASE.
+            </h2>
+            <motion.button
+              onClick={() => router.push('/perfume-wiki')}
+              initial="initial"
+              whileHover="hover"
+              className="group relative px-8 py-3 rounded-full border-2 border-[#1a1a1a] bg-[#FF6B6B] text-[#1a1a1a] hover:bg-white transition-all text-sm font-bold uppercase tracking-wide overflow-hidden shadow-md"
+            >
+              <span className="relative z-10 block group-hover:hidden">향수 백과</span>
+              <span className="relative z-10 hidden group-hover:block">VISIT PERFUME WIKI</span>
+            </motion.button>
+          </div>
+        </motion.div>
+      </div>
+    </section>
+  );
+}
+
+// --- 7. FOOTER ---
+function FooterSection() {
+  return (
+    <footer className="bg-[#1a1a1a] text-white/50 text-xs py-24 text-center">
+      <p className="mb-6 tracking-widest uppercase">© 2026 SCENTENCE.</p>
+      <div className="flex flex-col items-center gap-4">
+        <div className="flex items-center gap-3 opacity-60 hover:opacity-100 transition-opacity duration-300">
+          <span className="text-[10px] font-bold tracking-[0.2em] text-[#888]">TEAM.</span>
+          <img
+            src="/images/5s_logo_skewed.png"
+            alt="5S Logo"
+            className="w-8 h-8 object-contain hover:scale-110 transition-transform duration-300"
+          />
+        </div>
+      </div>
+    </footer>
+  )
 }

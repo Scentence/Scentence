@@ -53,15 +53,15 @@ const ChatList = ({ messages, loading, messagesEndRef, scrollToBottom, statusLog
                         }
                     `}
                 </style>
-                <div className="flex flex-col items-center gap-8 opacity-100 max-w-5xl">
-                    <div className="w-40 h-40 mb-2 drop-shadow-xl transition-transform hover:scale-105 duration-500">
+                <div className="flex flex-col items-center gap-4 md:gap-8 opacity-100 max-w-5xl mt-12 md:mt-0">
+                    <div className="w-28 h-28 md:w-40 md:h-40 mb-2 drop-shadow-xl transition-transform hover:scale-105 duration-500">
                         <img
                             src="/perfumes/chatlist_icon1.png"
                             alt="Chat Icon"
                             className="w-full h-full object-contain"
                         />
                     </div>
-                    <div className="flex flex-col items-center gap-12">
+                    <div className="flex flex-col items-center gap-6 md:gap-12">
                         <h1 className="text-2xl md:text-5xl font-bold text-[#2A2A2A] tracking-tight -mt-4">
                             {userName}님,
                         </h1>

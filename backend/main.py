@@ -48,14 +48,6 @@ app.add_middleware(
 )
 
 
-def resolve_recommended_count(user_query: str, explicit_count: int | None) -> int:
-    normalized_explicit = normalize_recommended_count(explicit_count)
-    if normalized_explicit is not None:
-        return normalized_explicit
-    parsed_count = parse_recommended_count(user_query)
-    return parsed_count or 3
-
-
 def resolve_recommended_count_with_flag(
     user_query: str,
     explicit_count: int | None
@@ -81,7 +73,6 @@ def resolve_recommended_count_with_flag(
 
     # 케이스 3: 디폴트
     return (3, False)  # 디폴트는 묵시적
-
 async def stream_generator(
     user_query: str,
     thread_id: str,
@@ -296,9 +287,7 @@ async def stream_generator(
 
 @app.post("/chat")
 async def chat_stream(request: ChatRequest):
-    recommended_count = resolve_recommended_count(
-        request.user_query, request.recommended_count
-    )
+    recommended_count = request.recommended_count or 3
     return StreamingResponse(
         stream_generator(
             request.user_query,

@@ -2,28 +2,28 @@
 
 import { FormEvent, useMemo, useState } from "react";
 import Link from "next/link";
-import Sidebar from "@/components/common/sidebar";
+import PageLayout from "@/components/common/PageLayout";
 import { useRouter } from "next/navigation";
 
 const AgreementPopup = ({ title, content, onAgree, onClose }: { title: string; content: string; onAgree: () => void; onClose: () => void; }) => (
   <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/60 p-4" onClick={onClose}>
     <div className="flex max-h-[80vh] w-full max-w-lg flex-col rounded-xl bg-white" onClick={e => e.stopPropagation()}>
       <div className="border-b p-6">
-          <h3 className="text-xl font-bold">{title}</h3>
+        <h3 className="text-xl font-bold">{title}</h3>
       </div>
       <div className="overflow-y-auto p-6 text-sm text-gray-700">
         <pre className="font-sans whitespace-pre-wrap">{content}</pre>
       </div>
       <div className="mt-auto border-t p-6">
-          <button
-            onClick={() => {
-              onAgree();
-              onClose();
-            }}
-            className="w-full rounded-lg bg-black py-3 font-bold text-white transition hover:opacity-90"
-          >
-            상기 내용을 숙지하였으며 이에 동의합니다.
-          </button>
+        <button
+          onClick={() => {
+            onAgree();
+            onClose();
+          }}
+          className="w-full rounded-lg bg-black py-3 font-bold text-white transition hover:opacity-90"
+        >
+          상기 내용을 숙지하였으며 이에 동의합니다.
+        </button>
       </div>
     </div>
   </div>
@@ -75,7 +75,6 @@ Scentence에서 제공하는 이벤트, 신규 서비스, 프로모션 등 다�
 
 export default function SignupPage() {
   const router = useRouter();
-  const [isSidebarOpen, setIsSidebarOpen] = useState(false);
   const [currentStep, setCurrentStep] = useState(1);
   const [termsAgree, setTermsAgree] = useState(false);
   const [privacyAgree, setPrivacyAgree] = useState(false);
@@ -123,7 +122,7 @@ export default function SignupPage() {
     privacy: { title: '개인정보 수집 및 이용 동의', content: PRIVACY_CONTENT, onAgree: () => setPrivacyAgree(true) },
     email: { title: 'E-mail 정보 수신 동의', content: EMAIL_AGREEMENT_CONTENT, onAgree: () => setEmailAlarmAgree(true) },
     sns: { title: 'SMS 정보 수신 동의', content: SNS_AGREEMENT_CONTENT, onAgree: () => setSnsAlarmAgree(true) },
-  // eslint-disable-next-line react-hooks/exhaustive-deps
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }), []);
 
   const handleShowPopup = (type: keyof typeof agreementDetails) => {
@@ -582,39 +581,15 @@ export default function SignupPage() {
   );
 
   return (
-    <div className="min-h-screen bg-white text-black flex flex-col">
-      <Sidebar
-        isOpen={isSidebarOpen}
-        onClose={() => setIsSidebarOpen(false)}
-        context="home"
-      />
-
-      {isSidebarOpen && (
-        <div
-          className="fixed inset-0 bg-black/50 z-40 md:hidden"
-          onClick={() => setIsSidebarOpen(false)}
-        />
-      )}
-
+    <PageLayout className="min-h-screen bg-white text-black flex flex-col">
       {popupContent && (
         <AgreementPopup
-            title={popupContent.title}
-            content={popupContent.content}
-            onAgree={popupContent.onAgree}
-            onClose={() => setPopupContent(null)}
+          title={popupContent.title}
+          content={popupContent.content}
+          onAgree={popupContent.onAgree}
+          onClose={() => setPopupContent(null)}
         />
       )}
-
-      <header className="fixed top-0 left-0 w-screen flex items-center justify-between px-5 py-4 bg-[#E5E5E5] z-50">
-        <Link href="/" className="text-xl font-bold text-black tracking-tight">
-          Scentence
-        </Link>
-        <button onClick={() => setIsSidebarOpen(true)} className="p-1">
-          <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" className="w-8 h-8 text-[#555]">
-            <path strokeLinecap="round" strokeLinejoin="round" d="M3.75 6.75h16.5M3.75 12h16.5m-16.5 5.25h16.5" />
-          </svg>
-        </button>
-      </header>
 
       <main className="flex-1 px-5 py-8 w-full max-w-md mx-auto pt-[72px]">
         <div className="space-y-2 mb-8">
@@ -624,7 +599,7 @@ export default function SignupPage() {
 
         {/* Progress Bar */}
         <div className="w-full bg-gray-200 rounded-full h-2.5 mb-8">
-          <div className="bg-black h-2.5 rounded-full transition-all duration-300" style={{width: `${(currentStep/4)*100}%`}}></div>
+          <div className="bg-black h-2.5 rounded-full transition-all duration-300" style={{ width: `${(currentStep / 4) * 100}%` }}></div>
         </div>
 
         <div className="space-y-5">
@@ -657,13 +632,12 @@ export default function SignupPage() {
                 (currentStep === 2 && !canProceedStep2) ||
                 (currentStep === 3 && !canProceedStep3)
               }
-              className={`flex-1 py-3 rounded-xl font-bold transition ${
-                ((currentStep === 1 && canProceedStep1) ||
-                (currentStep === 2 && canProceedStep2) ||
-                (currentStep === 3 && canProceedStep3))
+              className={`flex-1 py-3 rounded-xl font-bold transition ${((currentStep === 1 && canProceedStep1) ||
+                  (currentStep === 2 && canProceedStep2) ||
+                  (currentStep === 3 && canProceedStep3))
                   ? "bg-black text-white hover:opacity-90"
                   : "bg-gray-300 text-gray-500 cursor-not-allowed"
-              }`}
+                }`}
             >
               다음
             </button>
@@ -672,17 +646,16 @@ export default function SignupPage() {
               type="button"
               onClick={handleSubmit}
               disabled={!canProceedStep4 || isSubmitting}
-              className={`flex-1 py-3 rounded-xl font-bold transition ${
-                canProceedStep4 && !isSubmitting
+              className={`flex-1 py-3 rounded-xl font-bold transition ${canProceedStep4 && !isSubmitting
                   ? "bg-black text-white hover:opacity-90"
                   : "bg-gray-300 text-gray-500 cursor-not-allowed"
-              }`}
+                }`}
             >
               {isSubmitting ? "가입중..." : "가입 완료"}
             </button>
           )}
         </div>
       </main>
-    </div>
+    </PageLayout>
   );
 }

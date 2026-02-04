@@ -2,6 +2,7 @@
 
 import { useEffect, useMemo, useState } from "react";
 import { useSearchParams } from "next/navigation";
+import PageLayout from "@/components/common/PageLayout";
 
 import type { PerfumeDetail, RatioItem } from "./types";
 
@@ -80,7 +81,8 @@ export default function PerfumeDetailPage() {
   const hasOccasions = detail && detail.occasions.length > 0;
 
   return (
-    <div className="page">
+    <PageLayout subTitle="Perfume Detail">
+      <div className="page pt-24">
       <div className="container">
         {loading && <div className="status">불러오는 중...</div>}
         {!loading && error && <div className="status error">{error}</div>}
@@ -213,6 +215,7 @@ export default function PerfumeDetailPage() {
           </>
         )}
       </div>
+    </PageLayout>
 
       <style jsx>{`
         :global(body) {
@@ -440,6 +443,6 @@ export default function PerfumeDetailPage() {
           }
         }
       `}</style>
-    </div>
+    </div >
   );
 }

@@ -3,41 +3,13 @@
 import { useState, useEffect } from "react";
 import Link from "next/link";
 import { useSession } from "next-auth/react";
-import Sidebar from "@/components/common/sidebar";
-import UserProfileMenu from "@/components/common/UserProfileMenu";
+import PageLayout from "@/components/common/PageLayout";
 import { motion } from "framer-motion";
 
 export default function ContactPage() {
     const { data: session } = useSession();
-    const [isSidebarOpen, setIsSidebarOpen] = useState(false);
-    const [isProfileMenuOpen, setIsProfileMenuOpen] = useState(false);
-    const [localUser, setLocalUser] = useState<any>(null);
-    const [profileImageUrl, setProfileImageUrl] = useState<string | null>(null);
     const [copied, setCopied] = useState<string | null>(null);
 
-    // [Profile Logic]
-    useEffect(() => {
-        const authData = localStorage.getItem("localAuth");
-        if (authData) {
-            try { setLocalUser(JSON.parse(authData)); } catch (e) { }
-        }
-
-        const memberId = session?.user?.id || (localUser?.memberId);
-
-        if (memberId) {
-            fetch(`/api/users/profile/${memberId}`)
-                .then((res) => res.json())
-                .then((data) => {
-                    if (data.profile_image_url) {
-                        setProfileImageUrl(data.profile_image_url);
-                    }
-                })
-                .catch((err) => console.error(err));
-        }
-    }, [session, localUser?.memberId]);
-
-    const displayName = session?.user?.name || localUser?.nickname || localUser?.email?.split('@')[0] || "Guest";
-    const isLoggedIn = !!(session || localUser);
 
     const handleCopy = (text: string, type: string) => {
         navigator.clipboard.writeText(text);
@@ -46,76 +18,7 @@ export default function ContactPage() {
     };
 
     return (
-        <div className="min-h-screen bg-[#FDFBF8] text-black font-sans relative selection:bg-black selection:text-white overflow-x-hidden flex flex-col">
-            <style jsx global>{`
-                .hover-invert {
-                    transition: all 0.3s cubic-bezier(0.16, 1, 0.3, 1);
-                }
-                .hover-invert:hover {
-                    background-color: black;
-                    color: white;
-                }
-                .hover-invert:hover .text-muted {
-                    color: #999;
-                }
-            `}</style>
-
-            <Sidebar
-                isOpen={isSidebarOpen}
-                onClose={() => setIsSidebarOpen(false)}
-                context="home"
-            />
-            {
-                isSidebarOpen && (
-                    <div className="fixed inset-0 bg-transparent z-40 md:hidden" onClick={() => setIsSidebarOpen(false)} />
-                )
-            }
-
-            {/* [HEADER UI: Profile + Hamburger] */}
-            <div className="fixed top-0 right-0 z-50 py-5 px-6 md:px-10 flex items-center gap-4">
-                {!isLoggedIn ? (
-                    <div className="flex items-center gap-2 text-sm font-medium text-gray-400">
-                        <Link href="/login" className="hover:text-black transition-colors">Sign in</Link>
-                        <span className="text-gray-300">|</span>
-                        <Link href="/signup" className="hover:text-black transition-colors">Sign up</Link>
-                    </div>
-                ) : (
-                    <div className="flex items-center gap-3">
-                        <button
-                            id="profile-menu-toggle"
-                            onClick={() => setIsProfileMenuOpen(!isProfileMenuOpen)}
-                            className="block w-9 h-9 rounded-full overflow-hidden border border-gray-100 shadow-sm hover:opacity-80 transition-opacity"
-                        >
-                            <img
-                                src={profileImageUrl || "/default_profile.png"}
-                                alt="Profile"
-                                className="w-full h-full object-cover"
-                                onError={(e) => { e.currentTarget.src = "/default_profile.png"; }}
-                            />
-                        </button>
-                        <UserProfileMenu
-                            isOpen={isProfileMenuOpen}
-                            onClose={() => setIsProfileMenuOpen(false)}
-                        />
-                    </div>
-                )}
-
-                <button
-                    id="global-menu-toggle"
-                    onClick={() => setIsSidebarOpen(!isSidebarOpen)}
-                    className="w-9 h-9 flex items-center justify-center rounded-full hover:bg-black/5 transition-colors"
-                >
-                    {isSidebarOpen ? (
-                        <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1} stroke="black" className="w-8 h-8">
-                            <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
-                        </svg>
-                    ) : (
-                        <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1} stroke="black" className="w-8 h-8">
-                            <path strokeLinecap="round" strokeLinejoin="round" d="M3.75 9h16.5m-16.5 6.75h16.5" />
-                        </svg>
-                    )}
-                </button>
-            </div>
+        <PageLayout className="min-h-screen bg-[#FDFBF8] text-black font-sans relative selection:bg-black selection:text-white overflow-x-hidden flex flex-col">
 
             <main className="flex-1 pt-[100px] flex flex-col">
 
@@ -235,6 +138,6 @@ export default function ContactPage() {
                     </p> */}
                 </div>
             </main>
-        </div >
+        </PageLayout>
     );
 }

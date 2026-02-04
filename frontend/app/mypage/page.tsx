@@ -3,8 +3,7 @@
 import { FormEvent, useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import { useSession } from "next-auth/react";
-import Sidebar from "@/components/common/sidebar";
-import UserProfileMenu from "@/components/common/UserProfileMenu";
+import PageLayout from "@/components/common/PageLayout";
 import ImageCropperModal from './ImageCropperModal';
 
 interface ProfileData {
@@ -26,8 +25,7 @@ interface ProfileData {
 
 export default function MyPage() {
   const { data: session, update } = useSession();
-  const [isSidebarOpen, setIsSidebarOpen] = useState(false);
-  const [isProfileMenuOpen, setIsProfileMenuOpen] = useState(false);
+
   const [memberId, setMemberId] = useState<string | null>(null);
   const [profile, setProfile] = useState<ProfileData | null>(null);
   const [nickname, setNickname] = useState("");
@@ -53,11 +51,19 @@ export default function MyPage() {
   const [selectedFile, setSelectedFile] = useState<string | null>(null); // 자르기 전 원본 이미지 URL
   const [isCropperOpen, setIsCropperOpen] = useState(false); // 모달 열림 여부
 
-  // [이미지 경로 결정 로직]
+  // [기존 코드 주석 처리] 환경 변수에 의존하던 방식
+  // const apiBaseUrl = process.env.NEXT_PUBLIC_API_URL || "";
+
+  // [표준화] 이미지 경로 결정 로직 수정
   // 1. 이미 http로 시작하는 전체 경로(S3, 카카오 등)라면 그대로 사용합니다.
   // 2. /uploads/로 시작하는 상대 경로라면 그대로 사용합니다. (Next.js rewrites 활용)
   // 3. 사진이 없는 경우 기본 이미지를 보여줍니다.
-  const resolvedProfileImageUrl = profileImageUrl || "/default_profile.png";
+  // 4. [변경점] apiBaseUrl 대신 /api 프록시를 사용하거나 상대 경로를 유지하여 호환성을 높입니다.
+  const resolvedProfileImageUrl = profileImageUrl
+    ? (profileImageUrl.startsWith("http") || profileImageUrl.startsWith("/uploads"))
+      ? profileImageUrl
+      : `/api${profileImageUrl}` // `${apiBaseUrl}${profileImageUrl}` 대신 사용
+    : (session?.user?.image || "/default_profile.png"); // [추가] DB 이미지 없으면 세션/기본 이미지 폴백
   const checkedSnsJoinYn = profile?.sns_join_yn; // existing logic check
   const showPasswordSection = profile?.sns_join_yn !== "Y";
 
@@ -91,14 +97,27 @@ export default function MyPage() {
 
     const loadProfile = async () => {
       try {
+        /**
+         * [수정 이유: 페이지별 통신 방식 표준화]
+         * 메인 페이지와 동일하게 '/api' 프록시를 사용하여 
+         * 로컬/배포 환경 구분 없이 안정적으로 프로필 정보를 가져오도록 수정합니다.
+         */
         const response = await fetch(`/api/users/profile/${memberId}`, {
           signal: controller.signal,
         });
         if (!response.ok) {
           if (response.status === 404) {
-            setLoadMessage("회원 정보를 찾을 수 없습니다. 다시 로그인해주세요.");
-            if (typeof window !== "undefined") {
-              localStorage.removeItem("localAuth");
+            // [추가] DB에 정보가 없더라도 카카오 세션 정보로 폼을 채워주는 UX 개선
+            if (session?.user) {
+              setProfile(null);
+              setNickname(session.user.name || "");
+              setEmail(session.user.email || "");
+              setProfileImageUrl(session.user.image || "");
+            } else {
+              setLoadMessage("회원 정보를 찾을 수 없습니다. 다시 로그인해주세요.");
+              if (typeof window !== "undefined") {
+                localStorage.removeItem("localAuth");
+              }
             }
           }
           return;
@@ -108,13 +127,14 @@ export default function MyPage() {
         if (data?.member_id) {
           setMemberId(String(data.member_id));
         }
-        setNickname(data.nickname || "");
-        setProfileImageUrl(data.profile_image_url || "");
+        // [수정] DB 값이 없으면 세션 값이라도 보여주기 (nullish coalescing)
+        setNickname(data.nickname || session?.user?.name || "");
+        setProfileImageUrl(data.profile_image_url || session?.user?.image || "");
         setName(data.name || "");
         setSex((data.sex as "M" | "F" | "") || "");
         setPhoneNo(data.phone_no || "");
         setAddress(data.address || "");
-        setEmail(data.email || "");
+        setEmail(data.email || session?.user?.email || "");
         setSubEmail(data.sub_email || "");
         setEmailMarketing(data.email_alarm_yn === "Y");
         setSnsMarketing(data.sns_alarm_yn === "Y");
@@ -296,141 +316,48 @@ export default function MyPage() {
 
   if (!memberId) {
     return (
-      <div className="min-h-screen bg-[#FDFBF8] text-black flex flex-col">
-        <Sidebar
-          isOpen={isSidebarOpen}
-          onClose={() => setIsSidebarOpen(false)}
-          context="home"
-        />
-
-        {/* [STANDARD HEADER] 메인 페이지(app/page.tsx)와 100% 동일한 구조 및 디자인 적용 */}
-        <header className="fixed top-0 left-0 right-0 flex items-center justify-between px-5 py-4 bg-[#FDFBF8] border-b border-[#F0F0F0] z-50">
-          {/* 로고 영역: font-bold, text-black, tracking-tight (표준) */}
-          <Link href="/" className="text-xl font-bold text-black tracking-tight">
-            Scentence
-          </Link>
-
-          {/* 우측 상단 UI: 로그인 상태 및 사이드바 토글 버튼 (표준) */}
-          <div className="flex items-center gap-4">
-            {/* 비로그인 상태 UI (메인과 동일) */}
-            <div className="flex items-center gap-2 text-sm font-medium text-gray-400">
-              <Link href="/login" className="hover:text-black transition-colors">Sign in</Link>
-              <span className="text-gray-300">|</span>
-              <Link href="/signup" className="hover:text-black transition-colors">Sign up</Link>
-            </div>
-            {/* 마이페이지에서도 전역 내비게이션 사용을 위해 Sidebar 토글 버튼 유지 */}
-            <button
-              id="global-menu-toggle"
-              onClick={() => setIsSidebarOpen(!isSidebarOpen)}
-              className="p-1 rounded-md hover:bg-gray-100 transition-colors"
-            >
-              {isSidebarOpen ? (
-                <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" className="w-8 h-8 text-[#555]">
-                  <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
-                </svg>
-              ) : (
-                <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" className="w-8 h-8 text-[#555]">
-                  <path strokeLinecap="round" strokeLinejoin="round" d="M3.75 9h16.5m-16.5 6.75h16.5" />
-                </svg>
-              )}
-            </button>
-          </div>
-        </header>
-
+      <PageLayout className="min-h-screen bg-[#FDFBF8] text-black flex flex-col">
         <main className="flex-1 px-5 py-8 w-full max-w-md mx-auto pt-[120px]">
           <h2 className="text-2xl font-bold mb-3">마이페이지</h2>
           <p className="text-sm text-[#666]">로그인이 필요합니다.</p>
         </main>
-      </div>
+      </PageLayout>
     );
   }
 
   return (
-    <div className="min-h-screen bg-[#FDFBF8] text-black flex flex-col font-sans">
-      <Sidebar
-        isOpen={isSidebarOpen}
-        onClose={() => setIsSidebarOpen(false)}
-        context="home"
-      />
-
-      {isSidebarOpen && (
-        <div
-          className="fixed inset-0 bg-transparent z-40 md:hidden"
-          onClick={() => setIsSidebarOpen(false)}
-        />
-      )}
-
-      {/* [STANDARD HEADER] 메인 페이지(app/page.tsx)와 100% 동일한 구조 및 디자인 적용 */}
-      <header className="fixed top-0 left-0 right-0 flex items-center justify-between px-6 md:px-10 py-5 bg-[#FDFBF8] border-b border-[#F0F0F0] z-50">
-        {/* 로고 영역: font-bold, text-black, tracking-tight (표준) */}
-        <Link href="/" className="text-lg font-bold text-black tracking-[0.15em] uppercase">
-          SCENTENCE
-        </Link>
-
-        {/* 우측 상단 UI: 로그인 상태 및 사이드바 토글 버튼 (표준) */}
-        <div className="flex items-center gap-4">
-          <div className="flex items-center gap-3">
-            {/* 프로필 이미지 Link: 표준 크기(w-9 h-9) 및 스타일 적용 */}
-            <button
-              id="profile-menu-toggle"
-              onClick={() => setIsProfileMenuOpen(!isProfileMenuOpen)}
-              className="block w-9 h-9 rounded-full overflow-hidden border border-gray-100 shadow-sm hover:opacity-80 transition-opacity"
-            >
-              <img
-                src={resolvedProfileImageUrl}
-                alt="Profile"
-                className="w-full h-full object-cover"
-                onError={(e) => { e.currentTarget.src = "/default_profile.png"; }}
-              />
-            </button>
-            <UserProfileMenu
-              isOpen={isProfileMenuOpen}
-              onClose={() => setIsProfileMenuOpen(false)}
-            />
-          </div>
-          {/* 글로벌 내비게이션 토글 버튼 (px-5 py-4 패딩 및 w-8 h-8 규격 준수) */}
-          <button
-            id="global-menu-toggle"
-            onClick={() => setIsSidebarOpen(!isSidebarOpen)}
-            className="w-9 h-9 flex items-center justify-center rounded-full hover:bg-gray-100 transition-colors"
-          >
-            {isSidebarOpen ? (
-              <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" className="w-8 h-8 text-[#555]">
-                <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
-              </svg>
-            ) : (
-              <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" className="w-8 h-8 text-[#555]">
-                <path strokeLinecap="round" strokeLinejoin="round" d="M3.75 9h16.5m-16.5 6.75h16.5" />
-              </svg>
-            )}
-          </button>
-        </div>
-      </header>
+    <PageLayout subTitle="MY PAGE" className="min-h-screen bg-[#FDFBF8] text-black flex flex-col font-sans">
 
       <main className="flex-1 px-5 py-8 w-full max-w-2xl mx-auto pt-[120px] space-y-10">
         <div>
-          <h2 className="text-3xl font-bold tracking-tight">마이페이지</h2>
-          <p className="text-sm text-[#666] mt-2">회원정보를 관리할 수 있어요.</p>
+          <h2 className="text-2xl md:text-3xl font-bold tracking-tight">마이페이지</h2>
+          <p className="text-sm text-[#666] mt-1.5 md:mt-2">회원정보를 관리할 수 있어요.</p>
           {loadMessage && (
             <p className="text-sm text-red-600 mt-2">{loadMessage}</p>
           )}
         </div>
 
-        <form className="space-y-6 rounded-2xl border border-gray-100 bg-white p-8 shadow-sm" onSubmit={handleProfileSubmit}>
-          <h3 className="text-xl font-bold">프로필</h3>
+        <form className="space-y-6 rounded-2xl border border-gray-100 bg-white p-5 md:p-8 shadow-sm" onSubmit={handleProfileSubmit}>
+          <h3 className="text-lg md:text-xl font-bold">프로필</h3>
 
-          <div className="flex items-center gap-8 py-2">
-            <div className="w-28 h-28 rounded-full bg-gray-50 overflow-hidden border border-gray-100 shadow-inner">
+          <div className="flex flex-col md:flex-row items-center gap-6 md:gap-8 py-2">
+            <div className="w-32 h-32 md:w-36 md:h-36 rounded-full bg-gray-50 overflow-hidden border border-gray-100 shadow-inner shrink-0">
               <img
                 src={resolvedProfileImageUrl}
                 alt="프로필"
                 className="w-full h-full object-cover"
                 onError={(event) => {
-                  event.currentTarget.src = "/default_profile.png";
+                  const target = event.currentTarget;
+                  // [추가] 이미지 로드 실패 시 세션 이미지가 있으면 시도, 없으면 기본 이미지
+                  if (session?.user?.image && target.src !== session.user.image) {
+                    target.src = session.user.image;
+                  } else {
+                    target.src = "/default_profile.png";
+                  }
                 }}
               />
             </div>
-            <div className="flex-1 space-y-3">
+            <div className="flex flex-col items-center md:items-start space-y-3">
               <input
                 id="profileImage"
                 name="profileImage"
@@ -687,10 +614,10 @@ export default function MyPage() {
           </form>
         )}
 
-        <section className="space-y-4 rounded-2xl border border-red-100 bg-red-50/50 p-8">
+        <section className="space-y-4 rounded-2xl border border-red-100 bg-red-50/50 p-5 md:p-8">
           <div>
             <h3 className="text-lg font-bold text-red-600">회원탈퇴</h3>
-            <p className="text-sm text-red-400 mt-1">탈퇴 요청 시 계정은 탈퇴 요청 상태로 전환됩니다.</p>
+            <p className="text-[11px] md:text-sm text-red-400 mt-1">탈퇴 요청 시 계정은 탈퇴 요청 상태로 전환됩니다.</p>
           </div>
 
           <button
@@ -733,6 +660,6 @@ export default function MyPage() {
           onCropComplete={handleCropComplete}
         />
       )}
-    </div>
+    </PageLayout>
   );
 }

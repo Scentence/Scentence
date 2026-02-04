@@ -10,8 +10,7 @@ import PerfumeSearchModal from "@/components/archives/PerfumeSearchModal";
 import PerfumeDetailModal from "@/components/archives/PerfumeDetailModal";
 import HistoryModal from '@/components/archives/HistoryModal';
 import ArchiveGlobeView from "@/components/archives/ArchiveGlobeView";
-import NavSidebar from "@/components/common/sidebar"; // <--- 전역 내비게이션 추가
-import UserProfileMenu from "@/components/common/UserProfileMenu"; // <--- 프로필 메뉴 추가
+import PageLayout from "@/components/common/PageLayout";
 import { SavedPerfumesProvider } from "@/contexts/SavedPerfumesContext";
 
 const API_URL = "/api";
@@ -40,17 +39,20 @@ export default function ArchivesPage() {
     const [selectedPerfume, setSelectedPerfume] = useState<MyPerfume | null>(null);
     const [activeTab, setActiveTab] = useState<TabType>('ALL');
     const [isSidebarOpen, setIsSidebarOpen] = useState(false);
-    const [isNavOpen, setIsNavOpen] = useState(false); // <--- 우측 내비게이션 상태
-    const [isProfileMenuOpen, setIsProfileMenuOpen] = useState(false); // <--- 프로필 메뉴 상태 추가
     const [isSearchOpen, setIsSearchOpen] = useState(false);
     const [isKorean, setIsKorean] = useState(true);
     const [isHistoryOpen, setIsHistoryOpen] = useState(false);
     const [memberId, setMemberId] = useState<number>(0);
     const [viewMode, setViewMode] = useState<'GRID' | 'GLOBE'>('GRID');
+    const [isMounted, setIsMounted] = useState(false);
+
+    useEffect(() => {
+        setIsMounted(true);
+    }, []);
 
     // [Profile Logic] 메인/채팅 페이지와 동일하게 이식
     const [localUser, setLocalUser] = useState<{ memberId?: string | null; email?: string | null; nickname?: string | null; roleType?: string | null; isAdmin?: boolean } | null>(null);
-    const [profileImageUrl, setProfileImageUrl] = useState<string | null>(null);
+
 
     const fetchPerfumes = async () => {
         if (memberId === 0) return;
@@ -99,25 +101,7 @@ export default function ArchivesPage() {
         }
     }, [session]);
 
-    useEffect(() => {
-        const currentId = session?.user?.id || localUser?.memberId;
 
-        if (!currentId) {
-            setProfileImageUrl(null);
-            return;
-        }
-
-        fetch(`/api/users/profile/${currentId}`)
-            .then((res) => (res.ok ? res.json() : null))
-            .then((data) => {
-                if (data?.profile_image_url) {
-                    // [이미지 경로 함정 방지 로직]
-                    // 전체 경로(http)나 프록시 경로(/uploads)는 그대로 사용합니다.
-                    setProfileImageUrl(data.profile_image_url);
-                }
-            })
-            .catch(() => setProfileImageUrl(null));
-    }, [localUser, session]);
 
     const displayName = session?.user?.name || localUser?.nickname || localUser?.email?.split('@')[0] || "Guest";
     const isLoggedIn = Boolean(session || localUser);
@@ -216,91 +200,27 @@ export default function ArchivesPage() {
         return true;
     });
 
+    if (!isMounted) return null; // [추가] 마운트 전에는 구조를 렌더링하지 않아 서버-클라이언트 불일치 방지
+
     return (
         <SavedPerfumesProvider memberId={memberId}>
-            <div className="min-h-screen bg-[#FDFBF8] text-gray-800 font-sans selection:bg-[#C5A55D] selection:text-white relative">
-
-                {/* 1. 스마트 사이드바 (Nav용 Popover) */}
-                <NavSidebar
-                    isOpen={isNavOpen}
-                    onClose={() => setIsNavOpen(false)}
-                    context="home"
-                />
-
-                {/* [HEADER] Perfume Wiki와 100% 동일한 디자인 적용 */}
-                <header className="fixed top-0 left-0 right-0 z-30 flex items-center justify-between px-6 md:px-10 py-5 bg-[#FDFBF8] border-b border-[#F0F0F0]">
-                    <div className="flex items-center gap-4">
-                        <Link href="/" className="text-lg font-bold text-black tracking-[0.15em] uppercase hover:opacity-70 transition">
-                            SCENTENCE
-                        </Link>
-                        {/* [추가] Perfume Wiki 스타일의 보조 라벨 */}
-                        <span className="text-xs font-semibold text-[#8C6A1D] tracking-[0.3em] uppercase border-l border-gray-300 pl-4 hidden sm:block">
-                            My Gallery
-                        </span>
-                    </div>
-
-                    {/* 우측 상단 UI: Perfume Wiki 규격 준수 */}
-                    <div className="flex items-center gap-4">
-                        {!isLoggedIn ? (
-                            <div className="flex items-center gap-2 text-sm font-medium text-gray-400">
-                                <Link href="/login" className="hover:text-black transition-colors">Sign in</Link>
-                                <span className="text-gray-300">|</span>
-                                <Link href="/signup" className="hover:text-black transition-colors">Sign up</Link>
-                            </div>
-                        ) : (
-                            <div className="flex items-center gap-3">
-                                <button
-                                    id="profile-menu-toggle"
-                                    onClick={() => setIsProfileMenuOpen(!isProfileMenuOpen)}
-                                    className="block w-9 h-9 rounded-full overflow-hidden border border-gray-100 shadow-sm hover:opacity-80 transition-opacity"
-                                >
-                                    <img
-                                        src={profileImageUrl || "/default_profile.png"}
-                                        alt="Profile"
-                                        className="w-full h-full object-cover"
-                                        onError={(e) => { e.currentTarget.src = "/default_profile.png"; }}
-                                    />
-                                </button>
-                                <UserProfileMenu
-                                    isOpen={isProfileMenuOpen}
-                                    onClose={() => setIsProfileMenuOpen(false)}
-                                />
-                            </div>
-                        )}
-
-                        <button
-                            id="global-menu-toggle"
-                            onClick={() => setIsNavOpen(!isNavOpen)}
-                            className="w-9 h-9 flex items-center justify-center rounded-full hover:bg-gray-100 transition-colors"
-                        >
-                            {isNavOpen ? (
-                                <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" className="w-8 h-8 text-[#555]">
-                                    <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
-                                </svg>
-                            ) : (
-                                <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" className="w-8 h-8 text-[#555]">
-                                    <path strokeLinecap="round" strokeLinejoin="round" d="M3.75 9h16.5m-16.5 6.75h16.5" />
-                                </svg>
-                            )}
-                        </button>
-                    </div>
-                </header>
+            <PageLayout subTitle="My Gallery" className="min-h-screen bg-[#FDFBF8] text-gray-800 font-sans selection:bg-[#C5A55D] selection:text-white relative">
 
                 {/* Main */}
-                <main className="pt-[160px] pb-24 px-10 max-w-7xl mx-auto min-h-[80vh]">
+                <main className="pt-[140px] md:pt-[160px] pb-24 px-4 md:px-10 max-w-7xl mx-auto min-h-[80vh]">
 
                     {/* Header Section: Title (Left) & Primary Actions (Right) */}
-                    <section className="flex justify-between items-start mb-14">
+                    <section className="flex flex-col md:flex-row justify-between items-start gap-8 md:gap-0 mb-10 md:mb-14">
                         <div className="animate-fade-in">
-                            <h1 className="text-4xl font-bold text-[#222] mb-3 tracking-tight">My Sent Gallery</h1>
-                            <p className="text-[#888] text-sm font-medium">나만의 향기 컬렉션을 기록해보세요.</p>
+                            <h1 className="text-3xl md:text-4xl font-bold text-[#222] mb-2 md:mb-3 tracking-tight">My Sent Gallery</h1>
+                            <p className="text-[#888] text-xs md:text-sm font-medium">나만의 향기 컬렉션을 기록해보세요.</p>
                         </div>
 
-                        <div className="flex flex-col items-end gap-6">
+                        <div className="flex flex-col items-stretch md:items-end gap-6 w-full md:w-auto">
                             {/* 1. Filter & History Row (Moved to First Row) */}
-                            <div className="flex items-center gap-3">
+                            <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-3">
                                 {/* Tabs Box */}
-                                <div className="flex gap-4 bg-white px-3 py-2 rounded-2xl shadow-sm border border-gray-100 items-center">
+                                <div className="flex gap-2 sm:gap-4 bg-white px-2 sm:px-3 py-2 rounded-2xl shadow-sm border border-gray-100 items-center justify-between sm:justify-start">
                                     <TabItem
                                         label="전체 (ALL)"
                                         count={stats.have + stats.wish}
@@ -352,33 +272,33 @@ export default function ArchivesPage() {
                             </div>
 
                             {/* 2. Primary Actions (Moved to Second Row) */}
-                            <div className="flex items-center gap-3">
+                            <div className="flex items-center justify-between md:justify-end gap-3">
                                 <button
                                     onClick={() => setIsKorean(!isKorean)}
-                                    className="px-3 py-1.5 rounded-full border border-gray-200 text-[10px] font-bold text-gray-400 bg-white hover:bg-black hover:text-white transition-all shadow-sm"
+                                    className="px-4 py-2.5 rounded-xl border border-gray-200 text-xs font-bold text-gray-400 bg-white hover:bg-black hover:text-white transition-all shadow-sm"
                                     title={isKorean ? "Switch to English" : "한글로 전환"}
                                 >
                                     {isKorean ? "KR" : "EN"}
                                 </button>
                                 <button
                                     onClick={() => setIsSearchOpen(true)}
-                                    className="flex items-center gap-2 px-5 py-2.5 bg-[#C5A55D] text-white rounded-xl hover:bg-[#B09045] transition shadow-lg shadow-[#C5A55D]/20 text-[11px] font-black tracking-widest"
+                                    className="flex-1 md:flex-none flex items-center justify-center gap-2 px-6 py-2.5 bg-[#C5A55D] text-white rounded-xl hover:bg-[#B09045] transition shadow-lg shadow-[#C5A55D]/20 text-[11px] font-black tracking-widest"
                                 >
                                     ＋ ADD PERFUME
                                 </button>
                             </div>
 
                             {/* 3. View Switcher (Bottom Right of Controls) */}
-                            <div className="bg-gray-100 p-1 rounded-xl flex gap-1 mt-2">
+                            <div className="bg-gray-100 p-1 rounded-xl flex gap-1 mt-2 md:mt-0">
                                 <button
                                     onClick={() => setViewMode('GRID')}
-                                    className={`px-4 py-2 rounded-lg text-xs font-bold transition-all ${viewMode === 'GRID' ? 'bg-white text-black shadow-sm' : 'text-gray-400 hover:text-gray-600'}`}
+                                    className={`flex-1 md:flex-none px-4 py-2 rounded-lg text-xs font-bold transition-all ${viewMode === 'GRID' ? 'bg-white text-black shadow-sm' : 'text-gray-400 hover:text-gray-600'}`}
                                 >
                                     GALLERY 🏛️
                                 </button>
                                 <button
                                     onClick={() => setViewMode('GLOBE')}
-                                    className={`px-4 py-2 rounded-lg text-xs font-bold transition-all ${viewMode === 'GLOBE' ? 'bg-black text-white shadow-sm' : 'text-gray-400 hover:text-gray-600'}`}
+                                    className={`flex-1 md:flex-none px-4 py-2 rounded-lg text-xs font-bold transition-all ${viewMode === 'GLOBE' ? 'bg-black text-white shadow-sm' : 'text-gray-400 hover:text-gray-600'}`}
                                 >
                                     GALAXY 🌌
                                 </button>
@@ -401,7 +321,7 @@ export default function ArchivesPage() {
                                     </button>
                                 </div>
                             ) : (
-                                <section className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 gap-6 animate-fade-in-up">
+                                <section className="grid grid-cols-4 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 gap-2 md:gap-6 animate-fade-in-up">
                                     {filteredCollection.map((item) => (
                                         <CabinetShelf
                                             key={item.my_perfume_id}
@@ -416,30 +336,29 @@ export default function ArchivesPage() {
                     )}
                 </main>
 
-                <Link href="/perfume-network/nmap" className="fixed bottom-10 right-10 z-30 shadow-xl rounded-full transition-transform hover:scale-105">
-                    <div className="bg-[#C5A55D] text-white px-8 py-4 rounded-full flex items-center gap-3 font-bold text-sm shadow-[#C5A55D]/30 hover:bg-[#B09045] transition-colors">
+                <Link href="/perfume-network/nmap" className="fixed bottom-6 right-6 md:bottom-10 md:right-10 z-30 shadow-xl rounded-full transition-transform hover:scale-105">
+                    <div className="bg-[#C5A55D] text-white px-6 py-3 md:px-8 md:py-4 rounded-full flex items-center gap-3 font-bold text-xs md:text-sm shadow-[#C5A55D]/30 hover:bg-[#B09045] transition-colors">
                         <span>향수 관계 맵</span>
                     </div>
                 </Link>
 
-                {isSearchOpen && (
-                    <PerfumeSearchModal
-                        memberId={String(memberId)}
-                        onClose={() => setIsSearchOpen(false)}
-                        onAdd={handleAdd}
-                        isKorean={isKorean}
-                        onToggleLanguage={() => setIsKorean(!isKorean)}
-                        existingIds={collection.map(p => p.perfume_id)} // <--- 기존 등록된 ID 목록 전달
-                    />
-                )}
+                {
+                    isSearchOpen && (
+                        <PerfumeSearchModal
+                            memberId={String(memberId)}
+                            onClose={() => setIsSearchOpen(false)}
+                            onAdd={handleAdd}
+                            isKorean={isKorean}
+                            onToggleLanguage={() => setIsKorean(!isKorean)}
+                            existingIds={collection.map(p => p.perfume_id)} // <--- 기존 등록된 ID 목록 전달
+                        />
+                    )
+                }
                 {selectedPerfume && <PerfumeDetailModal perfume={selectedPerfume} onClose={() => setSelectedPerfume(null)} onUpdateStatus={handleUpdateStatus} onDelete={handleDelete} onUpdatePreference={handleUpdatePreference} isKorean={isKorean} />}
 
-                {/* NavSidebar Overlay (Main Page와 동일) */}
-                {isNavOpen && (
-                    <div className="fixed inset-0 bg-transparent z-40" onClick={() => setIsNavOpen(false)} />
-                )}
-            </div>
-        </SavedPerfumesProvider>
+                {/* NavSidebar Overlay Removed (Handled by PageLayout) */}
+            </PageLayout>
+        </SavedPerfumesProvider >
     );
 }
 
@@ -448,12 +367,12 @@ function TabItem({ label, count, color = "text-[#555]", isActive, onClick }: { l
         <button
             onClick={onClick}
             className={`
-                flex flex-col items-center min-w-[70px] px-3 py-2 rounded-xl transition-all
+                flex flex-col items-center min-w-[60px] sm:min-w-[70px] px-2 sm:px-3 py-1.5 sm:py-2 rounded-xl transition-all
                 ${isActive ? 'bg-gray-50 ring-1 ring-gray-200 shadow-sm' : 'hover:bg-gray-50/50'}
             `}
         >
-            <span className={`text-[10px] font-bold uppercase tracking-wide mb-1 transition-colors ${isActive ? 'text-gray-800' : 'text-gray-400'}`}>{label}</span>
-            <span className={`text-xl font-bold transition-all ${isActive ? color : 'text-gray-300'}`}>{count}</span>
+            <span className={`text-[9px] sm:text-[10px] font-bold uppercase tracking-wide mb-0.5 sm:mb-1 transition-colors ${isActive ? 'text-gray-800' : 'text-gray-400'}`}>{label.split(' ')[0]}</span>
+            <span className={`text-lg sm:text-xl font-bold transition-all ${isActive ? color : 'text-gray-300'}`}>{count}</span>
         </button>
     );
 }

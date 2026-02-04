@@ -21,7 +21,7 @@ export default function SeriesCard({
       href={`/perfume-wiki/${series.id}`}
       className="group block w-full text-left rounded-2xl overflow-hidden border border-[#F0F0F0] bg-white shadow-sm hover:shadow-md hover:-translate-y-0.5 transition-all"
     >
-      <div className="relative w-full aspect-[4/2.7] bg-[#EFEFEF] overflow-hidden">
+      <div className="relative w-full aspect-[4/2.7] bg-[#EFEFEF] overflow-hidden" suppressHydrationWarning>
         <img
           src={series.thumbnail}
           alt={series.title}

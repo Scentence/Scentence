@@ -3,14 +3,13 @@
 import { useEffect, useState } from "react";
 import Link from "next/link";
 import { useSearchParams } from "next/navigation";
-import Sidebar from "@/components/common/sidebar";
+import PageLayout from "@/components/common/PageLayout";
 
 export default function RecoverPage() {
   const searchParams = useSearchParams();
   const memberId = searchParams.get("memberId");
   const [nickname, setNickname] = useState<string | null>(null);
   const [message, setMessage] = useState<string | null>(null);
-  const [isSidebarOpen, setIsSidebarOpen] = useState(false);
   const [isRecovering, setIsRecovering] = useState(false);
   const apiBaseUrl = "/api";
 
@@ -56,26 +55,7 @@ export default function RecoverPage() {
   };
 
   return (
-    <div className="min-h-screen bg-white text-black flex flex-col">
-      <Sidebar isOpen={isSidebarOpen} onClose={() => setIsSidebarOpen(false)} context="home" />
-
-      {isSidebarOpen && (
-        <div
-          className="fixed inset-0 bg-black/50 z-40 md:hidden"
-          onClick={() => setIsSidebarOpen(false)}
-        />
-      )}
-
-      <header className="fixed top-0 left-0 w-screen flex items-center justify-between px-5 py-4 bg-[#E5E5E5] z-50">
-        <Link href="/" className="text-xl font-bold text-black tracking-tight">
-          Scentence
-        </Link>
-        <button onClick={() => setIsSidebarOpen(true)} className="p-1">
-          <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" className="w-8 h-8 text-[#555]">
-            <path strokeLinecap="round" strokeLinejoin="round" d="M3.75 6.75h16.5M3.75 12h16.5m-16.5 5.25h16.5" />
-          </svg>
-        </button>
-      </header>
+    <PageLayout className="min-h-screen bg-white text-black flex flex-col">
 
       <main className="flex-1 px-5 py-8 w-full max-w-md mx-auto pt-[72px] space-y-6">
         <div>
@@ -90,15 +70,14 @@ export default function RecoverPage() {
           type="button"
           disabled={isRecovering}
           onClick={handleRecover}
-          className={`w-full py-3 rounded-xl font-bold transition ${
-            isRecovering
+          className={`w-full py-3 rounded-xl font-bold transition ${isRecovering
               ? "bg-gray-300 text-gray-500 cursor-not-allowed"
               : "bg-black text-white hover:opacity-90"
-          }`}
+            }`}
         >
           계정 복구
         </button>
       </main>
-    </div>
+    </PageLayout>
   );
 }

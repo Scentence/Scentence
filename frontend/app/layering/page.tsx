@@ -3,12 +3,13 @@
 import { useState, useMemo, useRef, useEffect } from "react";
 import { useSession } from "next-auth/react"; // 카카오 로그인 세션
 import Link from "next/link";
+import Sidebar from "@/components/common/sidebar"; // [Fix] Import added
+import UserProfileMenu from "@/components/common/UserProfileMenu"; // [Fix] Import added
 import AccordWheel from "@/components/layering/AccordWheel";
 import { BACKEND_ACCORDS, ACCORD_LABELS } from "@/lib/accords";
 import LayeringPerfumePicker from "@/components/layering/LayeringPerfumePicker"; // 내 향수 불러오기
 import PerfumeInfoModal from "@/components/layering/PerfumeInfoModal";
-import Sidebar from "@/components/common/sidebar";
-import UserProfileMenu from "@/components/common/UserProfileMenu";
+import PageLayout from "@/components/common/PageLayout";
 import LayeringPerfumeSearchModal from "@/components/layering/LayeringPerfumeSearchModal";
 
 // ==================== 타입 정의 ====================
@@ -448,10 +449,11 @@ export default function LayeringPage() {
   const [archiveFeedbackSaving, setArchiveFeedbackSaving] = useState(false);
   const [archiveFeedbackLocked, setArchiveFeedbackLocked] = useState(false);
 
-  /** 향수 검색 모달 상태 */
+  // 향수 검색 모달
   const [searchModalOpen, setSearchModalOpen] = useState(false);
+  const [localUser, setLocalUser] = useState<any>(null); // [RESTORED] State for localUser
 
-  /** 렌더 시 안전한 memberId 상태 */
+  // [State] PerfumeInfoModal (단일 추천 결과)*/
   const [memberId, setMemberId] = useState(0);
 
   /** 마지막 추천 향수 ID (대화 맥락 유지용) */
@@ -465,51 +467,45 @@ export default function LayeringPage() {
 
   // [Fix] Hydration mismatch 해결을 위한 mounted 상태
   const [isMounted, setIsMounted] = useState(false);
+  const [isNavOpen, setIsNavOpen] = useState(false); // [Fix] Missing state
+  const [isProfileMenuOpen, setIsProfileMenuOpen] = useState(false); // [Fix] Missing state
+
   useEffect(() => {
     setIsMounted(true);
-  }, []);
-
-  // ==================== [NEW] 전역 헤더 및 프로필 상태 ====================
-  const [isNavOpen, setIsNavOpen] = useState(false);
-  const [isProfileMenuOpen, setIsProfileMenuOpen] = useState(false);
-  const [localUser, setLocalUser] = useState<any>(null);
-  const [profileImageUrl, setProfileImageUrl] = useState<string | null>(null);
-
-  useEffect(() => {
-    // 1. 로컬 스토리지 데이터 확인
-    const authData = localStorage.getItem("localAuth");
-    if (authData) {
+    const stored = localStorage.getItem("localAuth");
+    if (stored) {
       try {
-        const parsed = JSON.parse(authData);
-        setLocalUser(parsed);
-      } catch (e) {
-        console.error("Local auth parse error", e);
+        setLocalUser(JSON.parse(stored));
+      } catch {
+        setLocalUser(null);
       }
     }
+  }, []);
 
-    // 2. 세션(카카오) 기반 프로필 이미지 가져오기
-    if (session?.user?.id) {
-      fetch(`/api/users/profile/${session.user.id}`)
-        .then((res) => res.json())
-        .then((data) => {
-          if (data.profile_image_url) {
-            setProfileImageUrl(data.profile_image_url);
-          }
-        })
-        .catch((err) => console.error("Profile image fetch error", err));
+  const [profileImageUrl, setProfileImageUrl] = useState<string | null>(null); // [Fix] Missing state
+
+  useEffect(() => {
+    const currentMemberId = session?.user?.id || localUser?.memberId;
+    if (!currentMemberId) {
+      setProfileImageUrl(null);
+      return;
     }
-    // 3. 로컬 사용자 기반 프로필 이미지 가져오기
-    else if (localUser?.memberId) {
-      fetch(`/api/users/profile/${localUser.memberId}`)
-        .then((res) => res.json())
-        .then((data) => {
-          if (data.profile_image_url) {
-            setProfileImageUrl(data.profile_image_url);
-          }
-        })
-        .catch((err) => console.error("Local profile image fetch error", err));
-    }
-  }, [session, localUser?.memberId]);
+
+    fetch(`/api/users/profile/${currentMemberId}`)
+      .then((res) => (res.ok ? res.json() : null))
+      .then((data) => {
+        if (data?.profile_image_url) {
+          const rawUrl = data.profile_image_url;
+          const finalUrl = (rawUrl.startsWith("http") || rawUrl.startsWith("/uploads"))
+            ? rawUrl
+            : `/api${rawUrl}`;
+          setProfileImageUrl(finalUrl);
+        }
+      })
+      .catch(() => setProfileImageUrl(null));
+  }, [session, localUser]);
+
+
 
   const displayName = session?.user?.name || localUser?.nickname || localUser?.email?.split('@')[0] || "Guest";
   const isLoggedIn = !!(session || localUser);
@@ -1025,13 +1021,17 @@ export default function LayeringPage() {
   };
 
   return (
-    <div className="min-h-screen bg-[#FDFBF8] text-black relative font-sans">
-      {/* ==================== [NEW] Sidebar & Overlay ==================== */}
+    <>
       <Sidebar
         isOpen={isNavOpen}
         onClose={() => setIsNavOpen(false)}
         context="home"
       />
+      <UserProfileMenu
+        isOpen={isProfileMenuOpen}
+        onClose={() => setIsProfileMenuOpen(false)}
+      />
+
       {isNavOpen && (
         <div
           className="fixed inset-0 bg-transparent z-40"
@@ -1061,7 +1061,10 @@ export default function LayeringPage() {
             <div className="flex items-center gap-3">
               <button
                 id="profile-menu-toggle"
-                onClick={() => setIsProfileMenuOpen(!isProfileMenuOpen)}
+                onClick={() => {
+                  if (!isProfileMenuOpen) setIsNavOpen(false);
+                  setIsProfileMenuOpen(!isProfileMenuOpen);
+                }}
                 className="block w-9 h-9 rounded-full overflow-hidden border border-gray-100 shadow-sm hover:opacity-80 transition-opacity"
               >
                 <img
@@ -1071,16 +1074,16 @@ export default function LayeringPage() {
                   onError={(e) => { e.currentTarget.src = "/default_profile.png"; }}
                 />
               </button>
-              <UserProfileMenu
-                isOpen={isProfileMenuOpen}
-                onClose={() => setIsProfileMenuOpen(false)}
-              />
+
             </div>
           )}
 
           <button
             id="global-menu-toggle"
-            onClick={() => setIsNavOpen(!isNavOpen)}
+            onClick={() => {
+              if (!isNavOpen) setIsProfileMenuOpen(false);
+              setIsNavOpen(!isNavOpen);
+            }}
             className="w-9 h-9 flex items-center justify-center rounded-full hover:bg-gray-100 transition-colors"
           >
             {isNavOpen ? (
@@ -1095,6 +1098,7 @@ export default function LayeringPage() {
           </button>
         </div>
       </header>
+
 
       <div className="max-w-5xl mx-auto px-4 sm:px-6 pt-[96px] sm:pt-[120px] pb-12">
         {/* ==================== 페이지 헤더 (본문 타이틀) ==================== */}
@@ -1676,6 +1680,6 @@ export default function LayeringPage() {
           }, 0);
         }}
       />
-    </div>
+    </>
   );
 }

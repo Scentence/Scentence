@@ -18,16 +18,16 @@ function MenuItem({ href, icon: Icon, title, desc, onClick, className = "" }: an
         <Link
             href={href}
             onClick={onClick}
-            className={`flex items-center gap-4 py-3.5 px-6 hover:bg-white/10 transition-all duration-300 group rounded-xl ${className}`}
+            className={`flex items-center gap-3 md:gap-4 py-2.5 md:py-3.5 px-4 md:px-6 hover:bg-white/10 transition-all duration-300 group rounded-xl ${className}`}
         >
             {/* Icon with Glassy Glow */}
             <div className="relative group-hover:scale-110 transition-transform duration-300">
-                <Icon strokeWidth={1.5} className="w-6 h-6 text-[#1a1a1a] group-hover:text-black transition-colors" />
+                <Icon strokeWidth={1.5} className="w-5 h-5 md:w-6 md:h-6 text-[#1a1a1a] group-hover:text-black transition-colors" />
                 <div className="absolute inset-0 bg-white/20 blur-md opacity-0 group-hover:opacity-100 transition-opacity" />
             </div>
 
             <div className="flex flex-col">
-                <span className="text-lg font-bold text-[#1a1a1a] tracking-tight group-hover:tracking-widest transition-all duration-500 whitespace-nowrap">
+                <span className="text-base md:text-lg font-bold text-[#1a1a1a] tracking-tight group-hover:tracking-widest transition-all duration-500 whitespace-nowrap">
                     {title}
                 </span>
                 {desc && <span className="text-[10px] text-gray-500 mt-0.5">{desc}</span>}
@@ -63,44 +63,58 @@ export default function Sidebar({ isOpen, onClose, context }: SidebarProps) {
     }, [isOpen, ref, onClose]);
 
     // [ANIMATION VARIANTS] EC2 빌드 에러 방지를 위해 'as const' 추가 - ksu.
+    // [ANIMATION VARIANTS] EC2 빌드 에러 방지를 위해 'as const' 추가 - ksu.
+    // 1. Container: Orchestrates the staging of children. (No visual styles itself)
     const containerVariants = {
-        hidden: { opacity: 0, x: 20, backdropFilter: "blur(0px)" }, // 초기 블러 0
-        show: {
-            opacity: 1, x: 0,
-            backdropFilter: "blur(16px)", // 나타날 때 블러 16px까지 부드럽게 상승
-            transition: { type: "spring", stiffness: 300, damping: 30, staggerChildren: 0.1 }
-        },
-        exit: { opacity: 0, x: 20, backdropFilter: "blur(0px)", transition: { duration: 0.2 } }
+        hidden: { opacity: 1, transition: { staggerChildren: 0.1 } },
+        show: { opacity: 1, transition: { staggerChildren: 0.1 } },
+        exit: { opacity: 0, transition: { duration: 0.2 } }
     } as const;
 
-    // 애니메이션 속성 타입 고정을 위해 'as const' 적용 - ksu.
+    // 2. Card: Individual "Round Blur Plates" that animate in.
     const cardVariants = {
-        hidden: { opacity: 0, y: 10, scale: 0.95, backdropFilter: "blur(0px)" },
-        show: {
-            opacity: 1, y: 0, scale: 1,
-            backdropFilter: "blur(16px)"
+        hidden: {
+            opacity: 0, x: 20, y: 0, scale: 0.95,
+            backdropFilter: "blur(20px)", WebkitBackdropFilter: "blur(20px)"
         },
-        exit: { opacity: 0, y: 10, scale: 0.95, backdropFilter: "blur(0px)" }
+        show: {
+            opacity: 1, x: 0, y: 0, scale: 1,
+            backdropFilter: "blur(20px)", WebkitBackdropFilter: "blur(20px)",
+            transition: { type: "spring", stiffness: 300, damping: 30 }
+        },
+        exit: {
+            opacity: 0, x: 20, y: 0, scale: 0.95,
+            backdropFilter: "blur(20px)", WebkitBackdropFilter: "blur(20px)",
+            transition: { duration: 0.2 }
+        }
     } as const;
 
     // [HYPER-REALISTIC LIQUID GLASS BLOCK]
     // 1. Specular Highlights: Multiple inset shadows for the sharp rim and surface sheen.
     // 2. Volumetric Depth: Bottom inset shadow to simulate the glass meniscus.
-    // 3. Clarity: Minimal background color. (블러는 애니메이션으로 제어함)
-    const liquidGlassBlock = "bg-gradient-to-br from-white/[0.08] to-transparent border border-white/40 shadow-[inset_0_1px_1px_rgba(255,255,255,0.9),inset_0_15px_30px_rgba(255,255,255,0.15),inset_0_-2px_10px_rgba(0,0,0,0.05),0_20px_40px_-10px_rgba(0,0,0,0.2)] overflow-hidden rounded-[36px]";
+    // 3. Clarity: Opacity increased to 0.15. Blur handled via Motion Variants (Zero Delay).
+    const liquidGlassBlock = "transform-gpu bg-gradient-to-br from-white/20 to-transparent border border-white/40 shadow-[inset_0_1px_1px_rgba(255,255,255,0.9),inset_0_15px_30px_rgba(255,255,255,0.15),inset_0_-2px_10px_rgba(0,0,0,0.05),0_20px_40px_-10px_rgba(0,0,0,0.2)] overflow-hidden rounded-[36px] will-change-transform";
 
     // [OBSIDIAN LIQUID GLASS BLOCK]
-    const obsidianGlassBlock = "bg-gradient-to-br from-black/80 to-black/40 border border-white/10 shadow-[inset_0_1px_1px_rgba(255,255,255,0.3),inset_0_10px_20px_rgba(255,255,255,0.05),inset_0_-2px_10px_rgba(0,0,0,0.5),0_20px_40px_-5px_rgba(0,0,0,0.4)] overflow-hidden rounded-[32px]";
+    const obsidianGlassBlock = "transform-gpu bg-gradient-to-br from-black/80 to-black/40 border border-white/10 shadow-[inset_0_1px_1px_rgba(255,255,255,0.3),inset_0_10px_20px_rgba(255,255,255,0.05),inset_0_-2px_10px_rgba(0,0,0,0.5),0_20px_40px_-5px_rgba(0,0,0,0.4)] overflow-hidden rounded-[32px] will-change-transform";
 
     return (
         <AnimatePresence>
             {isOpen && (
                 <>
-                    <div className="fixed inset-0 z-40 bg-transparent" />
+                    {/* Mobile: Blur Overlay, Desktop: Transparent */}
+                    <motion.div
+                        initial={{ opacity: 0 }}
+                        animate={{ opacity: 1 }}
+                        exit={{ opacity: 0 }}
+                        className="fixed inset-0 z-40 bg-black/5 backdrop-blur-[4px] md:hidden"
+                        onClick={onClose}
+                    />
+                    <div className="fixed inset-0 z-40 bg-transparent hidden md:block" />
 
                     <motion.div
                         ref={setRef}
-                        className="fixed top-24 right-8 z-50 w-[300px] flex flex-col gap-5"
+                        className="fixed top-[72px] md:top-24 right-4 md:right-8 z-50 w-[calc(100%-32px)] sm:w-[350px] md:w-[300px] flex flex-col gap-3 md:gap-5"
                         variants={containerVariants}
                         initial="hidden"
                         animate="show"
@@ -115,14 +129,14 @@ export default function Sidebar({ isOpen, onClose, context }: SidebarProps) {
                         <motion.div variants={cardVariants} className={`${liquidGlassBlock} p-1`}>
                             <div className="flex flex-col divide-y divide-black/5">
                                 <MenuItem href="/chat" icon={Sparkles} title="향수 추천" onClick={onClose} />
-                                <MenuItem href="/layering" icon={Layers} title="향수 레이어링" onClick={onClose} />
+                                <MenuItem href="/layering" icon={Layers} title="레이어링 랩" onClick={onClose} />
                                 <MenuItem href="/perfume-network/nmap" icon={MapIcon} title="향수 지도" onClick={onClose} />
                                 <MenuItem href="/perfume-wiki" icon={BookOpen} title="향수 백과" onClick={onClose} />
                             </div>
                         </motion.div>
 
                         {/* --- CHUNK 3: FOOTER (Obsidian Glass) --- */}
-                        <motion.div variants={cardVariants} className={`${obsidianGlassBlock} p-6 flex flex-col gap-4`}>
+                        <motion.div variants={cardVariants} className={`${obsidianGlassBlock} p-4 md:p-6 flex flex-col gap-3 md:gap-4`}>
                             <Link href="/contact" onClick={onClose} className="flex items-center justify-between group">
                                 <span className="text-xs font-bold tracking-[0.2em] text-gray-400 group-hover:text-white transition-colors">CONTACT</span>
                                 {/* 살아있는 레드 도트 (Pulse 애니메이션) */}
