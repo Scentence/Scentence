@@ -198,7 +198,9 @@ class ResearcherOutput(BaseModel):
 class InfoState(Dict):
     user_query: str
     info_type: Literal["perfume", "note", "accord", "brand", "similarity", "unknown"]
-    target_name: str
+    target_name: str  # 영어명 (기본)
+    target_name_kr: Optional[str]  # [Phase 2] 한글명
+    target_brand: Optional[str]  # [Phase 2] 브랜드
     target_id: Optional[int]
 
     search_result: Optional[Dict]
@@ -216,8 +218,16 @@ class InfoRoutingDecision(BaseModel):
     info_type: Literal["perfume", "note", "accord", "brand", "similarity"] = Field(
         description="질문의 대상 카테고리 (향수, 노트, 어코드, 브랜드, 유사추천)"
     )
+    target_brand: Optional[str] = Field(
+        None,
+        description="[Phase 2] 브랜드 이름 (예: 'Dior', 'Jo Malone', 'Chanel')"
+    )
     target_name: str = Field(
-        description="질문의 핵심 대상 이름 (예: '조말론 블랙베리', '우디', '샤넬')"
+        description="[Phase 2] 영어 향수명 (예: 'J'adore', 'Wood Sage & Sea Salt', 'No.5')"
+    )
+    target_name_kr: Optional[str] = Field(
+        None,
+        description="[Phase 2] 한글 향수명 - 원본 유지 (예: '자도르', '우드세이지', '넘버5')"
     )
     intent: str = Field(
         description="사용자가 궁금해하는 구체적인 내용 (예: '지속력이 궁금해', '비슷한거 추천해줘')"

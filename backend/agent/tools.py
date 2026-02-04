@@ -24,7 +24,7 @@ from .schemas import (
     AccordSearchInput,
     PerfumeIdSearchInput,
 )
-from .utils import enrich_accord_description, sanitize_filters
+from .utils import enrich_accord_description, sanitize_filters, remove_special_chars
 
 
 NORMALIZER_LLM = ChatOpenAI(
@@ -172,6 +172,9 @@ def lookup_perfume_info_tool(user_input: str) -> Dict[str, Any] | List:
     conn = get_db_connection()
     cur = conn.cursor(cursor_factory=RealDictCursor)
     try:
+        # [Phase 1] 특수문자 완전 제거
+        normalized_name = remove_special_chars(target_name)
+
         sql = """
             SELECT
                 p.perfume_id, p.perfume_brand, p.perfume_name, p.img_link,
@@ -187,34 +190,31 @@ def lookup_perfume_info_tool(user_input: str) -> Dict[str, Any] | List:
 
             WHERE p.perfume_brand ILIKE %s
               AND (
-                  REPLACE(REPLACE(p.perfume_name, ' ', ''), '-', '') ILIKE %s
-                  OR REPLACE(REPLACE(n.name_kr, ' ', ''), '-', '') ILIKE %s
-                  OR REPLACE(REPLACE(n.search_keywords, ' ', ''), '-', '') ILIKE %s
+                  REGEXP_REPLACE(p.perfume_name, '[^a-zA-Z0-9가-힣]', '', 'g') ILIKE %s
+                  OR REGEXP_REPLACE(n.name_kr, '[^a-zA-Z0-9가-힣]', '', 'g') ILIKE %s
+                  OR REGEXP_REPLACE(n.search_keywords, '[^a-zA-Z0-9가-힣]', '', 'g') ILIKE %s
               )
 
             ORDER BY
                 CASE
-                    WHEN p.perfume_name ILIKE %s THEN 0
-                    WHEN n.name_kr ILIKE %s THEN 1
-                    WHEN n.search_keywords ILIKE %s THEN 2
-                    ELSE 3
+                    WHEN REGEXP_REPLACE(p.perfume_name, '[^a-zA-Z0-9가-힣]', '', 'g') ILIKE %s THEN 0
+                    WHEN REGEXP_REPLACE(n.name_kr, '[^a-zA-Z0-9가-힣]', '', 'g') ILIKE %s THEN 1
+                    ELSE 2
                 END,
                 LENGTH(p.perfume_name) ASC
             LIMIT 1
         """
 
         brand_pattern = f"%{target_brand}%"
-        clean_target_name = target_name.replace(" ", "").replace("-", "")
-        name_pattern = f"%{clean_target_name}%"
+        normalized_pattern = f"%{normalized_name}%"
 
         params = (
             brand_pattern,
-            name_pattern,
-            name_pattern,
-            name_pattern,
-            target_name,
-            target_name,
-            f"%,{target_name},%",
+            normalized_pattern,
+            normalized_pattern,
+            normalized_pattern,
+            normalized_pattern,
+            normalized_pattern,
         )
 
         cur.execute(sql, params)
@@ -440,6 +440,9 @@ def lookup_similar_perfumes_tool(user_input: str) -> Dict[str, Any] | List:
     사용자가 언급한 향수와 '가장 유사한 향수' 3개를 찾아서 반환합니다.
     (기준: 어코드와 노트의 구성이 얼마나 겹치는지 분석)
 
+    Args:
+        user_input: "브랜드|영어명|한글명" 형식 또는 단순 문자열
+
     Returns:
         Dict: {"target_perfume": str, "similar_list": List[Dict]} (성공)
         List: 빈 리스트 [] (결과 없음)
@@ -447,72 +450,170 @@ def lookup_similar_perfumes_tool(user_input: str) -> Dict[str, Any] | List:
         Exception: DB 에러 또는 검색 실패
     """
 
-    normalization_prompt = f"""
-    User Input: "{user_input}"
-    Task: Extract the Target Perfume Name user likes.
-    Output JSON: {{"brand": "Brand", "name": "Name"}}
-    """
-    try:
-        norm_result = NORMALIZER_LLM.invoke(normalization_prompt).content
-        cleaned_json = norm_result.replace("```json", "").replace("```", "").strip()
-        parsed = json.loads(cleaned_json)
-        target_brand = parsed.get("brand", "")
-        target_name = parsed.get("name", "")
-    except Exception as e:
-        raise Exception(f"검색 대상을 찾을 수 없습니다: {e}")
+    # [Phase 4] 파이프 구분자 파싱 (브랜드|영어명|한글명)
+    if "|" in user_input:
+        parts = user_input.split("|")
+        target_brand = parts[0].strip() if len(parts) > 0 and parts[0] else ""
+        target_name = parts[1].strip() if len(parts) > 1 and parts[1] else ""
+        target_name_kr = parts[2].strip() if len(parts) > 2 and parts[2] else ""
+
+        # 한글명이 있으면 우선 사용, 없으면 영어명 사용
+        search_name = target_name_kr if target_name_kr else target_name
+    else:
+        # 기존 로직 (하위 호환): LLM으로 파싱
+        normalization_prompt = f"""
+        User Input: "{user_input}"
+        Task: Extract the Target Perfume Name user likes.
+        Output JSON: {{"brand": "Brand", "name": "Name"}}
+        """
+        try:
+            norm_result = NORMALIZER_LLM.invoke(normalization_prompt).content
+            cleaned_json = norm_result.replace("```json", "").replace("```", "").strip()
+            parsed = json.loads(cleaned_json)
+            target_brand = parsed.get("brand", "")
+            target_name = parsed.get("name", "")
+            search_name = target_name
+        except Exception as e:
+            # LLM 변환 실패 시 원본 입력 사용
+            target_brand = ""
+            target_name = user_input
+            search_name = user_input
 
     conn = get_db_connection()
     cur = conn.cursor(cursor_factory=RealDictCursor)
 
     try:
-        sql = """
-            WITH TARGET_PERFUME AS (
-                SELECT PERFUME_ID, PERFUME_NAME
-                FROM TB_PERFUME_BASIC_M
-                WHERE PERFUME_NAME ILIKE %s OR (PERFUME_BRAND ILIKE %s AND PERFUME_NAME ILIKE %s)
-                LIMIT 1
-            ),
-            TARGET_ACCORDS AS (
-                SELECT ACCORD FROM TB_PERFUME_ACCORD_R
-                WHERE PERFUME_ID = (SELECT PERFUME_ID FROM TARGET_PERFUME)
-            ),
-            TARGET_NOTES AS (
-                SELECT NOTE FROM TB_PERFUME_NOTES_M
-                WHERE PERFUME_ID = (SELECT PERFUME_ID FROM TARGET_PERFUME)
-            ),
-            SIMILARITY_SCORE AS (
-                SELECT
-                    p.perfume_id,
-                    p.perfume_brand,
-                    p.perfume_name,
-                    p.img_link,
-                    (
-                        (SELECT COUNT(*) FROM TB_PERFUME_ACCORD_R a
-                         WHERE a.perfume_id = p.perfume_id
-                         AND a.accord IN (SELECT ACCORD FROM TARGET_ACCORDS)) * 3
-                        +
-                        (SELECT COUNT(*) FROM TB_PERFUME_NOTES_M n
-                         WHERE n.perfume_id = p.perfume_id
-                         AND n.note IN (SELECT NOTE FROM TARGET_NOTES)) * 1
-                    ) as score
-                FROM TB_PERFUME_BASIC_M p
-                WHERE p.perfume_id != (SELECT PERFUME_ID FROM TARGET_PERFUME)
-            )
-            SELECT * FROM SIMILARITY_SCORE
-            WHERE score > 0
-            ORDER BY score DESC
-            LIMIT 3;
-        """
+        # [Phase 1] 특수문자 완전 제거
+        normalized_name = remove_special_chars(search_name)
 
-        cur.execute(sql, (target_name, target_brand, f"%{target_name}%"))
+        # 브랜드가 있으면 브랜드+이름 검색, 없으면 이름만 검색
+        if target_brand:
+            # 브랜드 지정 검색 (더 정확)
+            sql = """
+                WITH TARGET_PERFUME AS (
+                    SELECT p.PERFUME_ID, p.PERFUME_NAME, p.PERFUME_BRAND
+                    FROM TB_PERFUME_BASIC_M p
+                    LEFT JOIN TB_PERFUME_NAME_KR n ON p.perfume_id = n.perfume_id
+                    WHERE p.PERFUME_BRAND ILIKE %s
+                      AND (
+                          REGEXP_REPLACE(p.PERFUME_NAME, '[^a-zA-Z0-9가-힣]', '', 'g') ILIKE %s
+                          OR REGEXP_REPLACE(n.name_kr, '[^a-zA-Z0-9가-힣]', '', 'g') ILIKE %s
+                          OR REGEXP_REPLACE(n.search_keywords, '[^a-zA-Z0-9가-힣]', '', 'g') ILIKE %s
+                      )
+                    ORDER BY LENGTH(p.PERFUME_NAME) ASC
+                    LIMIT 1
+                ),
+                TARGET_ACCORDS AS (
+                    SELECT ACCORD FROM TB_PERFUME_ACCORD_R
+                    WHERE PERFUME_ID = (SELECT PERFUME_ID FROM TARGET_PERFUME)
+                ),
+                TARGET_NOTES AS (
+                    SELECT NOTE FROM TB_PERFUME_NOTES_M
+                    WHERE PERFUME_ID = (SELECT PERFUME_ID FROM TARGET_PERFUME)
+                ),
+                SIMILARITY_SCORE AS (
+                    SELECT
+                        p.perfume_id,
+                        p.perfume_brand,
+                        p.perfume_name,
+                        p.img_link,
+                        (
+                            (SELECT COUNT(*) FROM TB_PERFUME_ACCORD_R a
+                             WHERE a.perfume_id = p.perfume_id
+                             AND a.accord IN (SELECT ACCORD FROM TARGET_ACCORDS)) * 3
+                            +
+                            (SELECT COUNT(*) FROM TB_PERFUME_NOTES_M n
+                             WHERE n.perfume_id = p.perfume_id
+                             AND n.note IN (SELECT NOTE FROM TARGET_NOTES)) * 1
+                        ) as score
+                    FROM TB_PERFUME_BASIC_M p
+                    WHERE p.perfume_id != (SELECT PERFUME_ID FROM TARGET_PERFUME)
+                )
+                SELECT s.*,
+                       (SELECT PERFUME_BRAND FROM TARGET_PERFUME) as target_brand,
+                       (SELECT PERFUME_NAME FROM TARGET_PERFUME) as target_name
+                FROM SIMILARITY_SCORE s
+                WHERE score > 0
+                ORDER BY score DESC
+                LIMIT 3;
+            """
+            brand_pattern = f"%{target_brand}%"
+            name_pattern = f"%{normalized_name}%"
+            params_target = (brand_pattern, name_pattern, name_pattern, name_pattern)
+        else:
+            # 이름만으로 검색 (브랜드 불명확) - 한글 테이블도 조인
+            sql = """
+                WITH TARGET_PERFUME AS (
+                    SELECT p.PERFUME_ID, p.PERFUME_NAME, p.PERFUME_BRAND
+                    FROM TB_PERFUME_BASIC_M p
+                    LEFT JOIN TB_PERFUME_NAME_KR n ON p.perfume_id = n.perfume_id
+                    WHERE REGEXP_REPLACE(p.PERFUME_NAME, '[^a-zA-Z0-9가-힣]', '', 'g') ILIKE %s
+                       OR REGEXP_REPLACE(n.name_kr, '[^a-zA-Z0-9가-힣]', '', 'g') ILIKE %s
+                       OR REGEXP_REPLACE(n.search_keywords, '[^a-zA-Z0-9가-힣]', '', 'g') ILIKE %s
+                    ORDER BY LENGTH(p.PERFUME_NAME) ASC
+                    LIMIT 1
+                ),
+                TARGET_ACCORDS AS (
+                    SELECT ACCORD FROM TB_PERFUME_ACCORD_R
+                    WHERE PERFUME_ID = (SELECT PERFUME_ID FROM TARGET_PERFUME)
+                ),
+                TARGET_NOTES AS (
+                    SELECT NOTE FROM TB_PERFUME_NOTES_M
+                    WHERE PERFUME_ID = (SELECT PERFUME_ID FROM TARGET_PERFUME)
+                ),
+                SIMILARITY_SCORE AS (
+                    SELECT
+                        p.perfume_id,
+                        p.perfume_brand,
+                        p.perfume_name,
+                        p.img_link,
+                        (
+                            (SELECT COUNT(*) FROM TB_PERFUME_ACCORD_R a
+                             WHERE a.perfume_id = p.perfume_id
+                             AND a.accord IN (SELECT ACCORD FROM TARGET_ACCORDS)) * 3
+                            +
+                            (SELECT COUNT(*) FROM TB_PERFUME_NOTES_M n
+                             WHERE n.perfume_id = p.perfume_id
+                             AND n.note IN (SELECT NOTE FROM TARGET_NOTES)) * 1
+                        ) as score
+                    FROM TB_PERFUME_BASIC_M p
+                    WHERE p.perfume_id != (SELECT PERFUME_ID FROM TARGET_PERFUME)
+                )
+                SELECT s.*,
+                       (SELECT PERFUME_BRAND FROM TARGET_PERFUME) as target_brand,
+                       (SELECT PERFUME_NAME FROM TARGET_PERFUME) as target_name
+                FROM SIMILARITY_SCORE s
+                WHERE score > 0
+                ORDER BY score DESC
+                LIMIT 3;
+            """
+            name_pattern = f"%{normalized_name}%"
+            params_target = (name_pattern, name_pattern, name_pattern)
+
+        # SQL 완성 및 실행
+        cur.execute(sql, params_target)
         results = cur.fetchall()
 
         if not results:
             return []  # 빈 리스트 반환
 
+        # 첫 번째 결과에서 타겟 향수 정보 추출
+        first_result = results[0]
+        target_brand_found = first_result.get('target_brand', '')
+        target_name_found = first_result.get('target_name', '')
+        target_display = f"{target_brand_found} - {target_name_found}"
+
+        # similar_list에서 target_brand, target_name 제거
+        similar_list = []
+        for r in results:
+            item = dict(r)
+            item.pop('target_brand', None)
+            item.pop('target_name', None)
+            similar_list.append(item)
+
         return {
-            "target_perfume": f"{target_brand} - {target_name}",
-            "similar_list": [dict(r) for r in results],
+            "target_perfume": target_display,
+            "similar_list": similar_list,
         }  # 객체 반환
 
     except Exception as e:
