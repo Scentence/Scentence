@@ -55,6 +55,33 @@ def resolve_recommended_count(user_query: str, explicit_count: int | None) -> in
     parsed_count = parse_recommended_count(user_query)
     return parsed_count or 3
 
+
+def resolve_recommended_count_with_flag(
+    user_query: str,
+    explicit_count: int | None
+) -> tuple[int, bool]:
+    """
+    추천 개수와 명시성 여부를 함께 반환합니다.
+
+    Returns:
+        (count, is_explicit)
+        - count: 추천 개수
+        - is_explicit: 사용자가 명시적으로 요청했는지 여부
+    """
+    # 케이스 1: API 파라미터로 명시적 전달
+    if explicit_count is not None:
+        normalized = normalize_recommended_count(explicit_count)
+        return (normalized, True)
+
+    # 케이스 2: 쿼리에서 개수 파싱 시도
+    parsed = parse_recommended_count(user_query)
+    if parsed is not None:
+        normalized = normalize_recommended_count(parsed)
+        return (normalized, True)  # 쿼리에 개수가 있으면 명시적
+
+    # 케이스 3: 디폴트
+    return (3, False)  # 디폴트는 묵시적
+
 async def stream_generator(
     user_query: str,
     thread_id: str,
@@ -109,12 +136,18 @@ async def stream_generator(
 
     normalized_mode = normalize_user_mode(user_mode)
 
+    # [★추가] 추천 개수와 명시성 여부 계산
+    resolved_count, is_explicit = resolve_recommended_count_with_flag(
+        user_query, recommended_count if recommended_count != 3 else None
+    )
+
     inputs = {
         "messages": input_messages,
         "member_id": member_id,
         "user_mode": normalized_mode,
         "user_query": user_query,
-        "recommended_count": recommended_count,
+        "recommended_count": resolved_count,
+        "is_count_explicit": is_explicit,  # [★추가] 명시성 플래그
         "thread_id": thread_id,  # [★추가] DB 백업을 위한 thread_id
         "recommended_history": db_recommended_history,  # [★추가] DB에서 복원한 히스토리
     }

@@ -94,6 +94,38 @@ def log_filters(h_filters: dict, s_filters: dict):
     pass
 
 
+def generate_count_notice(
+    requested: int,
+    actual: int,
+    is_explicit: bool
+) -> str:
+    """
+    추천 개수 관련 안내 메시지를 생성합니다.
+
+    Args:
+        requested: 요청된 개수 (명시적 또는 디폴트)
+        actual: 실제 생성된 개수
+        is_explicit: 사용자가 명시적으로 개수를 요청했는지
+
+    Returns:
+        안내 메시지 (필요 없으면 빈 문자열)
+    """
+    MAX_COUNT = 5
+
+    # 케이스 1: 과다 요청 (명시적일 때만)
+    if is_explicit and requested > MAX_COUNT:
+        return (f"💡 안내: 한 번에 최대 {MAX_COUNT}개까지만 추천이 가능합니다. "
+                f"{MAX_COUNT}개의 향수를 엄선하여 추천드리겠습니다.\n\n")
+
+    # 케이스 2: 부분 실패 (명시적 요청일 때만!)
+    if is_explicit and actual < requested:
+        return (f"💡 안내: 요청하신 {requested}개 중 {actual}개의 향수를 찾았습니다. "
+                f"조건에 맞는 향수가 제한적이었습니다.\n\n")
+
+    # 케이스 3: 묵시적이거나 정상 → 아무 말 안 함
+    return ""
+
+
 async def smart_search_with_retry_async(
     h_filters: dict,
     s_filters: dict,
@@ -1064,6 +1096,15 @@ async def parallel_reco_node(state: AgentState):
         for next_text in output_texts[1:]:
             next_text = _normalize_section_boundary(full_text, next_text)
             full_text = f"{full_text}\n\n{next_text}"
+
+        # [★추가] 개수 관련 안내 메시지 생성 및 추가
+        is_explicit = state.get("is_count_explicit", False)
+        actual_count = len(output_texts)
+        intro_notice = generate_count_notice(target_count, actual_count, is_explicit)
+
+        if intro_notice:
+            full_text = f"{intro_notice}{full_text}"
+            print(f"💬 [Notice] Added count notice to response", flush=True)
     else:
         fallback_messages = [
             SystemMessage(content=WRITER_FAILURE_PROMPT),

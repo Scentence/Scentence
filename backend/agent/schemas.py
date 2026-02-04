@@ -46,6 +46,7 @@ class AgentState(Dict):
 
     # [★추가] 추천 개수 요청
     recommended_count: Optional[int]
+    is_count_explicit: Optional[bool]  # 사용자가 명시적으로 개수를 요청했는지
 
     # [★추가] 프레임 컨텍스트/제약 메타데이터
     frame_id: str | None = None
