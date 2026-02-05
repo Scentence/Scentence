@@ -176,7 +176,7 @@ export default function AboutPage() {
                             {[
                                 { id: "01", nameEn: "SHIN JI SEOP", nameKr: "신지섭", role: "BACKEND", desc: "PM / System Architecture" },
                                 { id: "02", nameEn: "LEE SANG MIN", nameKr: "이상민", role: "BACKEND", desc: "Data Engineering" },
-                                { id: "03", nameEn: "KIM SO HEE", nameKr: "김소희", role: "FRONTEND", desc: "UI/UX & Data Visualization" },
+                                { id: "03", nameEn: "KIM JELLY", nameKr: "김젤리", role: "FRONTEND", desc: "UI/UX & Data Visualization" },
                                 { id: "04", nameEn: "MA HAN SUNG", nameKr: "마한성", role: "BACKEND", desc: "Data Analytics & 발표자" },
                                 { id: "05", nameEn: "KIM SUNG UK", nameKr: "김성욱", role: "FRONTEND", desc: "Frontend Development" },
                             ].map((member, idx) => (
