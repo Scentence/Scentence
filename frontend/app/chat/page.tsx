@@ -7,11 +7,9 @@ import { useRouter } from "next/navigation";
 import ChatList from "../../components/Chat/ChatList";
 import { Message } from "../../components/Chat/MessageItem";
 import ChatSidebar from "../../components/Chat/Sidebar"; // 좌측 채팅 기록 사이드바
-import NavSidebar from "../../components/common/sidebar"; // 우측 내비게이션 팝오버
 import MagneticButton from "../../components/common/MagneticButton"; // [NEW] 마그네틱 버튼 추가
-import Header from "@/components/common/Header";
-import UserProfileMenu from "@/components/common/UserProfileMenu"; // New import
 import { SavedPerfumesProvider } from "../../contexts/SavedPerfumesContext";
+import PageLayout from "@/components/common/PageLayout";
 
 const API_URL = "/api/chat";
 
@@ -19,8 +17,6 @@ export default function ChatPage() {
     const { data: session } = useSession(); // 카카오 로그인 세션
     const router = useRouter();
     const [isSidebarOpen, setIsSidebarOpen] = useState(false); // 좌측 채팅 내역 사이드바
-    const [isNavOpen, setIsNavOpen] = useState(false); // 우측 내비게이션 팝오버
-    const [isProfileMenuOpen, setIsProfileMenuOpen] = useState(false); // New state
 
     const [messages, setMessages] = useState<Message[]>([]);
     const [inputValue, setInputValue] = useState("");
@@ -32,21 +28,12 @@ export default function ChatPage() {
     const [memberId, setMemberId] = useState<number | null>(null);
     const messagesEndRef = useRef<HTMLDivElement>(null);
 
-    // [Profile Logic] 메인 페이지와 동일하게 이식
-    const [localUser, setLocalUser] = useState<{ memberId?: string | null; email?: string | null; nickname?: string | null; roleType?: string | null; isAdmin?: boolean } | null>(null);
+    // localAuth 제거: 세션 기반으로만 사용자 상태 관리
 
     const [placeholder, setPlaceholder] = useState("어떤 향수를 찾으시나요?"); // [NEW] Responsive Placeholder
 
     useEffect(() => {
         setIsMounted(true);
-        const stored = localStorage.getItem("localAuth");
-        if (stored) {
-            try {
-                setLocalUser(JSON.parse(stored));
-            } catch (error) {
-                setLocalUser(null);
-            }
-        }
 
         // [NEW] Window Resize Listener for Placeholder
         const handleResize = () => {
@@ -69,19 +56,16 @@ export default function ChatPage() {
     }, []);
 
     useEffect(() => {
-        const currentId = session?.user?.id || localUser?.memberId;
-
+        // localAuth 제거: memberId는 세션에서만 가져옴
+        const currentId = session?.user?.id;
         if (!currentId) {
             setMemberId(null);
             return;
         }
-
         setMemberId(parseInt(currentId, 10));
+    }, [session]);
 
-    }, [localUser, session]);
-
-    const displayName = session?.user?.name || localUser?.nickname || localUser?.email?.split('@')[0] || "Guest";
-    const isLoggedIn = Boolean(session || localUser);
+    const displayName = session?.user?.name || session?.user?.email?.split('@')[0] || "Guest";
 
     const scrollToBottom = useCallback(() => {
         if (messagesEndRef.current) {
@@ -140,40 +124,7 @@ export default function ChatPage() {
         const trimmed = inputValue.trim();
         if (!trimmed || !threadId) return;
 
-        // [★추가] 로그인 정보(MemberID) 가져오기 (카카오 세션 또는 로컬 로그인)
-        let currentMemberId = 0;
-        let currentUserMode = "BEGINNER";
-
-        // 1. 멤버 ID 결정 (카카오 세션 우선, 없으면 로컬)
-        if (session?.user?.id) {
-            currentMemberId = parseInt(session.user.id, 10);
-        } else {
-            // 로컬 로그인 확인
-            try {
-                const localAuth = localStorage.getItem("localAuth");
-                if (localAuth) {
-                    const parsed = JSON.parse(localAuth);
-                    if (parsed && parsed.memberId) {
-                        currentMemberId = parseInt(parsed.memberId, 10);
-                    }
-                }
-            } catch (e) {
-                console.error("Member ID Parsing Error:", e);
-            }
-        }
-
-        // 2. 유저 모드 결정 (항상 localAuth 확인)
-        try {
-            const localAuth = localStorage.getItem("localAuth");
-            if (localAuth) {
-                const parsed = JSON.parse(localAuth);
-                if (parsed && parsed.user_mode) {
-                    currentUserMode = parsed.user_mode;
-                }
-            }
-        } catch (e) {
-            console.error("User Mode Parsing Error:", e);
-        }
+        // localAuth 제거: member_id/user_mode는 BFF가 헤더로 주입
         setMessages((prev) => prev.map(m => ({ ...m, isStreaming: false })));
         setMessages((prev) => [...prev, { role: "user", text: trimmed, isStreaming: false }]);
         setInputValue("");
@@ -187,9 +138,7 @@ export default function ChatPage() {
                 headers: { "Content-Type": "application/json" },
                 body: JSON.stringify({
                     user_query: trimmed,
-                    thread_id: threadId,
-                    member_id: currentMemberId,
-                    user_mode: currentUserMode
+                    thread_id: threadId
                 }),
             });
 
@@ -262,37 +211,12 @@ export default function ChatPage() {
 
     return (
         <SavedPerfumesProvider memberId={memberId}>
-            <div className="flex flex-col h-[100dvh] bg-[#FDFBF8] overflow-hidden text-black relative font-sans">
-
-                {/* 1. 스마트 사이드바 (Nav용 Popover) */}
-                <NavSidebar
-                    isOpen={isNavOpen}
-                    onClose={() => setIsNavOpen(false)}
-                    context="chat"
-                />
-
-                {/* Profile Menu lifted out of Header */}
-                <UserProfileMenu
-                    isOpen={isProfileMenuOpen}
-                    onClose={() => setIsProfileMenuOpen(false)}
-                />
-
-                <Header
-                    onToggleSidebar={() => {
-                        if (!isNavOpen) setIsProfileMenuOpen(false);
-                        setIsNavOpen(!isNavOpen);
-                    }}
-                    isSidebarOpen={isNavOpen}
-                    onToggleProfile={() => {
-                        if (!isProfileMenuOpen) setIsNavOpen(false);
-                        setIsProfileMenuOpen(!isProfileMenuOpen);
-                    }}
-                    isProfileMenuOpen={isProfileMenuOpen}
-                    subTitle="AI Perfume Advisor"
-                    showGreeting={true}
-                    className="border-b border-[#EAE6DF]"
-                />
-
+            <PageLayout
+                subTitle="AI Perfume Advisor"
+                sidebarContext="chat"
+                disableContentPadding={true}
+                className="flex flex-col h-[100dvh] bg-[#FDFBF8] overflow-hidden text-black relative font-sans"
+            >
                 {/* 3. Content Wrapper (Sidebar + Main) */}
                 <div className="flex-1 flex relative overflow-hidden pt-[72px]">
 
@@ -435,7 +359,7 @@ export default function ChatPage() {
 
 
                 </div>
-            </div>
+            </PageLayout>
         </SavedPerfumesProvider >
     );
 }

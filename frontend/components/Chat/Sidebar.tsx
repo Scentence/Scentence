@@ -47,7 +47,7 @@ const Sidebar = ({ isOpen, activeThreadId, onToggle, onNewChat, onSelectThread, 
             return;
         }
 
-        // 2. Props가 없으면 기존 로직(세션/로컬) 시도 (하위 호환)
+        // 2. Props가 없으면 세션 기반으로만 조회
         if (session?.user?.id) {
             setUserNickname(session.user.name || "User");
             if (isOpen) {
@@ -58,26 +58,6 @@ const Sidebar = ({ isOpen, activeThreadId, onToggle, onNewChat, onSelectThread, 
                     .catch(err => console.error("History Load Error:", err));
             }
             return;
-        }
-
-        const localAuth = localStorage.getItem("localAuth");
-        console.log("[Sidebar Debug] LocalAuth:", localAuth);
-
-        if (localAuth) {
-            try {
-                const auth = JSON.parse(localAuth);
-                setUserNickname(auth.nickname || "User");
-
-                if (isOpen && auth.memberId) {
-                    console.log("[Sidebar] Fetching rooms for member_id (Local):", auth.memberId);
-                    fetch(`${BACKEND_URL}/chat/rooms/${auth.memberId}`)
-                        .then(res => res.json())
-                        .then(data => setChatRooms(data.rooms || []))
-                        .catch(err => console.error("History Load Error:", err));
-                }
-            } catch (e) {
-                console.error("Auth parsing failed", e);
-            }
         }
     }, [isOpen, session, currentMemberId]);
 

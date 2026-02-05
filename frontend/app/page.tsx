@@ -3,7 +3,6 @@
 import { useState, useEffect, useRef, useCallback } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
-import { useSession } from "next-auth/react";
 import { motion, useScroll, useTransform, useSpring, useInView, AnimatePresence, wrap } from "framer-motion";
 import Sidebar from "@/components/common/sidebar";
 import Header from "@/components/common/Header";
@@ -11,23 +10,14 @@ import UserProfileMenu from "@/components/common/UserProfileMenu"; // New import
 
 export default function LandingPage() {
   const router = useRouter();
-  const { data: session } = useSession();
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
   const [isProfileMenuOpen, setIsProfileMenuOpen] = useState(false); // New state
-  const [localUser, setLocalUser] = useState<{ memberId?: string | null; email?: string | null; nickname?: string | null } | null>(null);
+  // localAuth 제거: 랜딩 페이지는 세션 의존 로직 없음
 
   // Hydration Fix
   const [mounted, setMounted] = useState(false);
   useEffect(() => {
     setMounted(true);
-  }, []);
-
-  useEffect(() => {
-    if (typeof window === "undefined") return;
-    const stored = localStorage.getItem("localAuth");
-    if (stored) {
-      try { setLocalUser(JSON.parse(stored)); } catch { setLocalUser(null); }
-    }
   }, []);
 
 

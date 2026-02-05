@@ -36,17 +36,18 @@ function RecoverPageContent() {
         setMessage(data?.detail || "계정 복구에 실패했습니다.");
         return;
       }
-      if (typeof window !== "undefined") {
-        localStorage.setItem(
-          "localAuth",
-          JSON.stringify({
-            memberId,
-            nickname,
-            loggedInAt: new Date().toISOString(),
-          })
-        );
-      }
-      window.location.href = "/";
+      // 로컬 스토리지에 저장하는 로직은 제거
+      // if (typeof window !== "undefined") {
+      //   localStorage.setItem(
+      //     "localAuth",
+      //     JSON.stringify({
+      //       memberId,
+      //       nickname,
+      //       loggedInAt: new Date().toISOString(),
+      //     })
+      //   );
+      // }
+      window.location.href = "/login";
     } catch (error) {
       setMessage("계정 복구에 실패했습니다.");
     } finally {
@@ -71,8 +72,8 @@ function RecoverPageContent() {
           disabled={isRecovering}
           onClick={handleRecover}
           className={`w-full py-3 rounded-xl font-bold transition ${isRecovering
-              ? "bg-gray-300 text-gray-500 cursor-not-allowed"
-              : "bg-black text-white hover:opacity-90"
+            ? "bg-gray-300 text-gray-500 cursor-not-allowed"
+            : "bg-black text-white hover:opacity-90"
             }`}
         >
           계정 복구

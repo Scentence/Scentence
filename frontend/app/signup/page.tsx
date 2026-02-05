@@ -581,7 +581,7 @@ export default function SignupPage() {
   );
 
   return (
-    <PageLayout className="min-h-screen bg-white text-black flex flex-col">
+    <PageLayout className="h-screen bg-[#FDFBF8] text-black font-sans overflow-hidden flex flex-col">
       {popupContent && (
         <AgreementPopup
           title={popupContent.title}
@@ -591,70 +591,78 @@ export default function SignupPage() {
         />
       )}
 
-      <main className="flex-1 px-5 py-8 w-full max-w-md mx-auto pt-[72px]">
-        <div className="space-y-2 mb-8">
-          <h2 className="text-2xl font-bold">회원가입</h2>
-          <p className="text-sm text-[#666]">필수 정보를 입력해주세요.</p>
-        </div>
+      <main className="flex-1 flex w-full h-full pt-[76px] items-center justify-center bg-[#FDFBF8] overflow-y-auto">
+        <section className="w-full max-w-[480px] h-auto my-10 flex flex-col items-center justify-center bg-white rounded-2xl shadow-sm border border-gray-100 p-8 md:p-10 fade-in-up">
+          <div className="w-full">
+            <div className="space-y-2 mb-8 text-center md:text-left">
+              <h2 className="text-2xl font-bold">회원가입</h2>
+              <p className="text-sm text-[#666]">필수 정보를 입력해주세요.</p>
+            </div>
 
-        {/* Progress Bar */}
-        <div className="w-full bg-gray-200 rounded-full h-2.5 mb-8">
-          <div className="bg-black h-2.5 rounded-full transition-all duration-300" style={{ width: `${(currentStep / 4) * 100}%` }}></div>
-        </div>
+            {/* Progress Bar */}
+            <div className="w-full bg-gray-100 rounded-full h-2 mb-8">
+              <div className="bg-black h-2 rounded-full transition-all duration-300" style={{ width: `${(currentStep / 4) * 100}%` }}></div>
+            </div>
 
-        <div className="space-y-5">
-          {currentStep === 1 && renderStep1()}
-          {currentStep === 2 && renderStep2()}
-          {currentStep === 3 && renderStep3()}
-          {currentStep === 4 && renderStep4()}
-        </div>
+            <div className="space-y-5">
+              {currentStep === 1 && renderStep1()}
+              {currentStep === 2 && renderStep2()}
+              {currentStep === 3 && renderStep3()}
+              {currentStep === 4 && renderStep4()}
+            </div>
 
-        {submitMessage && (
-          <p className="text-xs text-red-600 mt-4">{submitMessage}</p>
-        )}
+            {submitMessage && (
+              <p className="text-xs text-red-600 mt-4 text-center">{submitMessage}</p>
+            )}
 
-        <div className="flex gap-4 mt-8">
-          {currentStep > 1 && (
-            <button
-              type="button"
-              onClick={prevStep}
-              className="flex-1 py-3 rounded-xl font-bold bg-gray-200 text-gray-700 transition hover:bg-gray-300"
-            >
-              이전
-            </button>
-          )}
-          {currentStep < 4 ? (
-            <button
-              type="button"
-              onClick={nextStep}
-              disabled={
-                (currentStep === 1 && !canProceedStep1) ||
-                (currentStep === 2 && !canProceedStep2) ||
-                (currentStep === 3 && !canProceedStep3)
-              }
-              className={`flex-1 py-3 rounded-xl font-bold transition ${((currentStep === 1 && canProceedStep1) ||
-                  (currentStep === 2 && canProceedStep2) ||
-                  (currentStep === 3 && canProceedStep3))
-                  ? "bg-black text-white hover:opacity-90"
-                  : "bg-gray-300 text-gray-500 cursor-not-allowed"
-                }`}
-            >
-              다음
-            </button>
-          ) : (
-            <button
-              type="button"
-              onClick={handleSubmit}
-              disabled={!canProceedStep4 || isSubmitting}
-              className={`flex-1 py-3 rounded-xl font-bold transition ${canProceedStep4 && !isSubmitting
-                  ? "bg-black text-white hover:opacity-90"
-                  : "bg-gray-300 text-gray-500 cursor-not-allowed"
-                }`}
-            >
-              {isSubmitting ? "가입중..." : "가입 완료"}
-            </button>
-          )}
-        </div>
+            <div className="flex gap-4 mt-8">
+              {currentStep > 1 && (
+                <button
+                  type="button"
+                  onClick={prevStep}
+                  className="flex-1 py-3.5 rounded-xl font-bold bg-gray-100 text-gray-700 transition hover:bg-gray-200 text-sm"
+                >
+                  이전
+                </button>
+              )}
+              {currentStep < 4 ? (
+                <button
+                  type="button"
+                  onClick={nextStep}
+                  disabled={
+                    (currentStep === 1 && !canProceedStep1) ||
+                    (currentStep === 2 && !canProceedStep2) ||
+                    (currentStep === 3 && !canProceedStep3)
+                  }
+                  className={`flex-1 py-3.5 rounded-xl font-bold transition text-sm ${((currentStep === 1 && canProceedStep1) ||
+                    (currentStep === 2 && canProceedStep2) ||
+                    (currentStep === 3 && canProceedStep3))
+                    ? "bg-black text-white hover:bg-gray-800 hover:shadow-lg hover:-translate-y-0.5"
+                    : "bg-gray-200 text-gray-400 cursor-not-allowed"
+                    }`}
+                >
+                  다음
+                </button>
+              ) : (
+                <button
+                  type="button"
+                  onClick={handleSubmit}
+                  disabled={!canProceedStep4 || isSubmitting}
+                  className={`flex-1 py-3.5 rounded-xl font-bold transition text-sm ${canProceedStep4 && !isSubmitting
+                    ? "bg-black text-white hover:bg-gray-800 hover:shadow-lg hover:-translate-y-0.5"
+                    : "bg-gray-200 text-gray-400 cursor-not-allowed"
+                    }`}
+                >
+                  {isSubmitting ? "가입중..." : "가입 완료"}
+                </button>
+              )}
+            </div>
+
+            <p className="text-center mt-6 text-xs text-gray-400">
+              이미 계정이 있으신가요? <Link href="/login" className="text-black font-bold underline ml-1 hover:text-gray-700">로그인</Link>
+            </p>
+          </div>
+        </section>
       </main>
     </PageLayout>
   );

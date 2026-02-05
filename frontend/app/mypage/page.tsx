@@ -70,20 +70,11 @@ export default function MyPage() {
   const displayName = session?.user?.name || profile?.nickname || profile?.name || profile?.email?.split('@')[0] || "User";
 
   useEffect(() => {
+    // localAuth 제거: 세션 id만 사용
     if (session?.user?.id) {
       setMemberId(String(session.user.id));
-      return;
-    }
-    if (typeof window === "undefined") return;
-    const stored = localStorage.getItem("localAuth");
-    if (!stored) return;
-    try {
-      const parsed = JSON.parse(stored);
-      if (parsed?.memberId) {
-        setMemberId(String(parsed.memberId));
-      }
-    } catch (error) {
-      return;
+    } else {
+      setMemberId(null);
     }
   }, [session]);
 
@@ -115,9 +106,6 @@ export default function MyPage() {
               setProfileImageUrl(session.user.image || "");
             } else {
               setLoadMessage("회원 정보를 찾을 수 없습니다. 다시 로그인해주세요.");
-              if (typeof window !== "undefined") {
-                localStorage.removeItem("localAuth");
-              }
             }
           }
           return;
@@ -216,24 +204,7 @@ export default function MyPage() {
         return;
       }
 
-      if (typeof window !== "undefined") {
-        const stored = localStorage.getItem("localAuth");
-        if (stored) {
-          try {
-            const parsed = JSON.parse(stored);
-            localStorage.setItem(
-              "localAuth",
-              JSON.stringify({
-                ...parsed,
-                nickname: nickname.trim() || null,
-                email: email.trim() || parsed.email || null,
-              })
-            );
-          } catch (error) {
-            // ignore
-          }
-        }
-      }
+      // localAuth 제거: 세션 동기화는 NextAuth에서 처리
 
       await update({ name: nickname });
       setProfileMessage("회원정보가 저장되었습니다.");
@@ -635,10 +606,7 @@ export default function MyPage() {
                   return;
                 }
                 setProfileMessage("탈퇴 요청이 완료되었습니다.");
-                if (typeof window !== "undefined") {
-                  localStorage.removeItem("localAuth");
-                  window.location.href = "/";
-                }
+                window.location.href = "/";
               } catch (error) {
                 setProfileMessage("탈퇴 요청에 실패했습니다.");
               }

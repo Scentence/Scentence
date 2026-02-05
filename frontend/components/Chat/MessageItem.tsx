@@ -28,25 +28,8 @@ const SaveButton = ({ id, name }: { id: string; name: string }) => {
     }, [perfumeId, checkSaved]);
 
     const handleSave = async () => {
-        let memberId = 0;
-
-        // 카카오 로그인 세션 확인
-        if (session?.user?.id) {
-            memberId = parseInt(session.user.id, 10);
-        } else {
-            // 로컬 로그인 확인
-            try {
-                const localAuth = localStorage.getItem("localAuth");
-                if (localAuth) {
-                    const parsed = JSON.parse(localAuth);
-                    if (parsed && parsed.memberId) {
-                        memberId = parseInt(parsed.memberId, 10);
-                    }
-                }
-            } catch (e) {
-                console.error("로그인 정보 파싱 실패:", e);
-            }
-        }
+        // localAuth 제거: 세션 ID만 사용
+        const memberId = session?.user?.id ? parseInt(session.user.id, 10) : 0;
 
         if (memberId === 0) {
             alert("로그인이 필요한 서비스입니다.");
@@ -58,8 +41,8 @@ const SaveButton = ({ id, name }: { id: string; name: string }) => {
             const res = await fetch(`${BACKEND_URL}/users/me/perfumes`, {
                 method: "POST",
                 headers: { "Content-Type": "application/json" },
+                // member_id는 서버가 세션에서 판별
                 body: JSON.stringify({
-                    member_id: memberId,
                     perfume_id: parseInt(id),
                     perfume_name: name,
                 }),

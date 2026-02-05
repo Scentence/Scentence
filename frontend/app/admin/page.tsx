@@ -29,31 +29,12 @@ export default function AdminPage() {
   const [isLoading, setIsLoading] = useState(false);
   const apiBaseUrl = "/api";
 
-  // Step 1: Get Member ID from Session OR localStorage (Fallback)
+  // localAuth 제거: 세션 id만 사용
   useEffect(() => {
-    // 1. Try NextAuth Session
     if (session?.user?.id) {
       setMemberId(String(session.user.id));
-      return; // Found in session, done.
+      return;
     }
-
-    // 2. Try LocalStorage (Legacy/Current Auth System)
-    // The current login page stores 'localAuth' in localStorage.
-    // We must read from here for users who logged in via the current system.
-    const localAuth = localStorage.getItem("localAuth");
-    if (localAuth) {
-      try {
-        const parsed = JSON.parse(localAuth);
-        if (parsed.memberId) {
-          setMemberId(String(parsed.memberId));
-          return; // Found in localStorage, done.
-        }
-      } catch (e) {
-        // ignore JSON parse error
-      }
-    }
-
-    // 3. If neither found, stop verifying (will be redirected to Home)
     if (session === null) {
       setIsVerifying(false);
     }
@@ -116,7 +97,7 @@ export default function AdminPage() {
       setMessage(null);
       try {
         const response = await fetch(
-          `${apiBaseUrl}/users/admin/members?admin_member_id=${memberId}`,
+          `${apiBaseUrl}/users/admin/members`,
           { signal: controller.signal }
         );
         if (!response.ok) {
@@ -142,7 +123,7 @@ export default function AdminPage() {
     if (!memberId) return;
     try {
       const response = await fetch(
-        `${apiBaseUrl}/users/admin/members/${targetId}/status?admin_member_id=${memberId}&status=${status}`,
+        `${apiBaseUrl}/users/admin/members/${targetId}/status?status=${status}`,
         { method: "PATCH" }
       );
       if (!response.ok) {

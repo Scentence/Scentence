@@ -9,6 +9,12 @@ import os
 from agent.user_mode import normalize_user_mode
 from langchain_core.messages import HumanMessage, AIMessage
 
+# auth 라우터 등록 + chat 검증방식 변경 ====ksu====
+from fastapi import Depends
+from agent.auth import get_identity, require_member_match
+from routers import auth
+
+
 # 모듈 임포트
 from agent.schemas import ChatRequest
 from agent.graph import app_graph
@@ -19,7 +25,7 @@ from agent.database import (
     get_user_chat_list,
     get_recommended_history,
 )
-from routers import users, perfumes, archive # <--- ksu 추가
+from routers import users, perfumes, archive, auth # <--- ksu 추가
 
 app = FastAPI(title="Perfume Re-Act Chatbot")
 
@@ -30,6 +36,7 @@ app.mount("/uploads", StaticFiles(directory=uploads_dir), name="uploads")
 app.include_router(users.router)
 app.include_router(perfumes.router) # <--- ksu 추가
 app.include_router(archive.router) # <--- ksu 추가
+app.include_router(auth.router) # <--- ksu 추가 (routers/auth.py)
 
 # CORS origins from environment variable
 cors_origins_env = os.getenv("BACKEND_CORS_ORIGINS", "")
@@ -294,19 +301,43 @@ async def stream_generator(
         error_msg = json.dumps({"type": "error", "content": str(e)}, ensure_ascii=False)
         yield f"data: {error_msg}\n\n"
 
+# 기존 코드 주석처리 /chat 변경 (request.user_mode 신뢰하지 않음)
+# @app.post("/chat")
+# async def chat_stream(request: ChatRequest):
+#     recommended_count = request.recommended_count or 3
+#     return StreamingResponse(
+#         stream_generator(
+#             request.user_query,
+#             request.thread_id,
+#             request.member_id,
+#             request.user_mode,
+#             recommended_count,
+#         ),
+#         media_type="text/event-stream",
+#         headers={
+#             "Cache-Control": "no-cache, no-transform",
+#             "Connection": "keep-alive",
+#             "X-Accel-Buffering": "no",
+#         },
+#     )
 
+# 수정 코드
 @app.post("/chat")
-async def chat_stream(request: ChatRequest):
+async def chat_stream(request: ChatRequest, identity = Depends(get_identity)):
+    member_id = identity.user_id or 0
+    user_mode = identity.user_mode or "BEGINNER"
     recommended_count = request.recommended_count or 3
     return StreamingResponse(
         stream_generator(
             request.user_query,
             request.thread_id,
-            request.member_id,
-            request.user_mode,
+            member_id,
+            user_mode,
             recommended_count,
         ),
         media_type="text/event-stream",
+        # NOTE: 이 변경은 SSE 응답 헤더 복구용이며 에이전트 로직/성능에는 영향 없음
+        # SSE 응답은 반드시 dict 헤더 필요 (set 사용 시 500 에러)
         headers={
             "Cache-Control": "no-cache, no-transform",
             "Connection": "keep-alive",
@@ -319,9 +350,17 @@ async def chat_stream(request: ChatRequest):
 def health():
     return {"status": "ok"}
 
+# 기존 코드 주석처리
+# @app.get("/chat/rooms/{member_id}")
+# async def get_rooms(member_id: int):
+#     rooms = get_user_chat_list(member_id)
+#     return {"rooms": rooms}
 
+# ============= ksu =============
+# 채팅방 목록 조회
 @app.get("/chat/rooms/{member_id}")
-async def get_rooms(member_id: int):
+async def get_rooms(member_id: int, identity = Depends(get_identity)):
+    require_member_match(member_id, identity)
     rooms = get_user_chat_list(member_id)
     return {"rooms": rooms}
 

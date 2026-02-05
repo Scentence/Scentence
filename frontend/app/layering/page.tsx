@@ -3,8 +3,7 @@
 import { useState, useMemo, useRef, useEffect } from "react";
 import { useSession } from "next-auth/react"; // 카카오 로그인 세션
 import Link from "next/link";
-import Sidebar from "@/components/common/sidebar"; // [Fix] Import added
-import UserProfileMenu from "@/components/common/UserProfileMenu"; // [Fix] Import added
+// Sidebar, UserProfileMenu removed as they are handled by PageLayout
 import AccordWheel from "@/components/layering/AccordWheel";
 import { BACKEND_ACCORDS, ACCORD_LABELS } from "@/lib/accords";
 import LayeringPerfumePicker from "@/components/layering/LayeringPerfumePicker"; // 내 향수 불러오기
@@ -150,7 +149,7 @@ const apiBase = getApiBase();
 // ==================== 유틸리티 함수 ====================
 
 /**
- * 로컬 스토리지에서 현재 회원 ID 추출
+ * localAuth 제거: 세션 ID만 사용
  * @param sessionUserId - 카카오 세션의 user.id (있으면 우선 사용)
  * @returns 회원 ID (로그인하지 않은 경우 0)
  */
@@ -159,20 +158,7 @@ const getMemberId = (sessionUserId?: string | number | null): number => {
   if (sessionUserId) {
     return typeof sessionUserId === 'number' ? sessionUserId : parseInt(sessionUserId, 10);
   }
-  if (typeof window === "undefined") {
-    return 0;
-  }
-  // 로컬 로그인 확인
-  try {
-    const localAuth = localStorage.getItem("localAuth");
-    if (!localAuth) return 0;
-
-    const parsed = JSON.parse(localAuth);
-    return parsed?.memberId ? parseInt(parsed.memberId, 10) : 0;
-  } catch (error) {
-    console.error("Member ID Parsing Error:", error);
-    return 0;
-  }
+  return 0;
 };
 
 /**
@@ -451,7 +437,6 @@ export default function LayeringPage() {
 
   // 향수 검색 모달
   const [searchModalOpen, setSearchModalOpen] = useState(false);
-  const [localUser, setLocalUser] = useState<any>(null); // [RESTORED] State for localUser
 
   // [State] PerfumeInfoModal (단일 추천 결과)*/
   const [memberId, setMemberId] = useState(0);
@@ -467,25 +452,17 @@ export default function LayeringPage() {
 
   // [Fix] Hydration mismatch 해결을 위한 mounted 상태
   const [isMounted, setIsMounted] = useState(false);
-  const [isNavOpen, setIsNavOpen] = useState(false); // [Fix] Missing state
-  const [isProfileMenuOpen, setIsProfileMenuOpen] = useState(false); // [Fix] Missing state
+  // isNavOpen, isProfileMenuOpen removed as handled by PageLayout
 
   useEffect(() => {
     setIsMounted(true);
-    const stored = localStorage.getItem("localAuth");
-    if (stored) {
-      try {
-        setLocalUser(JSON.parse(stored));
-      } catch {
-        setLocalUser(null);
-      }
-    }
   }, []);
 
   const [profileImageUrl, setProfileImageUrl] = useState<string | null>(null); // [Fix] Missing state
 
   useEffect(() => {
-    const currentMemberId = session?.user?.id || localUser?.memberId;
+    // localAuth 제거: 세션 ID로만 프로필 조회
+    const currentMemberId = session?.user?.id;
     if (!currentMemberId) {
       setProfileImageUrl(null);
       return;
@@ -503,12 +480,12 @@ export default function LayeringPage() {
         }
       })
       .catch(() => setProfileImageUrl(null));
-  }, [session, localUser]);
+  }, [session]);
 
 
 
-  const displayName = session?.user?.name || localUser?.nickname || localUser?.email?.split('@')[0] || "Guest";
-  const isLoggedIn = !!(session || localUser);
+  const displayName = session?.user?.name || session?.user?.email?.split('@')[0] || "Guest";
+  const isLoggedIn = !!session;
 
   /**
    * 채팅 메시지가 업데이트될 때마다 자동으로 스크롤
@@ -1021,86 +998,8 @@ export default function LayeringPage() {
   };
 
   return (
-    <>
-      <Sidebar
-        isOpen={isNavOpen}
-        onClose={() => setIsNavOpen(false)}
-        context="home"
-      />
-      <UserProfileMenu
-        isOpen={isProfileMenuOpen}
-        onClose={() => setIsProfileMenuOpen(false)}
-      />
-
-      {isNavOpen && (
-        <div
-          className="fixed inset-0 bg-transparent z-40"
-          onClick={() => setIsNavOpen(false)}
-        />
-      )}
-
-      {/* [STANDARD HEADER] Perfume Wiki와 동일한 스펙 (z-30, hover effect) */}
-      <header className="fixed top-0 left-0 right-0 z-30 flex flex-wrap items-center justify-between gap-3 px-4 sm:px-6 md:px-10 py-4 sm:py-5 bg-[#FDFBF8] border-b border-[#F0F0F0]">
-        {/* 로고 영역: Wiki와 동일하게 div로 감싸 구조 통일 */}
-        <div className="flex items-center gap-4">
-          <Link href="/" className="text-lg font-bold text-black tracking-[0.15em] uppercase hover:opacity-70 transition">
-            SCENTENCE
-          </Link>
-        </div>
-
-        {/* 우측 상단 UI: 로그인 상태 및 사이드바 토글 버튼 (표준) */}
-        {/* 우측 상단 UI: Perfume Wiki와 동일하게 통일 */}
-        <div className="flex items-center gap-4">
-          {!isLoggedIn ? (
-            <div className="flex items-center gap-2 text-sm font-medium text-gray-400">
-              <Link href="/login" className="hover:text-black transition-colors">Sign in</Link>
-              <span className="text-gray-300">|</span>
-              <Link href="/signup" className="hover:text-black transition-colors">Sign up</Link>
-            </div>
-          ) : (
-            <div className="flex items-center gap-3">
-              <button
-                id="profile-menu-toggle"
-                onClick={() => {
-                  if (!isProfileMenuOpen) setIsNavOpen(false);
-                  setIsProfileMenuOpen(!isProfileMenuOpen);
-                }}
-                className="block w-9 h-9 rounded-full overflow-hidden border border-gray-100 shadow-sm hover:opacity-80 transition-opacity"
-              >
-                <img
-                  src={profileImageUrl || "/default_profile.png"}
-                  alt="Profile"
-                  className="w-full h-full object-cover"
-                  onError={(e) => { e.currentTarget.src = "/default_profile.png"; }}
-                />
-              </button>
-
-            </div>
-          )}
-
-          <button
-            id="global-menu-toggle"
-            onClick={() => {
-              if (!isNavOpen) setIsProfileMenuOpen(false);
-              setIsNavOpen(!isNavOpen);
-            }}
-            className="w-9 h-9 flex items-center justify-center rounded-full hover:bg-gray-100 transition-colors"
-          >
-            {isNavOpen ? (
-              <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" className="w-8 h-8 text-[#555]">
-                <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
-              </svg>
-            ) : (
-              <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" className="w-8 h-8 text-[#555]">
-                <path strokeLinecap="round" strokeLinejoin="round" d="M3.75 9h16.5m-16.5 6.75h16.5" />
-              </svg>
-            )}
-          </button>
-        </div>
-      </header>
-
-
-      <div className="max-w-5xl mx-auto px-4 sm:px-6 pt-[96px] sm:pt-[120px] pb-12">
+    <PageLayout subTitle="LAYERING LAB" className="min-h-screen bg-[#FDFBF8] text-[#2B2B2B] font-sans">
+      <div className="max-w-5xl mx-auto px-4 sm:px-6 pt-[76px] pb-12">
         {/* ==================== 페이지 헤더 (본문 타이틀) ==================== */}
         <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between mb-8">
           <div className="space-y-3">
@@ -1680,6 +1579,6 @@ export default function LayeringPage() {
           }, 0);
         }}
       />
-    </>
+    </PageLayout>
   );
 }
