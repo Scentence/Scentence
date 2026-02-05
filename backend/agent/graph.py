@@ -1322,7 +1322,7 @@ async def unsupported_request_handler(_state: AgentState):
         },
         "레이어링": {
             "reason": "레이어링이나 조합 추천은 현재 지원하지 않습니다.",
-            "alternative": "개별 향수 추천은 가능합니다!"
+            "alternative": "개별 향수 추천은 가능합니다! 레이어링 관련 질문은 Scentence의 레이어링 관련 서비스에서 진행해주세요!"
         },
         "구매정보": {
             "reason": "구매처나 매장 정보는 제공하지 않습니다.",
