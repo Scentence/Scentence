@@ -338,13 +338,27 @@ def interviewer_node(state: AgentState):
             current_constraints=current_prefs,
         )
 
-        # [★추가] 브랜드 제외 파싱
-        exclude_brands, has_exclusion = parse_brand_exclusions(current_query)
+        # [★추가] 브랜드 제외 파싱 (세션 레벨 유지)
+        session_exclude_brands = state.get("exclude_brands", [])
+        current_exclude_brands, has_exclusion = parse_brand_exclusions(current_query)
+        
+        # 새로운 제외 요청이 있으면 누적
         if has_exclusion:
+            session_exclude_brands = list(set(session_exclude_brands + current_exclude_brands))
             print(
-                f"🚫 [Exclusion] Detected exclude_brands: {exclude_brands}",
+                f"🚫 [Exclusion] Detected exclude_brands: {current_exclude_brands}, Session: {session_exclude_brands}",
                 flush=True,
             )
+        
+        # 명시적 브랜드 요청 시 해당 브랜드 제외 목록에서 해제
+        if current_prefs and current_prefs.get("brand"):
+            requested_brand = current_prefs.get("brand")
+            if requested_brand in session_exclude_brands:
+                session_exclude_brands.remove(requested_brand)
+                print(
+                    f"   🔄 [Exclusion] Removed {requested_brand} from exclusion list due to explicit request",
+                    flush=True,
+                )
 
         current_frame_id = state.get("frame_id")
         if classification.intent in ["NEW_RECO", "RESET"]:
@@ -375,16 +389,15 @@ def interviewer_node(state: AgentState):
             merged_prefs[key] = value
 
         # [★추가] 브랜드 제외 처리
-        if has_exclusion:
-            merged_prefs["exclude_brands"] = exclude_brands
-            # 제외 브랜드가 있으면 brand, reference_brand 클리어
-            if should_clear_brand_fields(exclude_brands):
-                merged_prefs["brand"] = None
-                merged_prefs["reference_brand"] = None
-                print(
-                    f"   → brand/reference_brand cleared due to exclusions",
-                    flush=True,
-                )
+        merged_prefs["exclude_brands"] = session_exclude_brands
+        # 제외 브랜드가 있으면 brand, reference_brand 클리어
+        if should_clear_brand_fields(session_exclude_brands):
+            merged_prefs["brand"] = None
+            merged_prefs["reference_brand"] = None
+            print(
+                f"   → brand/reference_brand cleared due to exclusions",
+                flush=True,
+            )
 
         for slot in classification.drop_slots:
             if slot not in merged_prefs:
@@ -420,6 +433,7 @@ def interviewer_node(state: AgentState):
                 "fallback_triggered": False,
                 "frame_id": frame_id,
                 "recommended_history": new_recommended_history if new_recommended_history is not None else state.get("recommended_history", []),
+                "exclude_brands": session_exclude_brands,  # [★추가] 세션 레벨 제외 브랜드 유지
             }
 
         return {
@@ -433,6 +447,7 @@ def interviewer_node(state: AgentState):
             "fallback_triggered": False,
             "frame_id": frame_id,
             "recommended_history": new_recommended_history if new_recommended_history is not None else state.get("recommended_history", []),
+            "exclude_brands": session_exclude_brands,  # [★추가] 세션 레벨 제외 브랜드 유지
         }
     except Exception as e:
         print(f"Interviewer Error: {e}")
