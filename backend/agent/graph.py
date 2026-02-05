@@ -113,7 +113,7 @@ def generate_pre_notice(
 
     # 케이스 1: 과다 요청 (명시적일 때만)
     if is_explicit and requested > MAX_COUNT:
-        return (f"💡 안내: 한 번에 최대 {MAX_COUNT}개까지만 추천이 가능합니다. "
+        return (f"\n💡 안내: 한 번에 최대 {MAX_COUNT}개까지만 추천이 가능합니다. "
                 f"{MAX_COUNT}개의 향수를 엄선하여 추천드렸습니다.\n\n")
 
     return ""
@@ -138,7 +138,7 @@ def generate_post_notice(
     """
     # 케이스 2: 부분 실패 (명시적 요청일 때만!)
     if is_explicit and actual < requested:
-        return (f"\n\n💡 안내: 요청하신 {requested}개 중 {actual}개의 향수를 찾았습니다. "
+        return (f"\n💡 안내: 요청하신 {requested}개 중 {actual}개의 향수를 찾았습니다. "
                 f"조건에 맞는 향수가 제한적이었습니다.")
 
     return ""
