@@ -35,8 +35,8 @@ from .expression_loader import ExpressionLoader
 load_dotenv()
 
 # [LLM 이원화]
-INFO_LLM = ChatOpenAI(model="gpt-4o", temperature=0, streaming=True)
-ROUTER_LLM = ChatOpenAI(model="gpt-4o", temperature=0, streaming=False)
+INFO_LLM = ChatOpenAI(model="gpt-4.1", temperature=0, streaming=True)
+ROUTER_LLM = ChatOpenAI(model="gpt-4.1", temperature=0, streaming=False)
 
 
 # ==========================================
@@ -81,6 +81,31 @@ def info_supervisor_node(state: InfoState):
         HumanMessage(content=user_query),
     ]
 
+    # [Phase 0] Ordinal 번호 먼저 체크 (LLM 호출 전)
+    save_refs = extract_save_refs(chat_history)
+    ordinal = parse_ordinal(user_query)
+    
+    if ordinal and save_refs and 1 <= ordinal <= len(save_refs):
+        # Ordinal로 직접 타겟 결정 (LLM 호출 불필요)
+        target_id = save_refs[ordinal - 1]['id']
+        target_name = save_refs[ordinal - 1]['name']
+        
+        # info_type 결정: "비슷한/추천/대체" 키워드 체크
+        if any(kw in user_query for kw in ['비슷', '추천', '대체', '같은']):
+            info_type = "similarity"
+        else:
+            info_type = "perfume"
+        
+        print(f"   ✅ [Ordinal] {ordinal}번째 향수 직접 선택: {target_name} (type: {info_type})", flush=True)
+        
+        return {
+            "info_type": info_type,
+            "target_id": target_id,
+            "target_name": target_name,
+            "target_brand": None,
+            "target_name_kr": None
+        }
+    
     try:
         decision = ROUTER_LLM.with_structured_output(InfoRoutingDecision).invoke(
             messages
@@ -90,8 +115,6 @@ def info_supervisor_node(state: InfoState):
         final_target = decision.target_name
         final_brand = decision.target_brand
         final_target_kr = decision.target_name_kr
-
-        save_refs = extract_save_refs(chat_history)
 
         resolved = resolve_target_from_ordinal_or_pronoun(
             user_query, final_target, save_refs
