@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
-import Sidebar from "../components/Chat/Sidebar";
+import Sidebar from "@/components/Chat/Sidebar"; // 경로 수정: app/_backups에서는 @/components로 접근해야 빌드가 깨지지 않음
 import Link from "next/link";
 
 export default function LandingPage() {
