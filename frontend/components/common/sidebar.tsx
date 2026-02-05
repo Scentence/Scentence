@@ -1,10 +1,9 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { useSession } from "next-auth/react";
 import Link from "next/link";
 import { motion, AnimatePresence } from "framer-motion";
-import { Home, Sparkles, Layers, Map as MapIcon, BookOpen, Phone, Info } from "lucide-react";
+import { Home, Sparkles, Layers, Map as MapIcon, BookOpen, Phone, Info, FlaskConical, Network, Globe } from "lucide-react";
 
 interface SidebarProps {
     isOpen: boolean;
@@ -40,16 +39,7 @@ function MenuItem({ href, icon: Icon, title, desc, onClick, className = "" }: an
 }
 
 export default function Sidebar({ isOpen, onClose, context }: SidebarProps) {
-    const { data: session } = useSession();
-    const [localUser, setLocalUser] = useState<{ memberId?: string | null; email?: string | null; nickname?: string | null; roleType?: string | null; isAdmin?: boolean } | null>(null);
-
-    useEffect(() => {
-        if (!isOpen) return;
-        if (typeof window === "undefined") return;
-        const stored = localStorage.getItem("localAuth");
-        if (!stored) { setLocalUser(null); return; }
-        try { setLocalUser(JSON.parse(stored)); } catch { setLocalUser(null); }
-    }, [isOpen]);
+    // localAuth 제거: 사이드바는 로그인 정보에 의존하지 않음
 
     const [ref, setRef] = useState<HTMLDivElement | null>(null);
     useEffect(() => {
@@ -129,8 +119,8 @@ export default function Sidebar({ isOpen, onClose, context }: SidebarProps) {
                         <motion.div variants={cardVariants} className={`${liquidGlassBlock} p-1`}>
                             <div className="flex flex-col divide-y divide-black/5">
                                 <MenuItem href="/chat" icon={Sparkles} title="향수 추천" onClick={onClose} />
-                                <MenuItem href="/layering" icon={Layers} title="레이어링 랩" onClick={onClose} />
-                                <MenuItem href="/perfume-network/nmap" icon={MapIcon} title="향수 지도" onClick={onClose} />
+                                <MenuItem href="/layering" icon={FlaskConical} title="레이어링 랩" onClick={onClose} />
+                                <MenuItem href="/perfume-network/nmap" icon={Globe} title="향수 지도" onClick={onClose} />
                                 <MenuItem href="/perfume-wiki" icon={BookOpen} title="향수 백과" onClick={onClose} />
                             </div>
                         </motion.div>

@@ -50,8 +50,7 @@ export default function ArchivesPage() {
         setIsMounted(true);
     }, []);
 
-    // [Profile Logic] 메인/채팅 페이지와 동일하게 이식
-    const [localUser, setLocalUser] = useState<{ memberId?: string | null; email?: string | null; nickname?: string | null; roleType?: string | null; isAdmin?: boolean } | null>(null);
+    // localAuth 제거: 아카이브는 세션 id만 사용
 
 
     const fetchPerfumes = async () => {
@@ -82,20 +81,7 @@ export default function ArchivesPage() {
     };
 
     useEffect(() => {
-        if (typeof window === "undefined") return;
-        const stored = localStorage.getItem("localAuth");
-        if (stored) {
-            try {
-                const parsed = JSON.parse(stored);
-                setLocalUser(parsed);
-                if (parsed.memberId) setMemberId(Number(parsed.memberId));
-            } catch (error) {
-                setLocalUser(null);
-            }
-        }
-    }, []);
-
-    useEffect(() => {
+        // localAuth 제거: 세션에서만 memberId 설정
         if (session?.user?.id) {
             setMemberId(Number(session.user.id));
         }
@@ -103,8 +89,8 @@ export default function ArchivesPage() {
 
 
 
-    const displayName = session?.user?.name || localUser?.nickname || localUser?.email?.split('@')[0] || "Guest";
-    const isLoggedIn = Boolean(session || localUser);
+    const displayName = session?.user?.name || session?.user?.email?.split('@')[0] || "Guest";
+    const isLoggedIn = Boolean(session);
 
     // 2. memberId가 설정되면 데이터 로드
     useEffect(() => {
@@ -212,7 +198,7 @@ export default function ArchivesPage() {
                     {/* Header Section: Title (Left) & Primary Actions (Right) */}
                     <section className="flex flex-col md:flex-row justify-between items-start gap-8 md:gap-0 mb-10 md:mb-14">
                         <div className="animate-fade-in">
-                            <h1 className="text-3xl md:text-4xl font-bold text-[#222] mb-2 md:mb-3 tracking-tight">My Sent Gallery</h1>
+                            <h1 className="text-3xl md:text-4xl font-bold text-[#222] mb-2 md:mb-3 tracking-tight">My Scent Gallery</h1>
                             <p className="text-[#888] text-xs md:text-sm font-medium">나만의 향기 컬렉션을 기록해보세요.</p>
                         </div>
 

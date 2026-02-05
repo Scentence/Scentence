@@ -204,14 +204,15 @@ function PerfumeCard({
                                     }}
                                 >
                                     <div className="w-full h-full flex flex-col p-2 font-sans antialiased text-left select-none">
-                                        <div className="w-full h-[130px] bg-gray-900 rounded-sm overflow-hidden mb-3 shadow-inner relative">
+                                        <div className="w-full h-[130px] rounded-sm overflow-hidden mb-3 shadow-inner relative bg-transparent">
                                             {displayImage && (
                                                 <img
                                                     src={displayImage}
                                                     alt={displayName}
-                                                    className="w-full h-full object-cover transition-transform duration-300 ease-out"
+                                                    className="w-full h-full object-contain transition-transform duration-300 ease-out"
                                                     style={{
                                                         transform: (hovered || isFocused) ? `scale(${IMAGE_HOVER_SCALE})` : 'scale(1)',
+                                                        backgroundColor: 'transparent'
                                                     }}
                                                 />
                                             )}
@@ -293,14 +294,21 @@ export default function ArchiveGlobeView({ collection = [], isKorean = true }: G
             {/* Camera Setup: Far Clip 1000 for visibility */}
             <Canvas shadows camera={{ position: [0, 0, 38], fov: 38, near: 0.1, far: 1000 }} dpr={[1, 2]}>
 
-                {/* [Visuals: Background Universe] */}
-                <Stars radius={100} depth={50} count={5000} factor={2} saturation={0} fade speed={1} />
+                {/* [Visuals: Deep Universe Fog] - 깊이감 생성 */}
+                <fog attach="fog" args={['#050505', 20, 100]} />
 
-                {/* [Visuals: Foreground Space Dust] - 눈공격 방지 위해 더 축소 */}
-                <Sparkles count={100} scale={50} size={0.4} speed={0.4} opacity={0.3} color="#ffd700" noise={0} />
+                {/* [Visuals: Layer 1 - Wide Distant Stars] - 배경에 깔리는 수많은 작은 별들 */}
+                <Stars radius={300} depth={100} count={50000} factor={4} saturation={0} fade speed={1} />
 
-                <ambientLight intensity={0.6} />
-                <spotLight position={[10, 10, 20]} angle={0.5} penumbra={1} intensity={1} color="#ffffff" />
+                {/* [Visuals: Layer 2 - Bright Nearby Stars] - 반짝이는 큰 별들 */}
+                <Stars radius={100} depth={50} count={5000} factor={10} saturation={1} fade speed={2} />
+
+                {/* [Visuals: Foreground Space Dust] - 금빛 우주 먼지 (밀도 증가) */}
+                <Sparkles count={500} scale={40} size={2} speed={0.4} opacity={0.5} color="#ffd700" noise={1} />
+                <Sparkles count={300} scale={30} size={1} speed={0.8} opacity={0.3} color="#ffffff" noise={0.5} />
+
+                <ambientLight intensity={0.5} />
+                <spotLight position={[10, 10, 20]} angle={0.5} penumbra={1} intensity={2} color="#ffffff" />
 
                 <Background onReset={() => setFocusedId(null)} />
                 <FocusManager focusedPosition={focusedPosition} controlsRef={controlsRef} />

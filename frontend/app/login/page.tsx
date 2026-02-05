@@ -3,13 +3,16 @@
 import { FormEvent, useState } from "react";
 import Link from "next/link";
 import PageLayout from "@/components/common/PageLayout";
+import { signIn } from "next-auth/react"; // 26.02.05 [추가]
+import { useRouter } from "next/navigation"; // 26.02.05 [추가]
 
 export default function LoginPage() {
   const [loginId, setLoginId] = useState("");
   const [password, setPassword] = useState("");
   const [submitMessage, setSubmitMessage] = useState<string | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
-  const apiBaseUrl = "/api";
+  // const apiBaseUrl = "/api"; // 26.02.05 [안쓰기 때문에 주석처리]
+  const router = useRouter(); // 26.02.05 [추가]
 
   const handleKakaoPopup = () => {
     if (typeof window === "undefined") return;
@@ -24,6 +27,7 @@ export default function LoginPage() {
     );
   };
 
+  // localAuth 제거: NextAuth Credentials 로그인만 사용
   const handleSubmit = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
     setSubmitMessage(null);
@@ -36,56 +40,31 @@ export default function LoginPage() {
     setIsSubmitting(true);
 
     try {
-      const response = await fetch(`${apiBaseUrl}/users/login/local`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          email: loginId.trim(),
-          password,
-        }),
+      const result = await signIn("credentials", {
+        redirect: false,
+        email: loginId.trim(),
+        password,
       });
 
-      if (!response.ok) {
-        const data = await response.json().catch(() => null);
-        setSubmitMessage(data?.detail || "로그인에 실패했습니다.");
+      if (result?.error?.startsWith("WITHDRAW_PENDING:")) {
+        const memberId = result.error.split(":")[1];
+        router.push(`/recover?memberId=${memberId}`);
         return;
       }
-      const data = await response.json().catch(() => null);
-      if (data?.withdraw_pending && data?.member_id) {
-        window.location.href = `/recover?memberId=${data.member_id}`;
+
+      if (!result?.ok) {
+        setSubmitMessage("로그인에 실패했습니다.");
         return;
       }
-      let nickname = null;
-      let roleType = data?.role_type ?? null;
-      if (data?.member_id) {
-        const profileResponse = await fetch(`/api/users/profile/${data.member_id}`);
-        if (profileResponse.ok) {
-          const profileData = await profileResponse.json().catch(() => null);
-          nickname = profileData?.nickname ?? null;
-          roleType = profileData?.role_type ?? roleType;
-        }
-      }
-      if (typeof window !== "undefined") {
-        const userMode = data?.user_mode || "BEGINNER"; // [추가]
-        localStorage.setItem(
-          "localAuth",
-          JSON.stringify({
-            memberId: data?.member_id ?? null,
-            email: loginId.trim(),
-            nickname,
-            // roleType removed for security
-            user_mode: userMode,
-            loggedInAt: new Date().toISOString(),
-          })
-        );
-      }
-      window.location.href = "/";
-    } catch (error) {
+
+      router.push("/");
+    } catch {
       setSubmitMessage("로그인에 실패했습니다.");
     } finally {
       setIsSubmitting(false);
     }
   };
+
 
   return (
     <PageLayout className="h-screen bg-[#FDFBF8] text-black font-sans overflow-hidden flex flex-col">

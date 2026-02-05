@@ -58,27 +58,15 @@ export function usePerfumeNetwork(sessionUserId?: string | number) {
   const [isSavingCard, setIsSavingCard] = useState(false);
   const [saveSuccess, setSaveSuccess] = useState(false);
 
-  // 1. 로그인 정보 로드
+  // 1. 로그인 정보 로드 (localAuth 제거: 세션 ID만 사용)
   useEffect(() => {
     if (sessionUserId) {
       setMemberId(String(sessionUserId));
       setMemberIdReady(true);
       return;
     }
-    const stored = localStorage.getItem("localAuth");
-    if (!stored) {
-      setMemberIdReady(true);
-      return;
-    }
-    try {
-      const parsed = JSON.parse(stored) as { memberId?: number | string; mbti?: string };
-      if (parsed?.memberId) {
-        setMemberId(String(parsed.memberId));
-      }
-      setMemberIdReady(true);
-    } catch (e) {
-      setMemberIdReady(true);
-    }
+    setMemberId(null);
+    setMemberIdReady(true);
   }, [sessionUserId]);
 
   // 2. 세션 시작 (sessionStorage로 유지)
@@ -95,15 +83,8 @@ export function usePerfumeNetwork(sessionUserId?: string | number) {
           return;
         }
 
-        // 로컬 스토리지에서 MBTI 정보 획득
-        let userMbti = "INFJ";
-        const storedAuth = localStorage.getItem("localAuth");
-        if (storedAuth) {
-          try {
-            const parsed = JSON.parse(storedAuth);
-            if (parsed.mbti) userMbti = parsed.mbti;
-          } catch (e) { }
-        }
+        // localAuth 제거: 기본 MBTI 사용
+        const userMbti = "INFJ";
 
         // 새 세션 생성
         const response = await fetch(`${SESSION_API_BASE}/session/start`, {
@@ -192,15 +173,8 @@ export function usePerfumeNetwork(sessionUserId?: string | number) {
     setError(null);
 
     try {
-      // 로컬 스토리지에서 MBTI 정보 획득
-      let userMbti = "INFJ";
-      const storedAuth = localStorage.getItem("localAuth");
-      if (storedAuth) {
-        try {
-          const parsed = JSON.parse(storedAuth);
-          if (parsed.mbti) userMbti = parsed.mbti;
-        } catch (e) { }
-      }
+      // localAuth 제거: 기본 MBTI 사용
+      const userMbti = "INFJ";
 
       // 현재 그래프 가시 영역 향수 ID 리스트 추출
       const visiblePerfumeIds = fullPayload?.nodes
@@ -324,8 +298,8 @@ export function usePerfumeNetwork(sessionUserId?: string | number) {
 
   // [개선] 6. 전체 데이터 로드 (스마트 로딩: 300개 제한)
   const requestUrl = useMemo(() => {
-    const params = new URLSearchParams({ 
-      min_similarity: "0.0", 
+    const params = new URLSearchParams({
+      min_similarity: "0.0",
       top_accords: "5",
       max_perfumes: String(GRAPH_CONFIG.API_MAX_PERFUMES || 300) // [개선] max_perfumes 파라미터 추가
     });

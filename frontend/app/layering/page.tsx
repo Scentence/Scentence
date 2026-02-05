@@ -149,7 +149,7 @@ const apiBase = getApiBase();
 // ==================== 유틸리티 함수 ====================
 
 /**
- * 로컬 스토리지에서 현재 회원 ID 추출
+ * localAuth 제거: 세션 ID만 사용
  * @param sessionUserId - 카카오 세션의 user.id (있으면 우선 사용)
  * @returns 회원 ID (로그인하지 않은 경우 0)
  */
@@ -158,20 +158,7 @@ const getMemberId = (sessionUserId?: string | number | null): number => {
   if (sessionUserId) {
     return typeof sessionUserId === 'number' ? sessionUserId : parseInt(sessionUserId, 10);
   }
-  if (typeof window === "undefined") {
-    return 0;
-  }
-  // 로컬 로그인 확인
-  try {
-    const localAuth = localStorage.getItem("localAuth");
-    if (!localAuth) return 0;
-
-    const parsed = JSON.parse(localAuth);
-    return parsed?.memberId ? parseInt(parsed.memberId, 10) : 0;
-  } catch (error) {
-    console.error("Member ID Parsing Error:", error);
-    return 0;
-  }
+  return 0;
 };
 
 /**
@@ -450,7 +437,6 @@ export default function LayeringPage() {
 
   // 향수 검색 모달
   const [searchModalOpen, setSearchModalOpen] = useState(false);
-  const [localUser, setLocalUser] = useState<any>(null); // [RESTORED] State for localUser
 
   // [State] PerfumeInfoModal (단일 추천 결과)*/
   const [memberId, setMemberId] = useState(0);
@@ -470,20 +456,13 @@ export default function LayeringPage() {
 
   useEffect(() => {
     setIsMounted(true);
-    const stored = localStorage.getItem("localAuth");
-    if (stored) {
-      try {
-        setLocalUser(JSON.parse(stored));
-      } catch {
-        setLocalUser(null);
-      }
-    }
   }, []);
 
   const [profileImageUrl, setProfileImageUrl] = useState<string | null>(null); // [Fix] Missing state
 
   useEffect(() => {
-    const currentMemberId = session?.user?.id || localUser?.memberId;
+    // localAuth 제거: 세션 ID로만 프로필 조회
+    const currentMemberId = session?.user?.id;
     if (!currentMemberId) {
       setProfileImageUrl(null);
       return;
@@ -501,12 +480,12 @@ export default function LayeringPage() {
         }
       })
       .catch(() => setProfileImageUrl(null));
-  }, [session, localUser]);
+  }, [session]);
 
 
 
-  const displayName = session?.user?.name || localUser?.nickname || localUser?.email?.split('@')[0] || "Guest";
-  const isLoggedIn = !!(session || localUser);
+  const displayName = session?.user?.name || session?.user?.email?.split('@')[0] || "Guest";
+  const isLoggedIn = !!session;
 
   /**
    * 채팅 메시지가 업데이트될 때마다 자동으로 스크롤

@@ -14,6 +14,12 @@ import shutil
 from datetime import datetime, timedelta
 # [중복 제거] add_my_perfume은 위에서 이미 임포트됨
 
+# ======== ksu ========= 
+# 관리자/프로필/내향수 저장 등 모든 사용자 연관 API에 검증 적용
+from fastapi import Depends
+from agent.auth import get_identity, require_admin, require_member_match, require_authenticated
+# ======================
+
 # 이 라우터는 '/users'로 시작하는 모든 요청을 처리합니다.
 router = APIRouter(prefix="/users", tags=["users"])
 
@@ -171,6 +177,38 @@ def login_with_kakao(req: KakaoLoginRequest):
             # 이메일만 같다고 자동 통합하면, 타인의 계정을 뺏을 수 있습니다.
             # 반드시 비밀번호 확인 후 통합해야 합니다.
             # -------------------------------------------------------------------------
+            # 26.02.05 수정 내용
+            # [추가] 로컬 로그인 응답에 nickname/email 포함
+            # 목적: NextAuth Credentials 로그인에서도 프로필 정보가 세션에 들어가게 함
+            # 이유: 프론트에서 추가 프로필 조회를 최소화하고 UX 일관성 유지
+            # -------------------------------------------------------------------------
+
+            # if req.email:
+                # cur.execute(
+                #     """
+                #     SELECT b.member_id, p.nickname
+                #     FROM tb_member_basic_m b
+                #     JOIN tb_member_profile_t p ON b.member_id = p.member_id
+                #     WHERE p.email = %s AND b.join_channel = 'LOCAL'
+                #     """,
+                #     (req.email,)
+                # )
+                # existing_local_user = cur.fetchone()
+                # if existing_local_user:
+                #     # 같은 이메일로 자체 가입된 계정 발견!
+                #     # 프론트에 "연결 가능" 신호를 보내고, 실제 통합은 /link-account에서 처리
+                #     print(f"📧 이메일 중복 감지: {req.email} (기존 회원 ID: {existing_local_user['member_id']})")
+                #     conn.commit()
+                #     return {
+                #         "link_available": True,
+                #         "existing_member_id": str(existing_local_user["member_id"]),
+                #         "existing_nickname": existing_local_user["nickname"],
+                #         "email": req.email,
+                #         "kakao_id": req.kakao_id,
+                #         "kakao_nickname": nickname,
+                #         "kakao_profile_image": profile_image_url,
+                #     }
+
             if req.email:
                 cur.execute(
                     """
@@ -179,14 +217,11 @@ def login_with_kakao(req: KakaoLoginRequest):
                     JOIN tb_member_profile_t p ON b.member_id = p.member_id
                     WHERE p.email = %s AND b.join_channel = 'LOCAL'
                     """,
-                    (req.email,)
+                    (req.email,),
                 )
                 existing_local_user = cur.fetchone()
 
                 if existing_local_user:
-                    # 같은 이메일로 자체 가입된 계정 발견!
-                    # 프론트에 "연결 가능" 신호를 보내고, 실제 통합은 /link-account에서 처리
-                    print(f"📧 이메일 중복 감지: {req.email} (기존 회원 ID: {existing_local_user['member_id']})")
                     conn.commit()
                     return {
                         "link_available": True,
@@ -197,6 +232,9 @@ def login_with_kakao(req: KakaoLoginRequest):
                         "kakao_nickname": nickname,
                         "kakao_profile_image": profile_image_url,
                     }
+
+
+
 
             # [STEP 2: 신규/기존 회원 판별 및 가입]
             # auth 테이블에는 없지만, 혹시 옛날 로직으로 가입된 '레거시 회원'인지 확인해야 합니다.
@@ -302,12 +340,29 @@ def login_with_kakao(req: KakaoLoginRequest):
 
         role_type = _get_role_type(cur, member_id)
         user_mode = _get_user_mode(cur, member_id)
+        # ==== ksu ==== 프로필 정보 조회
+        cur.execute(
+            "SELECT nickname, email FROM tb_member_profile_t WHERE member_id=%s",
+            (member_id,),
+        )
+        profile = cur.fetchone() or {}
+        # ==== ksu ==== 프로필 정보 조회
+
         conn.commit()
+        # return {
+        #     "member_id": str(member_id),
+        #     "nickname": nickname,
+        #     "role_type": role_type,
+        #     "user_mode": user_mode,
+        # }
+
+        # ==== ksu ==== 세션 생성에 필요한 기본 사용자 정보 반환
         return {
             "member_id": str(member_id),
-            "nickname": nickname,
-            "role_type": role_type,
-            "user_mode": user_mode,
+            "role_type": (role_type or "USER").upper(),
+            "user_mode": (user_mode or "BEGINNER").upper(),
+            "nickname": profile.get("nickname") or nickname,
+            "email": profile.get("email") or req.email,
         }
 
     except Exception as e:
@@ -340,6 +395,7 @@ def login_with_kakao(req: KakaoLoginRequest):
 def link_account(req: LinkAccountRequest):
     conn = get_member_db_connection()
     cur = conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor)
+
 
     try:
         # [STEP 1] 이메일로 자체 가입 계정 조회
@@ -521,15 +577,27 @@ def login_local_user(req: LocalLoginRequest):
     cur = conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor)
 
     try:
+        # cur.execute(
+        #     """
+        #     SELECT member_id, pwd_hash, role_type, user_mode
+        #     FROM tb_member_basic_m
+        #     WHERE login_id=%s AND join_channel='LOCAL'
+        #     """,
+        #     (req.email,),
+        # )
+        # row = cur.fetchone()
         cur.execute(
             """
-            SELECT member_id, pwd_hash, role_type, user_mode
-            FROM tb_member_basic_m
-            WHERE login_id=%s AND join_channel='LOCAL'
+            SELECT b.member_id, b.pwd_hash, b.role_type, b.user_mode,
+                   p.nickname, p.email
+            FROM tb_member_basic_m b
+            LEFT JOIN tb_member_profile_t p ON b.member_id = p.member_id
+            WHERE b.login_id=%s AND b.join_channel='LOCAL'
             """,
             (req.email,),
         )
         row = cur.fetchone()
+
 
         if not row:
             raise HTTPException(status_code=401, detail="Invalid credentials")
@@ -552,11 +620,19 @@ def login_local_user(req: LocalLoginRequest):
 
         # [추가] user_mode가 없으면 기본값 'BEGINNER'
         user_mode = row.get("user_mode")
+        # return {
+        #     "member_id": str(row["member_id"]),
+        #     "role_type": (row.get("role_type") or "USER").upper(),
+        #     "user_mode": (user_mode or "BEGINNER").upper(), # [추가] 반환
+        # }
         return {
             "member_id": str(row["member_id"]),
             "role_type": (row.get("role_type") or "USER").upper(),
-            "user_mode": (user_mode or "BEGINNER").upper(), # [추가] 반환
+            "user_mode": (user_mode or "BEGINNER").upper(),
+            "nickname": row.get("nickname"),
+            "email": row.get("email") or req.email,
         }
+
 
     except HTTPException:
         raise
@@ -675,8 +751,14 @@ def register_local_user(req: LocalRegisterRequest):
             release_member_db_connection(conn)
 
 
+# @router.get("/profile/{member_id}")
+# def get_profile(member_id: int):
+
+# ======== ksu ========= 프로필 조회 API 변경
 @router.get("/profile/{member_id}")
-def get_profile(member_id: int):
+def get_profile(member_id: int, identity = Depends(get_identity)):
+    require_member_match(member_id, identity)
+# ======================
     conn = get_member_db_connection()
     cur = conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor)
 
@@ -753,8 +835,13 @@ def check_nickname(nickname: str, member_id: Optional[int] = None):
             release_member_db_connection(conn)
 
 
+# @router.patch("/profile/{member_id}")
+# def update_profile(member_id: int, req: UpdateProfileRequest):
+# ======== ksu ========= 프로필 API 변경
 @router.patch("/profile/{member_id}")
-def update_profile(member_id: int, req: UpdateProfileRequest):
+def update_profile(member_id: int, req: UpdateProfileRequest, identity = Depends(get_identity)):
+    require_member_match(member_id, identity)
+# ======================
     conn = get_member_db_connection()
     cur = conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor)
 
@@ -896,8 +983,14 @@ def update_profile(member_id: int, req: UpdateProfileRequest):
             release_member_db_connection(conn)
 
 
+# @router.post("/profile/{member_id}/password")
+# def update_password(member_id: int, req: UpdatePasswordRequest):
+
+# ========== ksu ========== 
 @router.post("/profile/{member_id}/password")
-def update_password(member_id: int, req: UpdatePasswordRequest):
+def update_password(member_id: int, req: UpdatePasswordRequest, identity = Depends(get_identity)):
+    require_member_match(member_id, identity)
+# ========== ksu ==========
     if req.new_password != req.confirm_password:
         raise HTTPException(
             status_code=400, detail="Password confirmation does not match"
@@ -959,8 +1052,15 @@ def update_password(member_id: int, req: UpdatePasswordRequest):
             release_member_db_connection(conn)
 
 
+# @router.post("/profile/{member_id}/withdraw")
+# def request_withdraw(member_id: int):
+
+# ========== ksu ========== 
 @router.post("/profile/{member_id}/withdraw")
-def request_withdraw(member_id: int):
+def request_withdraw(member_id: int, identity = Depends(get_identity)):
+    require_member_match(member_id, identity)
+# ========== ksu ==========
+
     conn = get_member_db_connection()
     cur = conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor)
 
@@ -1041,9 +1141,14 @@ def recover_account(member_id: int):
         if conn:
             release_member_db_connection(conn)
 
+# @router.post("/profile/{member_id}/image")
+# async def upload_profile_image(member_id: int, file: UploadFile = File(...)):
 
+# ======== ksu ========== identity = Depends(get_identity)):
+#    require_member_match(member_id, identity)
 @router.post("/profile/{member_id}/image")
-async def upload_profile_image(member_id: int, file: UploadFile = File(...)):
+async def upload_profile_image(member_id: int, file: UploadFile = File(...), identity = Depends(get_identity)):
+    require_member_match(member_id, identity)
     """
     Upload profile image to S3 and save CDN URL to database.
 
@@ -1167,14 +1272,19 @@ from typing import Optional
 
 # ...
 
+# @router.get("/admin/members")
+# def admin_list_members(admin_member_id: int):
+
+# ======== ksu ========= 관리자 회원 조회 API 변경
 @router.get("/admin/members")
-def admin_list_members(admin_member_id: int):
+def admin_list_members(identity = Depends(get_identity)):
+    require_admin(identity)
+    # admin_member_id 제거: 세션/헤더 기반 권한 검증만 사용
+# ======================
     conn = get_member_db_connection()
     cur = conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor)
 
     try:
-        _ensure_admin_by_member_id(cur, admin_member_id)
-
         cur.execute(
             """
             SELECT
@@ -1197,8 +1307,14 @@ def admin_list_members(admin_member_id: int):
             release_member_db_connection(conn)
 
 
+# @router.patch("/admin/members/{member_id}/status")
+# def admin_update_member_status(member_id: int, admin_member_id: int, status: str):
+# ======== ksu ========= 관리자 회원 상태 변경 API 변경
 @router.patch("/admin/members/{member_id}/status")
-def admin_update_member_status(member_id: int, admin_member_id: int, status: str):
+def admin_update_member_status(member_id: int, status: str, identity = Depends(get_identity)):
+    require_admin(identity)
+    # admin_member_id 제거: 세션/헤더 기반 권한 검증만 사용
+# ======================
     if status not in ("NORMAL", "LOCK", "DORMANT", "WITHDRAW_REQ", "WITHDRAW"):
         raise HTTPException(status_code=400, detail="Invalid status")
 
@@ -1206,8 +1322,6 @@ def admin_update_member_status(member_id: int, admin_member_id: int, status: str
     cur = conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor)
 
     try:
-        _ensure_admin_by_member_id(cur, admin_member_id)
-
         cur.execute(
             "SELECT member_id FROM tb_member_basic_m WHERE member_id=%s",
             (member_id,),
@@ -1241,24 +1355,28 @@ def admin_update_member_status(member_id: int, admin_member_id: int, status: str
             release_member_db_connection(conn)
 
 
+# member_id는 안 씀. identity만 씀.
 class SavePerfumeRequest(BaseModel):
-    member_id: int  # 로그인된 사용자 ID (프론트에서 세션 정보로 보냄)
+    # member_id: int  # 로그인된 사용자 ID (프론트에서 세션 정보로 보냄)
     perfume_id: int
     perfume_name: str
+    member_id: Optional[int] = None  # 예전 클라이언트 호환용 (필수는 아님)
 
 
+# @router.post("/me/perfumes")
+# def save_my_perfume(req: SavePerfumeRequest):
+
+# ========== ksu ==========
 @router.post("/me/perfumes")
-def save_my_perfume(req: SavePerfumeRequest):
+def save_my_perfume(req: SavePerfumeRequest, identity = Depends(get_identity)):
+    require_authenticated(identity)
+    result = add_my_perfume(identity.user_id, req.perfume_id, req.perfume_name)
+# =========================
     """
     사용자가 '저장하기' 버튼을 눌렀을 때 호출되는 API입니다.
     TB_MEMBER_MY_PERFUME_T 테이블에 향수를 저장합니다.
     """
-    if not req.member_id:
-        raise HTTPException(status_code=401, detail="로그인이 필요합니다.")
-
-    # DB 저장 함수 호출
-    result = add_my_perfume(req.member_id, req.perfume_id, req.perfume_name)
-
+    # member_id는 세션/헤더에서 판별하므로 req.member_id는 사용하지 않음
     if result["status"] == "error":
         raise HTTPException(status_code=500, detail=result["message"])
 

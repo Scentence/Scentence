@@ -10,10 +10,9 @@ import NMapView from './NMapView';
  * 향수 맵(NMap) 결과 페이지
  * 세션 정보를 관리하고 메인 뷰(NMapView)를 렌더링합니다.
  */
-export default function NMapPage() {
+  export default function NMapPage() {
   const { data: session } = useSession();
   const [sessionUserId, setSessionUserId] = useState<string | number | undefined>(undefined);
-  const [localUser, setLocalUser] = useState<any>(null); // [Fix] Missing state declaration
   const [isMounted, setIsMounted] = useState(false);
 
   useEffect(() => {
@@ -21,6 +20,7 @@ export default function NMapPage() {
   }, []);
 
   useEffect(() => {
+    // localAuth 제거: 세션 id만 사용
     // 1. Next-Auth 세션에서 ID 확인
     if (session?.user) {
       const id = (session.user as any).id;
@@ -29,32 +29,8 @@ export default function NMapPage() {
         return;
       }
     }
-
-    // 2. 로컬 스토리지에서 인증 정보 확인
-    const storedAuth = localStorage.getItem('localAuth');
-    if (storedAuth) {
-      try {
-        const parsed = JSON.parse(storedAuth);
-        if (parsed.memberId) {
-          setSessionUserId(parsed.memberId);
-        }
-      } catch (e) {
-        console.error('Failed to parse localAuth:', e);
-      }
-    }
+    setSessionUserId(undefined);
   }, [session]);
-
-  // [Profile Logic] 로그인 사용자 정보 및 이미지 연동
-  useEffect(() => {
-    const authData = localStorage.getItem("localAuth");
-    if (authData) {
-      try {
-        setLocalUser(JSON.parse(authData));
-      } catch (e) {
-        console.error("Local auth parse error", e);
-      }
-    }
-  }, []); // Added empty dependency array for mount check
 
   return (
     <PageLayout subTitle="PERFUME MAP">

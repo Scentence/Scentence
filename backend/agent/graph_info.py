@@ -1,7 +1,7 @@
 # backend/agent/graph_info.py
 import json
 import asyncio
-from typing import Literal
+from typing import Literal, Any
 from dotenv import load_dotenv
 from langchain_openai import ChatOpenAI
 from langchain_core.messages import SystemMessage, HumanMessage, AIMessage

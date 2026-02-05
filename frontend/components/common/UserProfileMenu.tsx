@@ -37,23 +37,14 @@ function MenuItem({ href, icon: Icon, title, desc, onClick, className = "" }: an
 
 export default function UserProfileMenu({ isOpen, onClose }: UserProfileMenuProps) {
     const { data: session } = useSession();
-    const [localUser, setLocalUser] = useState<{ roleType?: string | null; isAdmin?: boolean } | null>(null);
     const [profileRoleType, setProfileRoleType] = useState<string | null>(null);
-
-    // [AUTH CHECK] 권한 확인 로직
-    useEffect(() => {
-        if (!isOpen) return;
-        if (typeof window === "undefined") return;
-        const stored = localStorage.getItem("localAuth");
-        if (stored) {
-            try { setLocalUser(JSON.parse(stored)); } catch { setLocalUser(null); }
-        }
-    }, [isOpen]);
+    // 세션에 심어둔 roleType으로 UI를 즉시 표시 (서버 검증은 그대로 유지)
+    const sessionRoleType = (session?.user as any)?.roleType as string | undefined;
 
     // Role 확인
     useEffect(() => {
         if (!isOpen) return;
-        const memberId = session?.user?.id || (localUser as any)?.memberId;
+        const memberId = session?.user?.id;
         if (!memberId) return;
 
         // [Admin Button Fix] Force fresh fetch to ensure role_type is up to date
@@ -63,10 +54,10 @@ export default function UserProfileMenu({ isOpen, onClose }: UserProfileMenuProp
                 if (data?.role_type) setProfileRoleType(data.role_type);
             })
             .catch(() => { });
-    }, [isOpen, localUser, session]);
+    }, [isOpen, session]);
 
-    // Resolve Role: Server Profile > Local Storage > Default
-    const resolvedRoleType = (profileRoleType || localUser?.roleType || (localUser?.isAdmin ? "ADMIN" : "") || "").toUpperCase();
+    // UI는 세션 roleType으로 즉시 표시, 이후 서버 응답으로 보정
+    const resolvedRoleType = (profileRoleType || sessionRoleType || "").toUpperCase();
     const isAdmin = resolvedRoleType === "ADMIN";
 
     // Outside Click Close
@@ -154,10 +145,7 @@ export default function UserProfileMenu({ isOpen, onClose }: UserProfileMenuProp
                             <button
                                 onClick={() => {
                                     if (session) signOut({ callbackUrl: "/login" });
-                                    else {
-                                        if (typeof window !== "undefined") { localStorage.removeItem("localAuth"); window.location.href = "/login"; }
-                                        setLocalUser(null); onClose();
-                                    }
+                                    else window.location.href = "/login";
                                 }}
                                 className="w-full flex items-center justify-between p-3.5 md:p-4 px-5 md:px-6 hover:bg-white/10 transition-all duration-300 group rounded-xl"
                             >

@@ -31,25 +31,12 @@ export default function Header({
     const { data: session } = useSession();
     // Removed internal state: const [isProfileMenuOpen, setIsProfileMenuOpen] = useState(false);
 
-    // Profile Logic (moved from individual pages)
-    const [localUser, setLocalUser] = useState<{ memberId?: string | null; email?: string | null; nickname?: string | null } | null>(null);
+    // localAuth 제거: 프로필은 세션 기준으로만 조회
     const [profileImageUrl, setProfileImageUrl] = useState<string | null>(null);
     const [profileNickname, setProfileNickname] = useState<string | null>(null);
 
     useEffect(() => {
-        if (typeof window === "undefined") return;
-        const stored = localStorage.getItem("localAuth");
-        if (stored) {
-            try {
-                setLocalUser(JSON.parse(stored));
-            } catch {
-                setLocalUser(null);
-            }
-        }
-    }, []);
-
-    useEffect(() => {
-        const memberId = session?.user?.id || localUser?.memberId;
+        const memberId = session?.user?.id;
 
         if (!memberId) {
             setProfileImageUrl(null);
@@ -72,10 +59,10 @@ export default function Header({
                 }
             })
             .catch(() => setProfileImageUrl(null));
-    }, [session, localUser]);
+    }, [session]);
 
-    const displayName = profileNickname || session?.user?.name || localUser?.nickname || localUser?.email?.split('@')[0] || "Guest";
-    const isLoggedIn = Boolean(session || localUser);
+    const displayName = profileNickname || session?.user?.name || session?.user?.email?.split('@')[0] || "Guest";
+    const isLoggedIn = Boolean(session);
 
     // Glass/Scroll logic - Always Active
     const headerStyle = `bg-${theme === 'dark' ? 'black' : 'white'}/60 backdrop-blur-md`;

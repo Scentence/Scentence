@@ -10,31 +10,15 @@ interface ArchiveSidebarProps {
 
 export default function ArchiveSidebar({ isOpen, onClose }: ArchiveSidebarProps) {
     const { data: session } = useSession();
-    const [localUser, setLocalUser] = useState<{ memberId?: string | null; email?: string | null; nickname?: string | null } | null>(null);
     const [profileImageUrl, setProfileImageUrl] = useState<string | null>(null);
-    const displayName = session?.user?.name || localUser?.nickname || localUser?.email || "회원";
-
-    useEffect(() => {
-        if (!isOpen) return;
-        if (typeof window === "undefined") return;
-        const stored = localStorage.getItem("localAuth");
-        if (!stored) {
-            setLocalUser(null);
-            return;
-        }
-        try {
-            const parsed = JSON.parse(stored);
-            setLocalUser(parsed);
-        } catch (error) {
-            setLocalUser(null);
-        }
-    }, [isOpen]);
+    const displayName = session?.user?.name || session?.user?.email || "회원";
 
     useEffect(() => {
         if (!isOpen) return;
         if (typeof window === "undefined") return;
         const apiBaseUrl = "/api";
-        const memberId = session?.user?.id || localUser?.memberId;
+        // localAuth 제거: 세션 ID로만 조회
+        const memberId = session?.user?.id;
         if (!memberId) {
             setProfileImageUrl(null);
             return;
@@ -49,7 +33,7 @@ export default function ArchiveSidebar({ isOpen, onClose }: ArchiveSidebarProps)
                 }
             })
             .catch(() => setProfileImageUrl(null));
-    }, [isOpen, localUser, session]);
+    }, [isOpen, session]);
 
     if (!isOpen) return null;
 
@@ -88,10 +72,7 @@ export default function ArchiveSidebar({ isOpen, onClose }: ArchiveSidebarProps)
                                 signOut({ callbackUrl: "/login" });
                                 return;
                             }
-                            if (typeof window !== "undefined") {
-                                localStorage.removeItem("localAuth");
-                                window.location.href = "/login";
-                            }
+                            window.location.href = "/login";
                         }}
                         className="mt-4 text-sm text-gray-400 hover:text-red-500 underline decoration-gray-300 hover:decoration-red-300 underline-offset-4 transition-colors"
                     >
