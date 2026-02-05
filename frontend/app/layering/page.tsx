@@ -2,7 +2,6 @@
 
 import { useState, useMemo, useRef, useEffect } from "react";
 import { useSession } from "next-auth/react"; // 카카오 로그인 세션
-import Link from "next/link";
 // Sidebar, UserProfileMenu removed as they are handled by PageLayout
 import AccordWheel from "@/components/layering/AccordWheel";
 import { BACKEND_ACCORDS, ACCORD_LABELS } from "@/lib/accords";
@@ -1020,16 +1019,7 @@ export default function LayeringPage() {
             </p>
           </div>
 
-          {/* 홈 버튼 */}
-          <Link
-            href="/"
-            className="p-2.5 sm:p-3 bg-white/70 hover:bg-white rounded-full transition-all shadow-sm hover:shadow-md text-[#7A6B57] hover:text-[#5C5448]"
-            aria-label="홈으로 이동"
-          >
-            <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" className="w-5 h-5 sm:w-6 sm:h-6">
-              <path strokeLinecap="round" strokeLinejoin="round" d="m2.25 12 8.954-8.955c.44-.439 1.152-.439 1.591 0L21.75 12M4.5 9.75v10.125c0 .621.504 1.125 1.125 1.125H9.75v-4.875c0-.621.504-1.125 1.125-1.125h2.25c.621 0 1.125.504 1.125 1.125V21h4.125c.621 0 1.125-.504 1.125-1.125V9.75M8.25 21h8.25" />
-            </svg>
-          </Link>
+
         </div>
 
         {/* ==================== 메인 콘텐츠 그리드 ==================== */}
@@ -1435,11 +1425,11 @@ export default function LayeringPage() {
                 <div className="flex justify-start">
                   <div className="bg-[#F8F4EC] text-[#2E2B28] border border-[#E6DDCF] rounded-2xl rounded-bl-sm px-4 py-3">
                     <div className="flex items-center gap-2">
-                      <svg className="animate-spin h-4 w-4 text-[#7A6B57]" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                      <svg className="animate-spin h-4 w-4 text-[#57B898]" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
                         <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
                         <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
                       </svg>
-                      <span className="text-sm text-[#7A6B57]">분석 중...</span>
+                      <span className="text-sm text-[#57B898]">분석 중...</span>
                     </div>
                   </div>
                 </div>

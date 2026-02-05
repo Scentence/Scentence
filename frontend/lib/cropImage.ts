@@ -1,4 +1,3 @@
-// frontend/utils/cropImage.ts
 export const createImage = (url: string): Promise<HTMLImageElement> =>
     new Promise((resolve, reject) => {
         const image = new Image();

@@ -87,9 +87,7 @@ export default function Header({
             <div className="flex items-center gap-3 md:gap-4">
                 {!isLoggedIn ? (
                     <div className={`flex items-center gap-2 text-sm md:text-base font-medium ${theme === 'dark' ? 'text-white/70' : 'text-gray-400'}`}>
-                        <Link href="/login" className={`hover:text-${theme === 'dark' ? 'white' : 'black'} transition-colors`}>Sign in</Link>
-                        <span className="text-gray-300 text-xs">|</span>
-                        <Link href="/signup" className={`hover:text-${theme === 'dark' ? 'white' : 'black'} transition-colors`}>Sign up</Link>
+                        <Link href="/login" className={`hover:text-${theme === 'dark' ? 'white' : 'black'} transition-colors font-semibold`}>Join us</Link>
                     </div>
                 ) : (
                     <div className="flex items-center gap-2 md:gap-3">
