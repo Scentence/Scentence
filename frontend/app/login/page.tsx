@@ -91,33 +91,9 @@ export default function LoginPage() {
     <PageLayout className="h-screen bg-[#FDFBF8] text-black font-sans overflow-hidden flex flex-col">
 
       {/* [MAIN CONTENT] Split View (Gallery Look) */}
-      <main className="flex-1 flex w-full h-full pt-[76px]">
-
-        {/* [LEFT] Image Section (Desktop Only) */}
-        <section className="hidden md:block w-1/2 h-full relative overflow-hidden bg-gray-100 border-r border-[#F0F0F0]">
-          <div className="absolute inset-0">
-            {/* 
-                 랜덤 이미지 혹은 고정 이미지 사용.
-                 'archive_s1.png' 같은 감성적인 컷도 좋고, 'news1.png' 같은 화보 컷도 좋음.
-                 여기서는 제안드린 'news1.png' 사용.
-             */}
-            <img
-              src="/perfumes/news1.png"
-              alt="Login Visual"
-              className="w-full h-full object-cover grayscale-[20%] hover:grayscale-0 transition-all duration-1000 ease-in-out scale-105 hover:scale-100"
-            />
-            {/* Overlay for mood */}
-            <div className="absolute inset-0 bg-black/5" />
-          </div>
-          <div className="absolute bottom-10 left-10 text-white z-10 drop-shadow-md">
-            <p className="text-3xl font-bold tracking-widest uppercase mb-2">Archive</p>
-            <p className="text-sm font-light tracking-wider opacity-90">당신의 향기를 기록하고 발견하세요.</p>
-          </div>
-        </section>
-
-        {/* [RIGHT] Login Form Section */}
-        <section className="w-full md:w-1/2 h-full flex items-center justify-center overflow-y-auto bg-white">
-          <div className="w-full max-w-[420px] px-6 py-10 fade-in-up">
+      <main className="flex-1 flex w-full h-full pt-[76px] items-center justify-center bg-[#FDFBF8]">
+        <section className="w-full max-w-[420px] h-auto flex flex-col items-center justify-center bg-white rounded-2xl shadow-sm border border-gray-100 p-8 md:p-10 fade-in-up">
+          <div className="w-full">
 
             <div className="mb-10 text-center md:text-left">
               <h2 className="text-3xl font-bold mb-3 tracking-tight text-gray-900">Welcome Back</h2>

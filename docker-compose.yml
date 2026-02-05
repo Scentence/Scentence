@@ -20,6 +20,7 @@ services:
       - DB_PORT=${DB_PORT}
       - DATABASE_URL=postgresql://${DB_USER}:${DB_PASSWORD}@${DB_HOST}:${DB_PORT}/${DB_NAME}
       - ADMIN_EMAILS=${ADMIN_EMAILS}
+      - INTERNAL_REQUEST_SECRET=${INTERNAL_REQUEST_SECRET}
     extra_hosts:
       - "host.docker.internal:host-gateway"
     command: uvicorn main:app --host 0.0.0.0 --port 8000 --reload
@@ -46,6 +47,7 @@ services:
       - NEXT_PUBLIC_ADMIN_EMAILS=${NEXT_PUBLIC_ADMIN_EMAILS}
       - LAYERING_API_URL=${LAYERING_API_URL:-http://layering:8002}
       - SCENTMAP_INTERNAL_URL=${SCENTMAP_INTERNAL_URL:-http://scentmap:8001}
+      - INTERNAL_REQUEST_SECRET=${INTERNAL_REQUEST_SECRET}
       - WATCHPACK_POLLING=true
       - NEXT_PUBLIC_ENABLE_AUTH=true
     depends_on:
