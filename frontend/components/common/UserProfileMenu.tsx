@@ -119,7 +119,7 @@ export default function UserProfileMenu({ isOpen, onClose }: UserProfileMenuProp
                     />
 
                     <motion.div
-                        className="fixed top-[72px] md:top-20 right-4 md:right-20 z-50 w-[calc(100%-32px)] sm:w-[320px] md:w-[260px] flex flex-col gap-3 md:gap-4"
+                        className="fixed top-[84px] md:top-20 right-4 md:right-20 z-50 w-[calc(100%-32px)] sm:w-[320px] md:w-[260px] flex flex-col gap-3 md:gap-4"
                         variants={containerVariants}
                         initial="hidden"
                         animate="show"

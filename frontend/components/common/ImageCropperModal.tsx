@@ -1,7 +1,6 @@
-// frontend/components/common/ImageCropperModal.tsx
 import { useState, useCallback } from 'react';
 import Cropper from 'react-easy-crop';
-import getCroppedImg from './cropImage';
+import getCroppedImg from '@/lib/cropImage';
 
 interface Props {
     imageSrc: string;

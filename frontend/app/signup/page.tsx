@@ -3,7 +3,9 @@
 import { FormEvent, useMemo, useState } from "react";
 import Link from "next/link";
 import PageLayout from "@/components/common/PageLayout";
+import ImageCropperModal from "@/components/common/ImageCropperModal";
 import { useRouter } from "next/navigation";
+import { motion } from "framer-motion";
 
 const AgreementPopup = ({ title, content, onAgree, onClose }: { title: string; content: string; onAgree: () => void; onClose: () => void; }) => (
   <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/60 p-4" onClick={onClose}>
@@ -47,8 +49,8 @@ Scentence(이하 "회사")는 개인정보보호법, 정보통신망 이용촉�
 
 1. 수집하는 개인정보의 항목
 회사는 회원가입, 원활한 고객상담, 각종 서비스의 제공을 위해 아래와 같은 최소한의 개인정보를 필수항목으로 수집하고 있습니다.
-- 필수항목 : 이메일, 비밀번호, 이름, 성별
-- 선택항목 : 마케팅 정보 수신 동의(이메일, SMS)
+- 필수항목 : 이메일, 비밀번호, 닉네임, 향수 지식
+- 선택항목 : 이름, 성별, 주소, 핸드폰번호, 마케팅 정보 수신 동의(이메일, SMS)
 
 2. 개인정보의 수집 및 이용목적
 회사는 수집한 개인정보를 다음의 목적을 위해 활용합니다.
@@ -75,29 +77,41 @@ Scentence에서 제공하는 이벤트, 신규 서비스, 프로모션 등 다�
 
 export default function SignupPage() {
   const router = useRouter();
-  const [currentStep, setCurrentStep] = useState(1);
-  const [termsAgree, setTermsAgree] = useState(false);
-  const [privacyAgree, setPrivacyAgree] = useState(false);
-  const [emailAlarmAgree, setEmailAlarmAgree] = useState(false);
-  const [snsAlarmAgree, setSnsAlarmAgree] = useState(false);
+
+  // -- Form States --
   const [email, setEmail] = useState("");
+  const [nickname, setNickname] = useState("");
+  const [password, setPassword] = useState("");
+  const [confirmPassword, setConfirmPassword] = useState("");
+  const [userMode, setUserMode] = useState<"BEGINNER" | "EXPERT" | "">(""); // Essential
+
   const [name, setName] = useState("");
   const [sex, setSex] = useState<"M" | "F" | "">("");
   const [phoneNo, setPhoneNo] = useState("");
   const [address, setAddress] = useState("");
-  const [nickname, setNickname] = useState("");
-  const [userMode, setUserMode] = useState<"BEGINNER" | "EXPERT" | "">("");
   const [profileImageFile, setProfileImageFile] = useState<File | null>(null);
   const [profileImageUrl, setProfileImageUrl] = useState("");
-  const [password, setPassword] = useState("");
-  const [confirmPassword, setConfirmPassword] = useState("");
+  const [selectedFile, setSelectedFile] = useState<string | null>(null);
+  const [isCropperOpen, setIsCropperOpen] = useState(false);
+
+  // -- Checkbox States --
+  const [termsAgree, setTermsAgree] = useState(false);
+  const [privacyAgree, setPrivacyAgree] = useState(false);
+  const [emailAlarmAgree, setEmailAlarmAgree] = useState(false);
+  const [snsAlarmAgree, setSnsAlarmAgree] = useState(false);
+
+  // -- UI States --
   const [isPasswordVisible, setIsPasswordVisible] = useState(false);
   const [isConfirmVisible, setIsConfirmVisible] = useState(false);
   const [hasTypedConfirm, setHasTypedConfirm] = useState(false);
+
   const [emailCheckStatus, setEmailCheckStatus] = useState<"idle" | "checking" | "available" | "unavailable">("idle");
+  const [nicknameCheckStatus, setNicknameCheckStatus] = useState<"idle" | "checking" | "available" | "unavailable">("idle");
+
   const [submitMessage, setSubmitMessage] = useState<string | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [popupContent, setPopupContent] = useState<{ title: string; content: string; onAgree: () => void } | null>(null);
+
   const apiBaseUrl = "/api";
 
   const allAgree = termsAgree && privacyAgree && emailAlarmAgree && snsAlarmAgree;
@@ -122,7 +136,6 @@ export default function SignupPage() {
     privacy: { title: '개인정보 수집 및 이용 동의', content: PRIVACY_CONTENT, onAgree: () => setPrivacyAgree(true) },
     email: { title: 'E-mail 정보 수신 동의', content: EMAIL_AGREEMENT_CONTENT, onAgree: () => setEmailAlarmAgree(true) },
     sns: { title: 'SMS 정보 수신 동의', content: SNS_AGREEMENT_CONTENT, onAgree: () => setSnsAlarmAgree(true) },
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }), []);
 
   const handleShowPopup = (type: keyof typeof agreementDetails) => {
@@ -172,29 +185,57 @@ export default function SignupPage() {
     }
   };
 
-  const handleImageUpload = (event: React.ChangeEvent<HTMLInputElement>) => {
-    const file = event.target.files?.[0];
-    if (file) {
-      setProfileImageFile(file);
-      const url = URL.createObjectURL(file);
-      setProfileImageUrl(url);
+  const handleNicknameCheck = async () => {
+    if (!nickname.trim()) return;
+    setNicknameCheckStatus("checking");
+    try {
+      const response = await fetch(`${apiBaseUrl}/users/check-nickname?nickname=${encodeURIComponent(nickname.trim())}`);
+      if (!response.ok) {
+        setNicknameCheckStatus("unavailable");
+        return;
+      }
+      const data = await response.json();
+      setNicknameCheckStatus(data.available ? "available" : "unavailable");
+    } catch (error) {
+      setNicknameCheckStatus("unavailable");
     }
   };
 
-  const nextStep = () => {
-    if (currentStep < 4) setCurrentStep(currentStep + 1);
+  const handleImageUpload = (event: React.ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0];
+    if (file) {
+      // 1. 파일을 읽어 URL로 변환 (크롭퍼용)
+      const reader = new FileReader();
+      reader.addEventListener("load", () => {
+        setSelectedFile(reader.result?.toString() || null);
+        setIsCropperOpen(true); // 크롭 모달 열기
+      });
+      reader.readAsDataURL(file);
+
+      // 동일 파일 다시 선택 가능하도록 초기화
+      event.target.value = "";
+    }
   };
 
-  const prevStep = () => {
-    if (currentStep > 1) setCurrentStep(currentStep - 1);
+  const handleCropComplete = async (croppedBlob: Blob) => {
+    // 2. 크롭 완료된 이미지를 파일로 변환하여 상태 저장
+    const file = new File([croppedBlob], "profile_cropped.jpg", { type: "image/jpeg" });
+    setProfileImageFile(file);
+
+    // 미리보기 URL 생성
+    const url = URL.createObjectURL(file);
+    setProfileImageUrl(url);
+
+    setIsCropperOpen(false); // 모달 닫기
+    setSelectedFile(null);    // 원본 선택 초기화
   };
 
-  const canProceedStep1 = email.trim() && emailCheckStatus === "available" && passwordRules.minLength && passwordRules.hasRequiredSets && passwordRules.allowedSpecialsOnly && password === confirmPassword;
-  const canProceedStep2 = name.trim() && sex && phoneNo.trim() && address.trim();
-  const canProceedStep3 = termsAgree && privacyAgree;
-  const canProceedStep4 = nickname.trim() && userMode;
 
-  const handleSubmit = async () => {
+  /* Single Page Signup Implementation */
+  const handleSubmit = async (e?: FormEvent) => {
+    if (e) e.preventDefault();
+    if (!canSubmit) return;
+
     setIsSubmitting(true);
     setSubmitMessage(null);
 
@@ -205,12 +246,12 @@ export default function SignupPage() {
         body: JSON.stringify({
           email: email.trim(),
           password,
-          name: name.trim(),
+          name: name.trim() || null,
           sex: sex || null,
           phone_no: phoneNo.trim() || null,
           address: address.trim() || null,
           nickname: nickname.trim() || null,
-          user_mode: userMode || null,
+          user_mode: userMode || null, // Essential now
           req_agr_yn: termsAgree && privacyAgree ? "Y" : "N",
           email_alarm_yn: emailAlarmAgree ? "Y" : "N",
           sns_alarm_yn: snsAlarmAgree ? "Y" : "N",
@@ -227,7 +268,6 @@ export default function SignupPage() {
       const data = await response.json();
       const memberId = data.member_id;
 
-      // Upload profile image if exists
       if (profileImageFile && memberId) {
         const formData = new FormData();
         formData.append("file", profileImageFile);
@@ -235,7 +275,6 @@ export default function SignupPage() {
           method: "POST",
           body: formData,
         });
-        // Ignore errors for image upload
       }
 
       router.push("/login");
@@ -246,342 +285,415 @@ export default function SignupPage() {
     }
   };
 
-  const renderStep1 = () => (
-    <div className="space-y-5">
-      <div className="space-y-2">
-        <label htmlFor="email" className="text-sm font-medium text-[#333]">이메일</label>
-        <div className="flex gap-2">
-          <input
-            id="email"
-            name="email"
-            type="email"
-            placeholder="example@email.com"
-            value={email}
-            onChange={(event) => {
-              setEmail(event.target.value);
-              setEmailCheckStatus("idle");
-            }}
-            className="flex-1 rounded-xl border border-[#DDD] px-4 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-black/20"
-          />
-          <button
-            type="button"
-            onClick={handleEmailCheck}
-            disabled={!email.trim() || emailCheckStatus === "checking"}
-            className="rounded-xl bg-black px-4 py-3 text-sm font-bold text-white disabled:bg-gray-300"
-          >
-            {emailCheckStatus === "checking" ? "확인중..." : "중복확인"}
-          </button>
-        </div>
-        {emailCheckStatus === "available" && <p className="text-xs text-green-600">사용 가능한 이메일입니다.</p>}
-        {emailCheckStatus === "unavailable" && <p className="text-xs text-red-600">이미 사용중인 이메일입니다.</p>}
-      </div>
+  // Validation for submit button
+  const isEssentialValid =
+    email.trim() &&
+    emailCheckStatus === "available" &&
+    passwordRules.minLength &&
+    passwordRules.hasRequiredSets &&
+    passwordRules.allowedSpecialsOnly &&
+    password === confirmPassword &&
+    nickname.trim() &&
+    nicknameCheckStatus === "available" &&
+    userMode; // Knowledge is essential
 
-      <div className="space-y-2">
-        <label htmlFor="password" className="text-sm font-medium text-[#333]">비밀번호</label>
-        <div className="relative">
-          <input
-            id="password"
-            name="password"
-            type={isPasswordVisible ? "text" : "password"}
-            placeholder="비밀번호를 입력하세요"
-            value={password}
-            onChange={(event) => setPassword(event.target.value)}
-            className="w-full rounded-xl border border-[#DDD] px-4 py-3 pr-12 text-sm focus:outline-none focus:ring-2 focus:ring-black/20"
-          />
-          <button
-            type="button"
-            className="absolute right-3 top-1/2 -translate-y-1/2 p-1"
-            onMouseDown={() => setIsPasswordVisible(true)}
-            onMouseUp={() => setIsPasswordVisible(false)}
-            onMouseLeave={() => setIsPasswordVisible(false)}
-            onTouchStart={() => setIsPasswordVisible(true)}
-            onTouchEnd={() => setIsPasswordVisible(false)}
-            aria-label="비밀번호 보기"
-          >
-            <img src="/eye.svg" alt="비밀번호 보기" className="w-5 h-5" />
-          </button>
-        </div>
-        <div className="space-y-2 text-xs">
-          <div className="flex items-start gap-2">
-            <span className={`mt-1 inline-block w-2 h-2 rounded-full ${passwordRules.minLength ? "bg-green-500" : "bg-red-500"}`} />
-            <p className={`${passwordRules.minLength ? "text-green-600" : "text-red-600"}`}>비밀번호는 8자리 이상이어야 합니다.</p>
-          </div>
-          <div className="flex items-start gap-2">
-            <span className={`mt-1 inline-block w-2 h-2 rounded-full ${passwordRules.hasRequiredSets ? "bg-green-500" : "bg-red-500"}`} />
-            <p className={`${passwordRules.hasRequiredSets ? "text-green-600" : "text-red-600"}`}>대소문자, 숫자, 특수문자를 각각 하나 이상 포함해야 합니다.</p>
-          </div>
-          <div className="flex items-start gap-2">
-            <span className={`mt-1 inline-block w-2 h-2 rounded-full ${passwordRules.allowedSpecialsOnly ? "bg-green-500" : "bg-red-500"}`} />
-            <p className={`${passwordRules.allowedSpecialsOnly ? "text-green-600" : "text-red-600"}`}>특수문자는 !, @, #, $, %만 사용 가능합니다.</p>
-          </div>
-        </div>
-      </div>
+  const isAgreementsValid = termsAgree && privacyAgree;
+  const canSubmit = isEssentialValid && isAgreementsValid;
 
-      <div className="space-y-2">
-        <label htmlFor="confirmPassword" className="text-sm font-medium text-[#333]">비밀번호 확인</label>
-        <div className="relative">
-          <input
-            id="confirmPassword"
-            name="confirmPassword"
-            type={isConfirmVisible ? "text" : "password"}
-            placeholder="비밀번호를 다시 입력하세요"
-            value={confirmPassword}
-            onChange={(event) => {
-              setConfirmPassword(event.target.value);
-              if (!hasTypedConfirm) {
-                setHasTypedConfirm(true);
-              }
-            }}
-            className="w-full rounded-xl border border-[#DDD] px-4 py-3 pr-12 text-sm focus:outline-none focus:ring-2 focus:ring-black/20"
-          />
-          <button
-            type="button"
-            className="absolute right-3 top-1/2 -translate-y-1/2 p-1"
-            onMouseDown={() => setIsConfirmVisible(true)}
-            onMouseUp={() => setIsConfirmVisible(false)}
-            onMouseLeave={() => setIsConfirmVisible(false)}
-            onTouchStart={() => setIsConfirmVisible(true)}
-            onTouchEnd={() => setIsConfirmVisible(false)}
-            aria-label="비밀번호 확인 보기"
-          >
-            <img src="/eye.svg" alt="비밀번호 확인 보기" className="w-5 h-5" />
-          </button>
-        </div>
-        {confirmMessage && (
-          <p className={`text-xs ${confirmMessage.isMatch ? "text-green-600" : "text-red-600"}`}>
-            {confirmMessage.text}
-          </p>
-        )}
-      </div>
-    </div>
-  );
+  const validationGuide = useMemo(() => {
+    if (canSubmit) return null;
+    const missing = [];
+    if (!email.trim()) missing.push("이메일을 입력해주세요.");
+    else if (emailCheckStatus !== "available") missing.push("이메일 중복확인이 필요합니다.");
 
-  const renderStep2 = () => (
-    <div className="space-y-5">
-      <div className="space-y-2">
-        <label htmlFor="name" className="text-sm font-medium text-[#333]">이름</label>
-        <input
-          id="name"
-          name="name"
-          type="text"
-          placeholder="이름을 입력하세요"
-          value={name}
-          onChange={(event) => setName(event.target.value)}
-          className="w-full rounded-xl border border-[#DDD] px-4 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-black/20"
-        />
-      </div>
+    if (!password) missing.push("비밀번호를 입력해주세요.");
+    else if (!passwordRules.minLength || !passwordRules.hasRequiredSets || !passwordRules.allowedSpecialsOnly) missing.push("비밀번호 규칙을 확인해주세요.");
 
-      <div className="space-y-2">
-        <span className="text-sm font-medium text-[#333]">성별</span>
-        <div className="flex gap-4">
-          <label className="flex items-center gap-2 text-sm">
-            <input
-              type="radio"
-              name="gender"
-              value="M"
-              checked={sex === "M"}
-              onChange={() => setSex("M")}
-              className="accent-black"
-            />
-            남자
-          </label>
-          <label className="flex items-center gap-2 text-sm">
-            <input
-              type="radio"
-              name="gender"
-              value="F"
-              checked={sex === "F"}
-              onChange={() => setSex("F")}
-              className="accent-black"
-            />
-            여자
-          </label>
-        </div>
-      </div>
+    if (password !== confirmPassword) missing.push("비밀번호가 일치하지 않습니다.");
 
-      <div className="space-y-2">
-        <label htmlFor="phoneNo" className="text-sm font-medium text-[#333]">핸드폰번호</label>
-        <input
-          id="phoneNo"
-          name="phoneNo"
-          type="tel"
-          placeholder="010-1234-5678"
-          value={phoneNo}
-          onChange={(event) => setPhoneNo(event.target.value)}
-          className="w-full rounded-xl border border-[#DDD] px-4 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-black/20"
-        />
-      </div>
+    if (!nickname.trim()) missing.push("별명을 입력해주세요.");
+    else if (nicknameCheckStatus !== "available") missing.push("별명 중복확인이 필요합니다.");
 
-      <div className="space-y-2">
-        <label htmlFor="address" className="text-sm font-medium text-[#333]">주소</label>
-        <input
-          id="address"
-          name="address"
-          type="text"
-          placeholder="주소를 입력하세요"
-          value={address}
-          onChange={(event) => setAddress(event.target.value)}
-          className="w-full rounded-xl border border-[#DDD] px-4 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-black/20"
-        />
-      </div>
-    </div>
-  );
+    if (!userMode) missing.push("지식 수준을 선택해주세요.");
+    if (!isAgreementsValid) missing.push("필수 약관에 동의해주세요.");
 
-  const renderStep3 = () => (
-    <div className="space-y-5">
-      <div className="rounded-xl border border-[#EEE] p-4">
-        <label className="flex items-center gap-3 text-sm font-semibold">
-          <input
-            type="checkbox"
-            className="accent-black h-5 w-5"
-            checked={allAgree}
-            onChange={(event) => handleAllAgreeChange(event.target.checked)}
-          />
-          약관 전체동의
-        </label>
-        <hr className="my-3" />
-        <div className="space-y-3">
-          <div className="flex items-center justify-between">
-            <label className="flex cursor-pointer items-center gap-3 text-sm">
-              <input
-                type="checkbox"
-                className="accent-black h-4 w-4"
-                checked={termsAgree}
-                onChange={(event) => handleTermsChange(event.target.checked)}
-              />
-              <span><span className="text-red-500">(필수)</span> 이용약관 동의</span>
-            </label>
-            <button type="button" onClick={() => handleShowPopup('terms')} className="p-1 transition-transform hover:scale-125">
-              <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor" className="h-5 w-5 text-gray-400">
-                <path strokeLinecap="round" strokeLinejoin="round" d="M8.25 4.5l7.5 7.5-7.5 7.5" />
-              </svg>
-            </button>
-          </div>
-          <div className="flex items-center justify-between">
-            <label className="flex cursor-pointer items-center gap-3 text-sm">
-              <input
-                type="checkbox"
-                className="accent-black h-4 w-4"
-                checked={privacyAgree}
-                onChange={(event) => handlePrivacyChange(event.target.checked)}
-              />
-              <span><span className="text-red-500">(필수)</span> 개인정보 수집 및 이용 동의</span>
-            </label>
-            <button type="button" onClick={() => handleShowPopup('privacy')} className="p-1 transition-transform hover:scale-125">
-              <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor" className="h-5 w-5 text-gray-400">
-                <path strokeLinecap="round" strokeLinejoin="round" d="M8.25 4.5l7.5 7.5-7.5 7.5" />
-              </svg>
-            </button>
-          </div>
-          <div className="flex items-center justify-between">
-            <label className="flex cursor-pointer items-center gap-3 text-sm">
-              <input
-                type="checkbox"
-                className="accent-black h-4 w-4"
-                checked={emailAlarmAgree}
-                onChange={(event) => setEmailAlarmAgree(event.target.checked)}
-              />
-              <span>(선택) E-mail 정보 수신 동의</span>
-            </label>
-            <button type="button" onClick={() => handleShowPopup('email')} className="p-1 transition-transform hover:scale-125">
-              <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor" className="h-5 w-5 text-gray-400">
-                <path strokeLinecap="round" strokeLinejoin="round" d="M8.25 4.5l7.5 7.5-7.5 7.5" />
-              </svg>
-            </button>
-          </div>
-          <div className="flex items-center justify-between">
-            <label className="flex cursor-pointer items-center gap-3 text-sm">
-              <input
-                type="checkbox"
-                className="accent-black h-4 w-4"
-                checked={snsAlarmAgree}
-                onChange={(event) => setSnsAlarmAgree(event.target.checked)}
-              />
-              <span>(선택) SMS 정보 수신 동의</span>
-            </label>
-            <button type="button" onClick={() => handleShowPopup('sns')} className="p-1 transition-transform hover:scale-125">
-              <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor" className="h-5 w-5 text-gray-400">
-                <path strokeLinecap="round" strokeLinejoin="round" d="M8.25 4.5l7.5 7.5-7.5 7.5" />
-              </svg>
-            </button>
-          </div>
-        </div>
-      </div>
-    </div>
-  );
-
-  const renderStep4 = () => (
-    <div className="space-y-5">
-      <div className="space-y-2">
-        <label htmlFor="profileImage" className="text-sm font-medium text-[#333]">프로필 이미지</label>
-        <div className="flex items-center gap-6">
-          <div className="w-28 h-28 rounded-full bg-[#F2F2F2] overflow-hidden">
-            <img
-              src={profileImageUrl || "/default_profile.png"}
-              alt="프로필"
-              className="w-full h-full object-cover"
-              onError={(event) => {
-                event.currentTarget.src = "/default_profile.png";
-              }}
-            />
-          </div>
-          <div className="flex-1">
-            <input
-              id="profileImage"
-              name="profileImage"
-              type="file"
-              accept="image/*"
-              className="hidden"
-              onChange={handleImageUpload}
-            />
-            <label
-              htmlFor="profileImage"
-              className="inline-flex items-center gap-2 rounded-xl border border-[#DDD] px-4 py-2 text-sm cursor-pointer hover:bg-[#F7F7F7]"
-            >
-              <img src="/upload.svg" alt="업로드" className="w-4 h-4" />
-              이미지 업로드
-            </label>
-          </div>
-        </div>
-      </div>
-
-      <div className="space-y-2">
-        <label htmlFor="nickname" className="text-sm font-medium text-[#333]">별명</label>
-        <input
-          id="nickname"
-          name="nickname"
-          type="text"
-          placeholder="별명을 입력하세요"
-          value={nickname}
-          onChange={(event) => setNickname(event.target.value)}
-          className="w-full rounded-xl border border-[#DDD] px-4 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-black/20"
-        />
-      </div>
-
-      <div className="space-y-2">
-        <span className="text-sm font-medium text-[#333]">향수 관련 지식</span>
-        <div className="flex gap-4">
-          <button
-            type="button"
-            onClick={() => setUserMode("BEGINNER")}
-            className={`flex-1 rounded-xl py-3 text-sm font-bold transition ${userMode === "BEGINNER" ? "bg-black text-white" : "bg-gray-200 text-gray-700"}`}
-          >
-            초보에요
-          </button>
-          <button
-            type="button"
-            onClick={() => setUserMode("EXPERT")}
-            className={`flex-1 rounded-xl py-3 text-sm font-bold transition ${userMode === "EXPERT" ? "bg-black text-white" : "bg-gray-200 text-gray-700"}`}
-          >
-            경험자에요
-          </button>
-        </div>
-      </div>
-    </div>
-  );
+    return missing[0]; // Show first missing requirement
+  }, [canSubmit, email, emailCheckStatus, password, passwordRules, confirmPassword, nickname, nicknameCheckStatus, userMode, isAgreementsValid]);
 
   return (
-    <PageLayout className="h-screen bg-[#FDFBF8] text-black font-sans overflow-hidden flex flex-col">
+    <PageLayout>
+      <div className="flex min-h-screen flex-col items-center justify-center py-10 md:py-20 px-4 bg-[#FDFBF8]">
+        <div className="w-full max-w-xl">
+          <div className="mb-12 text-center">
+            <h1 className="flex flex-col items-center leading-none select-none -translate-x-3">
+              <motion.span
+                className="text-3xl md:text-5xl font-black tracking-tighter text-black uppercase -rotate-2 -translate-x-6 mb-[-5px] inline-block"
+                animate={{ y: [0, -8, 0] }}
+                transition={{ duration: 3, repeat: Infinity, ease: "easeInOut" }}
+              >
+                Join
+              </motion.span>
+              <motion.span
+                className="text-4xl md:text-7xl font-black tracking-tighter text-transparent uppercase rotate-1 translate-x-2 inline-block"
+                style={{ WebkitTextStroke: "1.5px black" }}
+                animate={{ y: [0, 8, 0] }}
+                transition={{ duration: 4, repeat: Infinity, ease: "easeInOut", delay: 0.5 }}
+              >
+                Scentence
+              </motion.span>
+            </h1>
+            <p className="mt-6 text-xs text-gray-600 font-medium tracking-[0.2em]">
+              나만의 향기를 찾는 여정의 시작
+            </p>
+          </div>
+
+          <form onSubmit={handleSubmit} className="space-y-12 md:space-y-16">
+
+            {/* 1. Essential Information Section */}
+            <section className="space-y-6">
+              <div className="border-b border-gray-100 pb-3 mb-8">
+                <h2 className="text-lg font-bold text-black tracking-tight">필수 정보</h2>
+                <p className="text-[10px] text-gray-400 uppercase tracking-widest mt-1">Essential Information</p>
+              </div>
+
+              {/* Email */}
+              <div className="space-y-2">
+                <label htmlFor="email" className="block text-xs font-bold text-gray-500 uppercase tracking-wider">Email</label>
+                <div className="flex gap-2">
+                  <input
+                    id="email"
+                    type="email"
+                    placeholder="example@email.com"
+                    value={email}
+                    onChange={(e) => { setEmail(e.target.value); setEmailCheckStatus("idle"); }}
+                    className="flex-1 border-b border-gray-300 py-2 text-base focus:border-black focus:outline-none transition-colors bg-transparent placeholder-gray-300"
+                  />
+                  <button
+                    type="button"
+                    onClick={handleEmailCheck}
+                    disabled={!email.trim() || emailCheckStatus === "checking"}
+                    className="whitespace-nowrap px-4 py-1 text-xs font-medium text-gray-500 hover:text-black disabled:opacity-30 underline decoration-1 underline-offset-4"
+                  >
+                    {emailCheckStatus === "checking" ? "Checking..." : "중복확인"}
+                  </button>
+                </div>
+                {emailCheckStatus === "available" && <p className="text-xs text-green-600 mt-1">✓ 사용 가능한 이메일입니다.</p>}
+                {emailCheckStatus === "unavailable" && <p className="text-xs text-red-600 mt-1">✗ 이미 사용중인 이메일입니다.</p>}
+              </div>
+
+              {/* Nickname */}
+              <div className="space-y-2">
+                <label htmlFor="nickname" className="block text-xs font-bold text-gray-500 uppercase tracking-wider">Nickname</label>
+                <div className="flex gap-2">
+                  <input
+                    id="nickname"
+                    type="text"
+                    placeholder="별명을 입력하세요"
+                    value={nickname}
+                    onChange={(e) => { setNickname(e.target.value); setNicknameCheckStatus("idle"); }}
+                    className="flex-1 border-b border-gray-300 py-2 text-base focus:border-black focus:outline-none transition-colors bg-transparent placeholder-gray-300"
+                  />
+                  <button
+                    type="button"
+                    onClick={handleNicknameCheck}
+                    disabled={!nickname.trim() || nicknameCheckStatus === "checking"}
+                    className="whitespace-nowrap px-4 py-1 text-xs font-medium text-gray-500 hover:text-black disabled:opacity-30 underline decoration-1 underline-offset-4"
+                  >
+                    {nicknameCheckStatus === "checking" ? "Checking..." : "중복확인"}
+                  </button>
+                </div>
+                {nicknameCheckStatus === "available" && <p className="text-[10px] text-green-600 mt-1 font-medium">✓ 사용 가능한 별명입니다.</p>}
+                {nicknameCheckStatus === "unavailable" && <p className="text-[10px] text-red-600 mt-1 font-medium">✗ 이미 사용중인 별명입니다.</p>}
+              </div>
+
+              {/* Password */}
+              <div className="grid grid-cols-1 gap-6 sm:grid-cols-2">
+                <div className="space-y-2">
+                  <label htmlFor="password" className="block text-xs font-bold text-gray-500 uppercase tracking-wider">Password</label>
+                  <div className="relative">
+                    <input
+                      id="password"
+                      type={isPasswordVisible ? "text" : "password"}
+                      value={password}
+                      onChange={(e) => setPassword(e.target.value)}
+                      className="w-full border-b border-gray-300 py-2 text-base focus:border-black focus:outline-none transition-colors bg-transparent"
+                    />
+                    <button
+                      type="button"
+                      className="absolute right-0 top-1/2 -translate-y-1/2 p-2 opacity-50 hover:opacity-100"
+                      onClick={() => setIsPasswordVisible(!isPasswordVisible)}
+                    >
+                      <img src="/eye.svg" alt="toggle" className="w-4 h-4" />
+                    </button>
+                  </div>
+                </div>
+
+                <div className="space-y-2">
+                  <label htmlFor="confirmPassword" className="block text-xs font-bold text-gray-500 uppercase tracking-wider">Confirm Password</label>
+                  <div className="relative">
+                    <input
+                      id="confirmPassword"
+                      type={isConfirmVisible ? "text" : "password"}
+                      value={confirmPassword}
+                      onChange={(e) => {
+                        setConfirmPassword(e.target.value);
+                        if (!hasTypedConfirm) setHasTypedConfirm(true);
+                      }}
+                      className="w-full border-b border-gray-300 py-2 text-base focus:border-black focus:outline-none transition-colors bg-transparent"
+                    />
+                    <button
+                      type="button"
+                      className="absolute right-0 top-1/2 -translate-y-1/2 p-2 opacity-50 hover:opacity-100"
+                      onClick={() => setIsConfirmVisible(!isConfirmVisible)}
+                    >
+                      <img src="/eye.svg" alt="toggle" className="w-4 h-4" />
+                    </button>
+                  </div>
+                  {confirmMessage && (
+                    <p className={`text-xs mt-1 ${confirmMessage.isMatch ? "text-green-600" : "text-red-600"}`}>
+                      {confirmMessage.text}
+                    </p>
+                  )}
+                </div>
+              </div>
+
+              {/* Password Rules */}
+              <div className="space-y-1">
+                <div className={`flex items-center gap-2 text-xs ${passwordRules.minLength ? "text-green-600" : "text-gray-400"}`}>
+                  <span className={`block w-1.5 h-1.5 rounded-full ${passwordRules.minLength ? "bg-green-600" : "bg-gray-300"}`} />
+                  비밀번호는 8자리 이상이어야 합니다.
+                </div>
+                <div className={`flex items-center gap-2 text-xs ${passwordRules.hasRequiredSets ? "text-green-600" : "text-gray-400"}`}>
+                  <span className={`block w-1.5 h-1.5 rounded-full ${passwordRules.hasRequiredSets ? "bg-green-600" : "bg-gray-300"}`} />
+                  대소문자, 숫자, 특수문자를 각각 하나 이상 포함해야 합니다.
+                </div>
+                <div className={`flex items-center gap-2 text-xs ${passwordRules.allowedSpecialsOnly ? "text-green-600" : "text-gray-400"}`}>
+                  <span className={`block w-1.5 h-1.5 rounded-full ${passwordRules.allowedSpecialsOnly ? "bg-green-600" : "bg-gray-300"}`} />
+                  특수문자는 !, @, #, $, %만 사용 가능합니다.
+                </div>
+              </div>
+
+
+              {/* Perfume Knowledge (Essential) */}
+              <div className="space-y-4 pt-4">
+                <label className="block text-xs font-bold text-gray-500 uppercase tracking-wider">Perfume Knowledge</label>
+                <div className="grid grid-cols-2 gap-4">
+                  <button
+                    type="button"
+                    onClick={() => setUserMode("BEGINNER")}
+                    className={`group relative overflow-hidden rounded-full border py-3.5 text-center transition-all shadow-sm ${userMode === "BEGINNER" ? "border-black bg-black text-white" : "border-gray-200 hover:border-black"}`}
+                  >
+                    <span className="relative z-10 text-sm font-bold">입문자</span>
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setUserMode("EXPERT")}
+                    className={`group relative overflow-hidden rounded-full border py-3.5 text-center transition-all shadow-sm ${userMode === "EXPERT" ? "border-black bg-black text-white" : "border-gray-200 hover:border-black"}`}
+                  >
+                    <span className="relative z-10 text-sm font-bold">경험자</span>
+                  </button>
+                </div>
+              </div>
+            </section>
+
+
+            {/* 2. Optional Information Section */}
+            <section className="space-y-8">
+              <div className="border-b border-gray-100 pb-3 mb-8">
+                <h2 className="text-lg font-bold text-black tracking-tight">선택 정보</h2>
+                <p className="text-[10px] text-gray-400 uppercase tracking-widest mt-1">Optional Details</p>
+              </div>
+
+              {/* Profile Image (Moved to Optional) */}
+              <div className="flex items-center gap-6">
+                <div className="relative h-20 w-20 flex-shrink-0 overflow-hidden rounded-full bg-gray-100 border border-gray-200">
+                  <img
+                    src={profileImageUrl || "/default_profile.png"}
+                    alt="Profile"
+                    className="h-full w-full object-cover"
+                    onError={(e) => e.currentTarget.src = "/default_profile.png"}
+                  />
+                </div>
+                <div>
+                  <input
+                    id="profileImage"
+                    type="file"
+                    accept="image/*"
+                    className="hidden"
+                    onChange={handleImageUpload}
+                  />
+                  <label
+                    htmlFor="profileImage"
+                    className="cursor-pointer inline-flex items-center gap-2 rounded-full border border-gray-300 px-4 py-2 text-xs font-medium transition hover:bg-black hover:text-white"
+                  >
+                    이미지 변경
+                  </label>
+                  <p className="mt-2 text-[10px] text-gray-400">프로필 이미지는 언제든 변경 가능합니다.</p>
+                </div>
+              </div>
+
+              <div className="grid grid-cols-1 gap-6 sm:grid-cols-2">
+                {/* Name */}
+                <div className="space-y-2">
+                  <label htmlFor="name" className="block text-xs font-bold text-gray-500 uppercase tracking-wider">Name</label>
+                  <input
+                    id="name"
+                    type="text"
+                    placeholder="이름"
+                    value={name}
+                    onChange={(e) => setName(e.target.value)}
+                    className="w-full border-b border-gray-300 py-2 text-base focus:border-black focus:outline-none transition-colors bg-transparent placeholder-gray-300"
+                  />
+                </div>
+
+                {/* Phone */}
+                <div className="space-y-2">
+                  <label htmlFor="phoneNo" className="block text-xs font-bold text-gray-500 uppercase tracking-wider">Phone</label>
+                  <input
+                    id="phoneNo"
+                    type="tel"
+                    placeholder="010-0000-0000"
+                    value={phoneNo}
+                    onChange={(e) => setPhoneNo(e.target.value)}
+                    className="w-full border-b border-gray-300 py-2 text-base focus:border-black focus:outline-none transition-colors bg-transparent placeholder-gray-300"
+                  />
+                </div>
+              </div>
+
+              {/* Address */}
+              <div className="space-y-2">
+                <label htmlFor="address" className="block text-xs font-bold text-gray-500 uppercase tracking-wider">Address</label>
+                <input
+                  id="address"
+                  type="text"
+                  placeholder="주소"
+                  value={address}
+                  onChange={(e) => setAddress(e.target.value)}
+                  className="w-full border-b border-gray-300 py-2 text-base focus:border-black focus:outline-none transition-colors bg-transparent placeholder-gray-300"
+                />
+              </div>
+
+              {/* Gender (Now Optional) */}
+              <div className="space-y-4">
+                <label className="block text-xs font-bold text-gray-500 uppercase tracking-wider">Gender</label>
+                <div className="flex gap-4">
+                  <label className="flex cursor-pointer items-center gap-2 text-sm text-gray-600 hover:text-black">
+                    <input
+                      type="radio"
+                      name="gender"
+                      value="M"
+                      checked={sex === "M"}
+                      onChange={() => setSex("M")}
+                      className="accent-black h-4 w-4"
+                    />
+                    Male
+                  </label>
+                  <label className="flex cursor-pointer items-center gap-2 text-sm text-gray-600 hover:text-black">
+                    <input
+                      type="radio"
+                      name="gender"
+                      value="F"
+                      checked={sex === "F"}
+                      onChange={() => setSex("F")}
+                      className="accent-black h-4 w-4"
+                    />
+                    Female
+                  </label>
+                </div>
+              </div>
+            </section>
+
+            {/* 3. Agreements Section */}
+            <section className="space-y-6 pt-10 border-t border-gray-100">
+              <div className="flex items-center justify-between bg-gray-50/50 p-4 rounded-2xl border border-gray-100">
+                <h2 className="text-base font-bold text-black tracking-tight">서비스 이용 약관 전체 동의</h2>
+                <label className="flex items-center gap-2 cursor-pointer">
+                  <input
+                    type="checkbox"
+                    checked={allAgree}
+                    onChange={(e) => handleAllAgreeChange(e.target.checked)}
+                    className="accent-black h-5 w-5 rounded-md"
+                  />
+                </label>
+              </div>
+
+              <div className="space-y-3 pl-1">
+                {/* Terms */}
+                <div className="flex items-center justify-between group">
+                  <label className="flex items-center gap-3 text-sm text-gray-600 cursor-pointer">
+                    <input type="checkbox" checked={termsAgree} onChange={(e) => handleTermsChange(e.target.checked)} className="accent-black h-4 w-4" />
+                    <span><span className="text-black font-semibold mx-1">[필수]</span> 이용약관 동의</span>
+                  </label>
+                  <button type="button" onClick={() => handleShowPopup('terms')} className="text-gray-400 hover:text-black p-1">
+                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M9 5l7 7-7 7"></path></svg>
+                  </button>
+                </div>
+                {/* Privacy */}
+                <div className="flex items-center justify-between group">
+                  <label className="flex items-center gap-3 text-sm text-gray-600 cursor-pointer">
+                    <input type="checkbox" checked={privacyAgree} onChange={(e) => handlePrivacyChange(e.target.checked)} className="accent-black h-4 w-4" />
+                    <span><span className="text-black font-semibold mx-1">[필수]</span> 개인정보 수집 및 이용 동의</span>
+                  </label>
+                  <button type="button" onClick={() => handleShowPopup('privacy')} className="text-gray-400 hover:text-black p-1">
+                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M9 5l7 7-7 7"></path></svg>
+                  </button>
+                </div>
+                {/* Email */}
+                <div className="flex items-center justify-between group">
+                  <label className="flex items-center gap-3 text-sm text-gray-600 cursor-pointer">
+                    <input type="checkbox" checked={emailAlarmAgree} onChange={(e) => setEmailAlarmAgree(e.target.checked)} className="accent-black h-4 w-4" />
+                    <span><span className="text-gray-400 mx-1">[선택]</span> 마케팅 정보 E-mail 수신 동의</span>
+                  </label>
+                  <button type="button" onClick={() => handleShowPopup('email')} className="text-gray-400 hover:text-black p-1">
+                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M9 5l7 7-7 7"></path></svg>
+                  </button>
+                </div>
+                {/* SMS */}
+                <div className="flex items-center justify-between group">
+                  <label className="flex items-center gap-3 text-sm text-gray-600 cursor-pointer">
+                    <input type="checkbox" checked={snsAlarmAgree} onChange={(e) => setSnsAlarmAgree(e.target.checked)} className="accent-black h-4 w-4" />
+                    <span><span className="text-gray-400 mx-1">[선택]</span> 마케팅 정보 SMS 수신 동의</span>
+                  </label>
+                  <button type="button" onClick={() => handleShowPopup('sns')} className="text-gray-400 hover:text-black p-1">
+                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M9 5l7 7-7 7"></path></svg>
+                  </button>
+                </div>
+              </div>
+            </section>
+
+            {/* Submit Area */}
+            <div className="pt-8 pb-20">
+              {submitMessage && (
+                <div className="mb-4 rounded-lg bg-red-50 p-4 text-center text-sm text-red-600 animate-pulse">
+                  {submitMessage}
+                </div>
+              )}
+              <button
+                type="submit"
+                disabled={!canSubmit || isSubmitting}
+                className="w-full rounded-full bg-black py-4.5 text-base font-bold text-white shadow-xl transition-all hover:bg-gray-900 active:scale-[0.98] disabled:bg-gray-200 disabled:shadow-none disabled:cursor-not-allowed"
+              >
+                {isSubmitting ? "가입 처리중..." : "Sign Up"}
+              </button>
+
+              {/* Validation Guide */}
+              {!canSubmit && !isSubmitting && validationGuide && (
+                <p className="mt-4 text-center text-[11px] text-red-400 font-medium animate-pulse">
+                  {validationGuide}
+                </p>
+              )}
+              <div className="mt-6 text-center text-sm">
+                <Link href="/login" className="text-gray-500 underline decoration-gray-300 underline-offset-4 hover:text-black hover:decoration-black transition-all">
+                  이미 계정이 있으신가요? 로그인하기
+                </Link>
+              </div>
+            </div>
+
+          </form>
+        </div>
+      </div>
+
+      {/* 팝업 UI (유지) */}
       {popupContent && (
         <AgreementPopup
           title={popupContent.title}
@@ -590,80 +702,17 @@ export default function SignupPage() {
           onClose={() => setPopupContent(null)}
         />
       )}
-
-      <main className="flex-1 flex w-full h-full pt-[76px] items-center justify-center bg-[#FDFBF8] overflow-y-auto">
-        <section className="w-full max-w-[480px] h-auto my-10 flex flex-col items-center justify-center bg-white rounded-2xl shadow-sm border border-gray-100 p-8 md:p-10 fade-in-up">
-          <div className="w-full">
-            <div className="space-y-2 mb-8 text-center md:text-left">
-              <h2 className="text-2xl font-bold">회원가입</h2>
-              <p className="text-sm text-[#666]">필수 정보를 입력해주세요.</p>
-            </div>
-
-            {/* Progress Bar */}
-            <div className="w-full bg-gray-100 rounded-full h-2 mb-8">
-              <div className="bg-black h-2 rounded-full transition-all duration-300" style={{ width: `${(currentStep / 4) * 100}%` }}></div>
-            </div>
-
-            <div className="space-y-5">
-              {currentStep === 1 && renderStep1()}
-              {currentStep === 2 && renderStep2()}
-              {currentStep === 3 && renderStep3()}
-              {currentStep === 4 && renderStep4()}
-            </div>
-
-            {submitMessage && (
-              <p className="text-xs text-red-600 mt-4 text-center">{submitMessage}</p>
-            )}
-
-            <div className="flex gap-4 mt-8">
-              {currentStep > 1 && (
-                <button
-                  type="button"
-                  onClick={prevStep}
-                  className="flex-1 py-3.5 rounded-xl font-bold bg-gray-100 text-gray-700 transition hover:bg-gray-200 text-sm"
-                >
-                  이전
-                </button>
-              )}
-              {currentStep < 4 ? (
-                <button
-                  type="button"
-                  onClick={nextStep}
-                  disabled={
-                    (currentStep === 1 && !canProceedStep1) ||
-                    (currentStep === 2 && !canProceedStep2) ||
-                    (currentStep === 3 && !canProceedStep3)
-                  }
-                  className={`flex-1 py-3.5 rounded-xl font-bold transition text-sm ${((currentStep === 1 && canProceedStep1) ||
-                    (currentStep === 2 && canProceedStep2) ||
-                    (currentStep === 3 && canProceedStep3))
-                    ? "bg-black text-white hover:bg-gray-800 hover:shadow-lg hover:-translate-y-0.5"
-                    : "bg-gray-200 text-gray-400 cursor-not-allowed"
-                    }`}
-                >
-                  다음
-                </button>
-              ) : (
-                <button
-                  type="button"
-                  onClick={handleSubmit}
-                  disabled={!canProceedStep4 || isSubmitting}
-                  className={`flex-1 py-3.5 rounded-xl font-bold transition text-sm ${canProceedStep4 && !isSubmitting
-                    ? "bg-black text-white hover:bg-gray-800 hover:shadow-lg hover:-translate-y-0.5"
-                    : "bg-gray-200 text-gray-400 cursor-not-allowed"
-                    }`}
-                >
-                  {isSubmitting ? "가입중..." : "가입 완료"}
-                </button>
-              )}
-            </div>
-
-            <p className="text-center mt-6 text-xs text-gray-400">
-              이미 계정이 있으신가요? <Link href="/login" className="text-black font-bold underline ml-1 hover:text-gray-700">로그인</Link>
-            </p>
-          </div>
-        </section>
-      </main>
+      {/* Image Cropper Modal */}
+      {isCropperOpen && selectedFile && (
+        <ImageCropperModal
+          imageSrc={selectedFile}
+          onClose={() => {
+            setIsCropperOpen(false);
+            setSelectedFile(null);
+          }}
+          onCropComplete={handleCropComplete}
+        />
+      )}
     </PageLayout>
   );
 }

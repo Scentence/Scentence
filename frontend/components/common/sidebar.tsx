@@ -104,7 +104,7 @@ export default function Sidebar({ isOpen, onClose, context }: SidebarProps) {
 
                     <motion.div
                         ref={setRef}
-                        className="fixed top-[72px] md:top-24 right-4 md:right-8 z-50 w-[calc(100%-32px)] sm:w-[350px] md:w-[300px] flex flex-col gap-3 md:gap-5"
+                        className="fixed top-[84px] md:top-24 right-4 md:right-8 z-50 w-[calc(100%-32px)] sm:w-[350px] md:w-[300px] flex flex-col gap-3 md:gap-5"
                         variants={containerVariants}
                         initial="hidden"
                         animate="show"

@@ -674,6 +674,28 @@ def check_email(email: str):
             release_member_db_connection(conn)
 
 
+@router.get("/check-nickname")
+def check_nickname(nickname: str):
+    if not nickname:
+        raise HTTPException(status_code=400, detail="Nickname is required")
+
+    conn = get_member_db_connection()
+    cur = conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor)
+
+    try:
+        cur.execute(
+            "SELECT member_id FROM tb_member_profile_t WHERE nickname=%s", (nickname,)
+        )
+        exists = cur.fetchone() is not None
+        return {"available": not exists}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+    finally:
+        cur.close()
+        if conn:
+            release_member_db_connection(conn)
+
+
 @router.post("/register")
 def register_local_user(req: LocalRegisterRequest):
     if req.req_agr_yn not in ("Y", "N"):

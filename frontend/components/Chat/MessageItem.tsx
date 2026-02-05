@@ -117,15 +117,15 @@ const parseMessageContent = (text: string) => {
                 key={index}
                 remarkPlugins={[remarkGfm]}
                 components={{
-                    // [기존 유지] 링크
+                    // [기존 유지] 링크 - 1번 색상 (Salmon Pink: #FF8C8C)
                     a: ({ node, ...props }: any) => (
-                        <a {...props} target="_blank" rel="noopener noreferrer" className="text-pink-600 hover:underline" />
+                        <a {...props} target="_blank" rel="noopener noreferrer" className="text-[#FF8C8C] hover:text-[#FF6B6B] hover:underline transition-colors" />
                     ),
 
                     // [기존 유지] 이미지 (Rounded-2xl 사각형 유지)
                     img: ({ node, ...props }: any) => {
                         return (
-                            <span className="mx-auto my-6 block h-40 w-40 md:h-[250px] md:w-[250px] overflow-hidden rounded-2xl shadow-lg border border-slate-200 relative bg-white">
+                            <span className="mx-auto my-6 block h-40 w-40 md:h-[250px] md:w-[250px] overflow-hidden rounded-2xl shadow-lg border border-slate-100 relative bg-white">
                                 <img
                                     {...props}
                                     className="h-full w-full object-contain p-2 transition-all duration-300"
@@ -135,9 +135,9 @@ const parseMessageContent = (text: string) => {
                         );
                     },
 
-                    // [기존 유지] h2: 핑크색 보더 포인트 (브랜드명 등)
+                    // [기존 유지] h2: 1번 색상 보더 포인트 (Salmon Pink: #FF8C8C)
                     h2: ({ node, ...props }: any) => (
-                        <h2 {...props} className="text-lg font-bold mt-6 mb-3 text-[#393939] border-l-4 border-pink-500 pl-3 leading-none" />
+                        <h2 {...props} className="text-lg font-bold mt-6 mb-3 text-[#393939] border-l-4 border-[#FF8C8C] pl-3 leading-none" />
                     ),
 
                     // [★신규 추가] h3: 소제목 (분위기, 향기 구성 등) 강조 스타일
@@ -149,9 +149,10 @@ const parseMessageContent = (text: string) => {
                     // [기존 유지] 기타 스타일
                     hr: ({ node, ...props }: any) => <hr {...props} className="my-8 border-[#E5E4DE]" />,
                     em: ({ node, ...props }: any) => (
-                        <em {...props} className="not-italic text-violet-600 font-bold mr-1" />
+                        // 2번 색상 (Pastel Purple: #C4A0E6)
+                        <em {...props} className="not-italic text-[#C4A0E6] font-bold mr-1" />
                     ),
-                    strong: ({ node, ...props }: any) => <strong {...props} className="text-pink-600 font-extrabold" />,
+                    strong: ({ node, ...props }: any) => <strong {...props} className="text-[#FF8C8C] font-extrabold" />, // 1번 색상 (Salmon Pink)
                     p: ({ node, ...props }: any) => <p {...props} className="mb-3 last:mb-0 leading-relaxed text-slate-700" />,
 
                     // [기존 유지] 리스트
@@ -159,11 +160,11 @@ const parseMessageContent = (text: string) => {
                     li: ({ node, ...props }: any) => <li {...props} className="pl-1" />,
 
                     // [★디자인 수정] 인용구 (노트 설명, 코멘트 강조용)
-                    // 회색 박스 대신 깔끔한 핑크색 라인 스타일 적용
+                    // 1번 색상 보더 (Salmon Pink: #FF8C8C)
                     blockquote: ({ node, ...props }: any) => (
                         <blockquote
                             {...props}
-                            className="my-3 pl-4 border-l-[3px] border-pink-300 text-sm text-slate-600 italic bg-transparent"
+                            className="my-3 pl-4 border-l-[3px] border-[#FF8C8C] text-sm text-slate-500 italic bg-transparent"
                         />
                     ),
 

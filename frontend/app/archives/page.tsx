@@ -12,6 +12,7 @@ import HistoryModal from '@/components/archives/HistoryModal';
 import ArchiveGlobeView from "@/components/archives/ArchiveGlobeView";
 import PageLayout from "@/components/common/PageLayout";
 import { SavedPerfumesProvider } from "@/contexts/SavedPerfumesContext";
+import { motion, AnimatePresence } from "framer-motion";
 
 const API_URL = "/api";
 // const MEMBER_ID = 1;
@@ -45,6 +46,7 @@ export default function ArchivesPage() {
     const [memberId, setMemberId] = useState<number>(0);
     const [viewMode, setViewMode] = useState<'GRID' | 'GLOBE'>('GRID');
     const [isMounted, setIsMounted] = useState(false);
+    const [searchQuery, setSearchQuery] = useState("");
 
     useEffect(() => {
         setIsMounted(true);
@@ -179,10 +181,28 @@ export default function ArchivesPage() {
 
     // 필터링된 목록
     const filteredCollection = collection.filter(item => {
-        if (activeTab === 'ALL') return item.register_status !== 'HAD'; // HAD 제외
-        if (activeTab === 'HAVE') return item.register_status === 'HAVE';
-        if (activeTab === 'HAD') return item.register_status === 'HAD';
-        if (activeTab === 'WISH') return item.register_status === 'RECOMMENDED';
+        // 1. 탭 필터링
+        let matchesTab = true;
+        if (activeTab === 'ALL') matchesTab = item.register_status !== 'HAD';
+        else if (activeTab === 'HAVE') matchesTab = item.register_status === 'HAVE';
+        else if (activeTab === 'HAD') matchesTab = item.register_status === 'HAD';
+        else if (activeTab === 'WISH') matchesTab = item.register_status === 'RECOMMENDED';
+
+        if (!matchesTab) return false;
+
+        // 2. 검색 필터링
+        if (searchQuery.trim()) {
+            const query = searchQuery.toLowerCase();
+            const nameMatch =
+                item.name_kr?.toLowerCase().includes(query) ||
+                item.name_en?.toLowerCase().includes(query) ||
+                item.name?.toLowerCase().includes(query);
+            const brandMatch =
+                item.brand_kr?.toLowerCase().includes(query) ||
+                item.brand?.toLowerCase().includes(query);
+            return nameMatch || brandMatch;
+        }
+
         return true;
     });
 
@@ -190,175 +210,284 @@ export default function ArchivesPage() {
 
     return (
         <SavedPerfumesProvider memberId={memberId}>
-            <PageLayout subTitle="My Gallery" className="min-h-screen bg-[#FDFBF8] text-gray-800 font-sans selection:bg-[#C5A55D] selection:text-white relative">
+            <PageLayout className="min-h-screen bg-[#FDFBF8] text-black font-sans overflow-x-hidden relative">
+                {/* Background Aura Blobs */}
+                <div className="fixed inset-0 pointer-events-none overflow-hidden z-0">
+                    <motion.div
+                        animate={{
+                            x: [0, 80, 0],
+                            y: [0, 40, 0],
+                            scale: [1, 1.1, 1],
+                        }}
+                        transition={{ duration: 20, repeat: Infinity, ease: "linear" }}
+                        className="absolute -top-[5%] -right-[5%] w-[40%] h-[40%] bg-[#D4E6F1]/20 rounded-full blur-[100px]"
+                    />
+                    <motion.div
+                        animate={{
+                            x: [0, -60, 0],
+                            y: [0, 80, 0],
+                            scale: [1, 1.2, 1],
+                        }}
+                        transition={{ duration: 25, repeat: Infinity, ease: "linear" }}
+                        className="absolute bottom-[10%] -left-[10%] w-[50%] h-[50%] bg-[#FADBD8]/20 rounded-full blur-[100px]"
+                    />
+                </div>
 
-                {/* Main */}
-                <main className="pt-[140px] md:pt-[160px] pb-24 px-4 md:px-10 max-w-7xl mx-auto min-h-[80vh]">
+                {/* Main Content */}
+                <main className="relative z-10 pt-[60px] md:pt-[140px] pb-32 px-4 md:px-10 max-w-7xl mx-auto min-h-screen">
 
-                    {/* Header Section: Title (Left) & Primary Actions (Right) */}
-                    <section className="flex flex-col md:flex-row justify-between items-start gap-8 md:gap-0 mb-10 md:mb-14">
-                        <div className="animate-fade-in">
-                            <h1 className="text-3xl md:text-4xl font-bold text-[#222] mb-2 md:mb-3 tracking-tight">My Scent Gallery</h1>
-                            <p className="text-[#888] text-xs md:text-sm font-medium">나만의 향기 컬렉션을 기록해보세요.</p>
-                        </div>
+                    {/* Header: Title & Description */}
+                    <div className="mb-6 md:mb-10 text-center md:text-left">
+                        <motion.h1
+                            initial={{ opacity: 0, x: -20 }}
+                            animate={{ opacity: 1, x: 0 }}
+                            className="text-4xl md:text-6xl font-black tracking-tighter text-black uppercase mb-2"
+                        >
+                            MY Gallery
+                        </motion.h1>
+                        <motion.p
+                            initial={{ opacity: 0 }}
+                            animate={{ opacity: 1 }}
+                            transition={{ delay: 0.3 }}
+                            className="text-xs md:text-sm text-gray-400 font-bold uppercase tracking-[0.2em]"
+                        >
+                            나만의 향수 보관함
+                        </motion.p>
+                    </div>
 
-                        <div className="flex flex-col items-stretch md:items-end gap-6 w-full md:w-auto">
-                            {/* 1. Filter & History Row (Moved to First Row) */}
-                            <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-3">
-                                {/* Tabs Box */}
-                                <div className="flex gap-2 sm:gap-4 bg-white px-2 sm:px-3 py-2 rounded-2xl shadow-sm border border-gray-100 items-center justify-between sm:justify-start">
-                                    <TabItem
-                                        label="전체 (ALL)"
-                                        count={stats.have + stats.wish}
-                                        isActive={activeTab === 'ALL'}
-                                        onClick={() => setActiveTab('ALL')}
-                                    />
-                                    <div className="h-6 w-px bg-gray-100"></div>
-                                    <TabItem
-                                        label="보유 (HAVE)"
-                                        count={stats.have}
-                                        color="text-indigo-600"
-                                        isActive={activeTab === 'HAVE'}
-                                        onClick={() => setActiveTab('HAVE')}
-                                    />
-                                    <div className="h-6 w-px bg-gray-100"></div>
-                                    <TabItem
-                                        label="위시 (WISH)"
-                                        count={stats.wish}
-                                        color="text-rose-500"
-                                        isActive={activeTab === 'WISH'}
-                                        onClick={() => setActiveTab('WISH')}
-                                    />
+                    {/* Stats & Toolbar Container */}
+                    <div className="flex flex-col gap-6 mb-8 md:mb-12">
+                        {/* 1. Integrated Stats Bar */}
+                        <motion.div
+                            initial={{ opacity: 0, y: 20 }}
+                            animate={{ opacity: 1, y: 0 }}
+                            className="flex flex-wrap items-center justify-center md:justify-start gap-3 md:gap-4 bg-white/40 backdrop-blur-md border border-white/60 p-3 md:p-3 rounded-[32px] shadow-sm"
+                        >
+                            <StatItem
+                                label="Total"
+                                count={stats.have + stats.wish}
+                                isActive={activeTab === 'ALL'}
+                                onClick={() => setActiveTab('ALL')}
+                            />
+                            <div className="w-px h-8 bg-gray-200/50 hidden sm:block" />
+                            <StatItem
+                                label="Have"
+                                count={stats.have}
+                                activeColor="text-indigo-500"
+                                isActive={activeTab === 'HAVE'}
+                                onClick={() => setActiveTab('HAVE')}
+                            />
+                            <div className="w-px h-8 bg-gray-200/50 hidden sm:block" />
+                            <StatItem
+                                label="Wish"
+                                count={stats.wish}
+                                activeColor="text-rose-400"
+                                isActive={activeTab === 'WISH'}
+                                onClick={() => setActiveTab('WISH')}
+                            />
+
+                            {/* [Quick Search] 오른쪽 여백을 채우는 검색 바 */}
+                            <div className="flex-1 min-w-[200px] w-full md:w-auto md:ml-8 relative group">
+                                <div className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-300 group-focus-within:text-black transition-colors">
+                                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2.5" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"></path></svg>
                                 </div>
-
-                                {/* History (Matching Tabs Height) */}
-                                <div className="relative z-40 h-[64px]">
+                                <input
+                                    type="text"
+                                    value={searchQuery}
+                                    onChange={(e) => setSearchQuery(e.target.value)}
+                                    placeholder="SEARCH YOUR SCENTS..."
+                                    className="w-full bg-white/50 border border-transparent focus:border-black/10 focus:bg-white rounded-2xl py-3 pl-12 pr-4 text-[11px] font-black uppercase tracking-widest placeholder:text-gray-300 outline-none transition-all shadow-inner"
+                                />
+                                {searchQuery && (
                                     <button
-                                        onClick={() => setIsHistoryOpen(!isHistoryOpen)}
-                                        className={`
-                                        flex flex-col items-center justify-center gap-1 px-5 h-full rounded-2xl border transition-all shadow-sm
-                                        ${isHistoryOpen
-                                                ? 'bg-[#2da44e] text-white border-[#2da44e]'
-                                                : 'bg-white text-gray-500 border-gray-100 hover:bg-green-50 hover:text-[#2da44e]'}
-                                    `}
+                                        onClick={() => setSearchQuery("")}
+                                        className="absolute right-4 top-1/2 -translate-y-1/2 text-gray-300 hover:text-black"
                                     >
-                                        <span className="text-xs font-bold uppercase tracking-tighter">History</span>
-                                        <span className={`text-base font-bold ${isHistoryOpen ? 'text-white' : 'text-gray-300'}`}>
-                                            {stats.had}
-                                        </span>
+                                        <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="3" d="M6 18L18 6M6 6l12 12"></path></svg>
                                     </button>
-                                    {isHistoryOpen && (
-                                        <HistoryModal
-                                            historyItems={collection.filter(p => p.register_status === 'HAD')}
-                                            onClose={() => setIsHistoryOpen(false)}
-                                            onSelect={setSelectedPerfume}
-                                        />
-                                    )}
-                                </div>
+                                )}
                             </div>
+                        </motion.div>
 
-                            {/* 2. Primary Actions (Moved to Second Row) */}
-                            <div className="flex items-center justify-between md:justify-end gap-3">
+                        {/* 2. Action Toolbar */}
+                        <div className="flex flex-col md:flex-row items-center justify-between gap-4 md:gap-6">
+                            {/* View & Language Controls (Left Group) */}
+                            <div className="flex items-center gap-3 w-full md:w-auto">
+                                {/* View Switcher (Segmented Control) */}
+                                <div className="relative flex p-1 bg-gray-100 rounded-full w-full md:w-[240px]">
+                                    <div
+                                        className="absolute top-1 bottom-1 bg-white rounded-full shadow-sm transition-all duration-300 ease-out"
+                                        style={{
+                                            left: viewMode === 'GRID' ? '4px' : '50%',
+                                            width: 'calc(50% - 4px)'
+                                        }}
+                                    />
+                                    <button
+                                        onClick={() => setViewMode('GRID')}
+                                        className={`relative z-10 flex-1 py-2 text-[10px] font-black uppercase tracking-widest transition-colors ${viewMode === 'GRID' ? 'text-black' : 'text-gray-400'}`}
+                                    >
+                                        GRID
+                                    </button>
+                                    <button
+                                        onClick={() => setViewMode('GLOBE')}
+                                        className={`relative z-10 flex-1 py-2 text-[10px] font-black uppercase tracking-widest transition-colors ${viewMode === 'GLOBE' ? 'text-black' : 'text-gray-400'}`}
+                                    >
+                                        GALAXY
+                                    </button>
+                                </div>
+
+                                {/* Language Toggle */}
                                 <button
                                     onClick={() => setIsKorean(!isKorean)}
-                                    className="px-4 py-2.5 rounded-xl border border-gray-200 text-xs font-bold text-gray-400 bg-white hover:bg-black hover:text-white transition-all shadow-sm"
-                                    title={isKorean ? "Switch to English" : "한글로 전환"}
+                                    className="px-5 py-2.5 rounded-full border border-gray-200 bg-white hover:border-black text-[10px] font-black uppercase tracking-widest transition-all shadow-sm"
                                 >
                                     {isKorean ? "KR" : "EN"}
                                 </button>
-                                <button
-                                    onClick={() => setIsSearchOpen(true)}
-                                    className="flex-1 md:flex-none flex items-center justify-center gap-2 px-6 py-2.5 bg-[#C5A55D] text-white rounded-xl hover:bg-[#B09045] transition shadow-lg shadow-[#C5A55D]/20 text-[11px] font-black tracking-widest"
-                                >
-                                    ＋ ADD PERFUME
-                                </button>
                             </div>
 
-                            {/* 3. View Switcher (Bottom Right of Controls) */}
-                            <div className="bg-gray-100 p-1 rounded-xl flex gap-1 mt-2 md:mt-0">
-                                <button
-                                    onClick={() => setViewMode('GRID')}
-                                    className={`flex-1 md:flex-none px-4 py-2 rounded-lg text-xs font-bold transition-all ${viewMode === 'GRID' ? 'bg-white text-black shadow-sm' : 'text-gray-400 hover:text-gray-600'}`}
-                                >
-                                    GALLERY 🏛️
-                                </button>
-                                <button
-                                    onClick={() => setViewMode('GLOBE')}
-                                    className={`flex-1 md:flex-none px-4 py-2 rounded-lg text-xs font-bold transition-all ${viewMode === 'GLOBE' ? 'bg-black text-white shadow-sm' : 'text-gray-400 hover:text-gray-600'}`}
-                                >
-                                    GALAXY 🌌
-                                </button>
-                            </div>
-                        </div>
-                    </section>
-
-                    {viewMode === 'GLOBE' ? (
-                        <div className="mb-12 animate-fade-in">
-                            {/* TO-BE (데이터 주입) */}
-                            <ArchiveGlobeView collection={filteredCollection} isKorean={isKorean} />
-                        </div>
-                    ) : (
-                        <>
-                            {filteredCollection.length === 0 ? (
-                                <div className="flex flex-col items-center justify-center py-20 border border-[#C5A55D]/30 rounded-3xl bg-white/50">
-                                    <p className="text-gray-400 font-medium mb-4">해당하는 향수가 없습니다.</p>
-                                    <button onClick={() => setIsSearchOpen(true)} className="text-[#C5A55D] font-bold text-sm hover:underline">
-                                        + 향수 추가하기
+                            {/* Action Buttons (Right Group) */}
+                            <div className="flex items-center gap-3 w-full md:w-auto">
+                                <div className="relative">
+                                    <button
+                                        onClick={() => setIsHistoryOpen(!isHistoryOpen)}
+                                        className={`flex items-center gap-2 px-5 py-3 rounded-full border border-gray-100 bg-white/50 backdrop-blur-sm transition-all hover:border-gray-200 ${isHistoryOpen ? 'ring-2 ring-black bg-white shadow-md' : 'shadow-sm'}`}
+                                    >
+                                        <svg className="w-4 h-4 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"></path></svg>
+                                        <span className="text-[10px] font-black uppercase tracking-widest text-gray-500">History</span>
+                                        <span className="text-xs font-black text-black ml-1">{stats.had}</span>
                                     </button>
+                                    <AnimatePresence>
+                                        {isHistoryOpen && (
+                                            <HistoryModal
+                                                historyItems={collection.filter(p => p.register_status === 'HAD')}
+                                                onClose={() => setIsHistoryOpen(false)}
+                                                onSelect={setSelectedPerfume}
+                                            />
+                                        )}
+                                    </AnimatePresence>
                                 </div>
-                            ) : (
-                                <section className="grid grid-cols-4 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 gap-2 md:gap-6 animate-fade-in-up">
-                                    {filteredCollection.map((item) => (
-                                        <CabinetShelf
-                                            key={item.my_perfume_id}
-                                            perfume={item}
-                                            onSelect={setSelectedPerfume}
-                                            isKorean={isKorean}
-                                        />
-                                    ))}
-                                </section>
-                            )}
-                        </>
-                    )}
+                                <motion.button
+                                    whileHover={{ scale: 1.02 }}
+                                    whileTap={{ scale: 0.98 }}
+                                    onClick={() => setIsSearchOpen(true)}
+                                    className="flex-1 md:flex-none flex items-center justify-center gap-2 md:gap-3 px-6 py-2.5 md:px-8 md:py-3 bg-black text-white rounded-full text-[9px] md:text-[10px] font-black uppercase tracking-[0.1em] md:tracking-[0.2em] shadow-lg shadow-black/10"
+                                >
+                                    <span>Add Scent</span>
+                                    <svg className="w-3 h-3 md:w-4 md:h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="3" d="M12 6v6m0 0v6m0-6h6m-6 0H6"></path></svg>
+                                </motion.button>
+                            </div>
+                        </div>
+                    </div>
+
+                    {/* Content Section */}
+                    <AnimatePresence mode="wait">
+                        {viewMode === 'GLOBE' ? (
+                            <motion.div
+                                key="globe"
+                                initial={{ opacity: 0, scale: 0.98 }}
+                                animate={{ opacity: 1, scale: 1 }}
+                                exit={{ opacity: 0, scale: 1.02 }}
+                                className="animate-fade-in"
+                            >
+                                <ArchiveGlobeView collection={filteredCollection} isKorean={isKorean} />
+                            </motion.div>
+                        ) : (
+                            <motion.div
+                                key="grid"
+                                initial={{ opacity: 0, y: 20 }}
+                                animate={{ opacity: 1, y: 0 }}
+                                exit={{ opacity: 0, y: -20 }}
+                            >
+                                {filteredCollection.length === 0 ? (
+                                    <div className="flex flex-col items-center justify-center py-32 bg-white/30 backdrop-blur-sm rounded-[40px] border border-white/50">
+                                        <p className="text-gray-400 font-bold uppercase tracking-widest mb-6">No scents found</p>
+                                        <button
+                                            onClick={() => setIsSearchOpen(true)}
+                                            className="text-black font-black text-xs uppercase tracking-widest hover:underline decoration-2 underline-offset-8"
+                                        >
+                                            + Add Your First Perfume
+                                        </button>
+                                    </div>
+                                ) : (
+                                    <section className="grid grid-cols-3 sm:grid-cols-4 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 gap-2 md:gap-8">
+                                        {filteredCollection.map((item) => (
+                                            <CabinetShelf
+                                                key={item.my_perfume_id}
+                                                perfume={item}
+                                                onSelect={setSelectedPerfume}
+                                                isKorean={isKorean}
+                                            />
+                                        ))}
+                                    </section>
+                                )}
+                            </motion.div>
+                        )}
+                    </AnimatePresence>
                 </main>
 
-                <Link href="/perfume-network/nmap" className="fixed bottom-6 right-6 md:bottom-10 md:right-10 z-30 shadow-xl rounded-full transition-transform hover:scale-105">
-                    <div className="bg-[#C5A55D] text-white px-6 py-3 md:px-8 md:py-4 rounded-full flex items-center gap-3 font-bold text-xs md:text-sm shadow-[#C5A55D]/30 hover:bg-[#B09045] transition-colors">
-                        <span>향수 관계 맵</span>
-                    </div>
+                <Link href="/perfume-network/nmap" className="fixed bottom-6 right-6 md:bottom-8 md:right-8 z-40 group">
+                    <motion.div
+                        whileHover={{ scale: 1.05 }}
+                        whileTap={{ scale: 0.95 }}
+                        className="flex items-center gap-2 md:gap-3 px-4 py-2.5 md:px-8 md:py-4 bg-white/80 backdrop-blur-md border border-white/50 text-black rounded-full shadow-2xl shadow-black/5 font-black text-[8px] md:text-xs uppercase tracking-widest"
+                    >
+                        <div className="w-1.5 h-1.5 md:w-2 md:h-2 rounded-full bg-black animate-pulse" />
+                        <span>Scent Map</span>
+                    </motion.div>
                 </Link>
 
-                {
-                    isSearchOpen && (
-                        <PerfumeSearchModal
-                            memberId={String(memberId)}
-                            onClose={() => setIsSearchOpen(false)}
-                            onAdd={handleAdd}
-                            isKorean={isKorean}
-                            onToggleLanguage={() => setIsKorean(!isKorean)}
-                            existingIds={collection.map(p => p.perfume_id)} // <--- 기존 등록된 ID 목록 전달
-                        />
-                    )
-                }
-                {selectedPerfume && <PerfumeDetailModal perfume={selectedPerfume} onClose={() => setSelectedPerfume(null)} onUpdateStatus={handleUpdateStatus} onDelete={handleDelete} onUpdatePreference={handleUpdatePreference} isKorean={isKorean} />}
-
-                {/* NavSidebar Overlay Removed (Handled by PageLayout) */}
+                {isSearchOpen && (
+                    <PerfumeSearchModal
+                        memberId={String(memberId)}
+                        onClose={() => setIsSearchOpen(false)}
+                        onAdd={handleAdd}
+                        isKorean={isKorean}
+                        onToggleLanguage={() => setIsKorean(!isKorean)}
+                        existingIds={collection.map(p => p.perfume_id)}
+                    />
+                )}
+                {selectedPerfume && (
+                    <PerfumeDetailModal
+                        perfume={selectedPerfume}
+                        onClose={() => setSelectedPerfume(null)}
+                        onUpdateStatus={handleUpdateStatus}
+                        onDelete={handleDelete}
+                        onUpdatePreference={handleUpdatePreference}
+                        isKorean={isKorean}
+                    />
+                )}
             </PageLayout>
-        </SavedPerfumesProvider >
+        </SavedPerfumesProvider>
     );
 }
 
-function TabItem({ label, count, color = "text-[#555]", isActive, onClick }: { label: string; count: number; color?: string; isActive: boolean; onClick: () => void }) {
+function StatItem({
+    label,
+    count,
+    activeColor = "text-black",
+    isActive,
+    onClick
+}: {
+    label: string;
+    count: number;
+    activeColor?: string;
+    isActive: boolean;
+    onClick: () => void
+}) {
     return (
         <button
             onClick={onClick}
             className={`
-                flex flex-col items-center min-w-[60px] sm:min-w-[70px] px-2 sm:px-3 py-1.5 sm:py-2 rounded-xl transition-all
-                ${isActive ? 'bg-gray-50 ring-1 ring-gray-200 shadow-sm' : 'hover:bg-gray-50/50'}
+                flex flex-col items-center min-w-[80px] md:min-w-[100px] px-4 py-3 rounded-[24px] transition-all duration-300
+                ${isActive ? 'bg-white shadow-sm ring-1 ring-black/5' : 'hover:bg-white/40'}
             `}
         >
-            <span className={`text-[9px] sm:text-[10px] font-bold uppercase tracking-wide mb-0.5 sm:mb-1 transition-colors ${isActive ? 'text-gray-800' : 'text-gray-400'}`}>{label.split(' ')[0]}</span>
-            <span className={`text-lg sm:text-xl font-bold transition-all ${isActive ? color : 'text-gray-300'}`}>{count}</span>
+            <span className={`text-[10px] font-black uppercase tracking-widest mb-1 transition-colors ${isActive ? 'text-black' : 'text-gray-400'}`}>
+                {label}
+            </span>
+            <span className={`text-2xl font-black transition-all ${isActive ? activeColor : 'text-gray-300'}`}>
+                {count}
+            </span>
         </button>
     );
 }

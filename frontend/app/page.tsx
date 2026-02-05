@@ -126,15 +126,15 @@ function HeroSection() {
       <div className="container mx-auto px-6 grid md:grid-cols-2 gap-8 md:gap-24 items-center h-full">
 
         {/* LEFT: Text Content */}
-        <div className="relative z-10 flex flex-col items-start text-left space-y-4 md:space-y-8 order-2 md:order-1 mb-10 md:mb-0">
+        <div className="relative z-10 flex flex-col items-start text-left space-y-3 md:space-y-8 order-2 md:order-1 mb-10 md:mb-0">
           <motion.div
             initial={{ scale: 0 }} animate={{ scale: 1 }} transition={{ duration: 0.5 }}
-            className="w-4 h-4 md:w-6 md:h-6 rounded-full bg-[#FF6B6B]"
+            className="w-3 h-3 md:w-6 md:h-6 rounded-full bg-[#FF6B6B]"
           />
-          <h1 className="text-5xl md:text-8xl font-sans font-bold tracking-tighter text-[#1a1a1a] leading-[0.9]">
+          <h1 className="text-4xl md:text-8xl font-sans font-bold tracking-tighter text-[#1a1a1a] leading-[0.9]">
             FIND <br /> YOUR <br /> SIGNATURE.
           </h1>
-          <p className="text-base md:text-xl text-[#555] font-medium max-w-md">
+          <p className="text-sm md:text-xl text-[#555] font-medium max-w-md">
             {/* 당신의 언어는 향기가 된다. <br /> */}
             향기로 기억되는 순간. <br />
             당신의 분위기를 완성하는 향수를 찾아보세요.
@@ -151,7 +151,7 @@ function HeroSection() {
         </div>
 
         {/* RIGHT: Image Carousel & Stickers */}
-        <div className="relative h-[40vh] md:h-[80vh] w-full order-1 md:order-2 flex items-center justify-center mt-12 md:mt-0">
+        <div className="relative h-[38vh] md:h-[80vh] w-full order-1 md:order-2 flex items-center justify-center mt-12 md:mt-0">
           <motion.div
             style={{ y: imageY }}
             initial={{ opacity: 0, scale: 0.9, borderRadius: "100%" }}
@@ -180,7 +180,7 @@ function HeroSection() {
                   if (swipe < -swipeConfidenceThreshold) paginate(1);
                   else if (swipe > swipeConfidenceThreshold) paginate(-1);
                 }}
-                className="absolute inset-0 w-full h-full object-cover"
+                className={`absolute inset-0 w-full h-full object-cover ${imageIndex === 4 ? 'scale-105' : ''}`}
                 draggable={false}
               />
             </AnimatePresence>
@@ -192,27 +192,27 @@ function HeroSection() {
             initial={{ opacity: 0, x: -100 }}
             animate={{ opacity: 1, x: 0 }}
             transition={{ delay: 0.5, type: "spring" }}
-            className="absolute top-[5%] md:top-[10%] left-[-5%] md:left-[-15%] bg-[#FF8F8F] text-[#1a1a1a] px-4 py-2 md:px-10 md:py-6 rounded-full shadow-[0_10px_30px_rgba(255,143,143,0.4)] z-20 border-2 border-[#1a1a1a]"
+            className="absolute top-[5%] md:top-[10%] left-[-5%] md:left-[-15%] bg-[#FF8F8F] text-[#1a1a1a] px-3 py-1 md:px-10 md:py-6 rounded-full shadow-[0_10px_30px_rgba(255,143,143,0.4)] z-20 border-2 border-[#1a1a1a]"
           >
-            <span className="text-sm md:text-4xl font-bold tracking-tight font-sans">ATMOSPHERE</span>
+            <span className="text-[10px] md:text-4xl font-bold tracking-tight font-sans">ATMOSPHERE</span>
           </motion.div>
           <motion.div
             style={{ y: stickerY_2, rotate: 8 }}
             initial={{ opacity: 0, x: 100 }}
             animate={{ opacity: 1, x: 0 }}
             transition={{ delay: 0.7, type: "spring" }}
-            className="absolute bottom-[20%] md:bottom-[30%] right-[-5%] md:right-[-12%] bg-[#FFAB76] text-[#1a1a1a] px-4 py-2 md:px-10 md:py-6 rounded-full shadow-[0_10px_30px_rgba(255,171,118,0.4)] z-20 border-2 border-[#1a1a1a]"
+            className="absolute bottom-[20%] md:bottom-[30%] right-[-5%] md:right-[-12%] bg-[#FFAB76] text-[#1a1a1a] px-3 py-1 md:px-10 md:py-6 rounded-full shadow-[0_10px_30px_rgba(255,171,118,0.4)] z-20 border-2 border-[#1a1a1a]"
           >
-            <span className="text-sm md:text-4xl font-bold tracking-tight font-sans">EMOTIONS</span>
+            <span className="text-[10px] md:text-4xl font-bold tracking-tight font-sans">EMOTIONS</span>
           </motion.div>
           <motion.div
             style={{ y: stickerY_3, rotate: -5 }}
             initial={{ opacity: 0, y: 100 }}
             animate={{ opacity: 1, y: 0 }}
             transition={{ delay: 0.9, type: "spring" }}
-            className="absolute bottom-[-5%] md:bottom-[5%] left-[10%] md:left-[0%] bg-[#FFCB74] text-[#1a1a1a] px-4 py-2 md:px-12 md:py-5 rounded-full shadow-[0_10px_30px_rgba(255,203,116,0.4)] z-20 border-2 border-[#1a1a1a]"
+            className="absolute bottom-[-5%] md:bottom-[5%] left-[10%] md:left-[0%] bg-[#FFCB74] text-[#1a1a1a] px-3 py-1.5 md:px-12 md:py-5 rounded-full shadow-[0_10px_30px_rgba(255,203,116,0.4)] z-20 border-2 border-[#1a1a1a]"
           >
-            <span className="text-sm md:text-3xl font-bold tracking-tight font-sans">& MEMORIES</span>
+            <span className="text-[10px] md:text-3xl font-bold tracking-tight font-sans">& MEMORIES</span>
           </motion.div>
         </div>
       </div>
@@ -228,10 +228,10 @@ function BrandStorySection() {
 
   return (
     <section ref={ref} className="relative h-[100dvh] md:min-h-[80vh] flex items-center justify-center bg-[#FDFBF8] py-0 md:py-24 overflow-hidden snap-start snap-always">
-      <div className="container mx-auto px-6 grid md:grid-cols-2 gap-8 md:gap-24 items-center h-full">
+      <div className="container mx-auto px-6 grid md:grid-cols-2 gap-4 md:gap-24 items-center">
 
         {/* Visual: Abstract AI with Stickers */}
-        <div className="relative order-1 md:order-1 flex justify-center mt-[-10vh] md:mt-0">
+        <div className="relative order-1 md:order-1 flex justify-center mt-0 md:mt-0">
           <motion.div
             initial={{ opacity: 0, scale: 0.8, borderRadius: "50%" }}
             whileInView={{ opacity: 1, scale: 1, borderRadius: "3rem" }}
@@ -301,15 +301,15 @@ function LayeringSection() {
 
   return (
     <section ref={ref} className="relative h-[100dvh] md:min-h-[80vh] flex items-center justify-center bg-[#FDFBF8] py-0 md:py-24 overflow-hidden border-t border-gray-100 snap-start snap-always">
-      <div className="container mx-auto px-6 grid md:grid-cols-2 gap-8 md:gap-24 items-center h-full">
+      <div className="container mx-auto px-6 grid md:grid-cols-2 gap-4 md:gap-24 items-center">
 
         {/* Visual */}
-        <div className="relative order-1 md:order-1 flex justify-center mt-[-10vh] md:mt-0">
+        <div className="relative order-1 md:order-1 flex justify-center mt-0 md:mt-0">
           <motion.div
             initial={{ opacity: 0, scale: 0.8 }}
             whileInView={{ opacity: 1, scale: 1 }}
             transition={{ duration: 1 }}
-            className="w-full max-w-[280px] md:max-w-[500px] aspect-[4/5] rounded-[3rem] overflow-hidden shadow-2xl relative border-2 border-[#1a1a1a]"
+            className="w-full max-w-[280px] md:max-w-[500px] aspect-[4/5] rounded-[2.5rem] md:rounded-[3rem] overflow-hidden shadow-2xl relative border-2 border-[#1a1a1a]"
           >
             <img src="/section_layering.png" alt="Layering Lab" className="w-full h-full object-cover hover:scale-110 transition-transform duration-700" />
           </motion.div>
@@ -319,17 +319,17 @@ function LayeringSection() {
             initial={{ scale: 0, rotate: 5 }}
             whileInView={{ scale: 1, rotate: 5 }}
             transition={{ delay: 0.3, type: "spring" }}
-            className="absolute top-[10%] left-[-5%] bg-[#FFD3B6] text-[#1a1a1a] px-4 py-2 md:px-6 md:py-3 rounded-full border-2 border-[#1a1a1a] shadow-lg z-20"
+            className="absolute top-[10%] left-[-5%] bg-[#FFD3B6] text-[#1a1a1a] px-3 py-1.5 md:px-6 md:py-3 rounded-full border-2 border-[#1a1a1a] shadow-lg z-20"
           >
-            <span className="text-sm md:text-xl font-bold font-sans">ALCHEMY</span>
+            <span className="text-[10px] md:text-xl font-bold font-sans">ALCHEMY</span>
           </motion.div>
           <motion.div
             initial={{ scale: 0, rotate: -8 }}
             whileInView={{ scale: 1, rotate: -8 }}
             transition={{ delay: 0.5, type: "spring" }}
-            className="absolute bottom-[-2%] right-[5%] bg-[#D4F0F0] text-[#1a1a1a] px-4 py-2 md:px-6 md:py-3 rounded-full border-2 border-[#1a1a1a] shadow-lg z-20"
+            className="absolute bottom-[-2%] right-[5%] bg-[#D4F0F0] text-[#1a1a1a] px-3 py-1.5 md:px-6 md:py-3 rounded-full border-2 border-[#1a1a1a] shadow-lg z-20"
           >
-            <span className="text-sm md:text-xl font-bold font-sans">UNIQUE</span>
+            <span className="text-[10px] md:text-xl font-bold font-sans">UNIQUE</span>
           </motion.div>
         </div>
 
@@ -338,22 +338,21 @@ function LayeringSection() {
           initial={{ opacity: 0, x: 50 }}
           whileInView={{ opacity: 1, x: 0 }}
           transition={{ duration: 0.8 }}
-          className="flex flex-col items-start text-left space-y-4 md:space-y-8 order-2 md:order-2"
+          className="flex flex-col items-start text-left space-y-2 md:space-y-8 order-2 md:order-2"
         >
-          <div className="w-4 h-4 rounded-full bg-[#FFCB74] shadow-[0_0_15px_rgba(255,203,116,0.5)]" />
-          <h2 className="text-4xl md:text-7xl font-sans font-bold tracking-tighter text-[#1a1a1a] leading-[0.9]">
+          <div className="w-3 h-3 md:w-4 md:h-4 rounded-full bg-[#FFCB74] shadow-[0_0_15px_rgba(255,203,116,0.5)]" />
+          <h2 className="text-3xl md:text-7xl font-sans font-bold tracking-tighter text-[#1a1a1a] leading-[0.9]">
             SCENT <br /> MIXOLOGY.
           </h2>
-          <p className="text-base md:text-lg text-[#555] font-medium max-w-sm">
+          <p className="text-sm md:text-lg text-[#555] font-medium max-w-sm">
             A + B = ∞ <br />
-            서로 다른 노트를 섞어 만드는 나만의 무드. <br />
-            레이어링 랩에서 실험해보세요.
+            서로 다른 노트를 섞어 만드는 나만의 무드.
           </p>
           <motion.button
             onClick={() => router.push('/layering')}
             initial="initial"
             whileHover="hover"
-            className="group relative px-6 py-3 md:px-8 md:py-3 rounded-full border-2 border-[#1a1a1a] text-[#1a1a1a] bg-transparent hover:bg-[#1a1a1a] hover:text-white transition-all text-xs md:text-sm font-bold uppercase tracking-wide overflow-hidden"
+            className="group relative px-6 py-2.5 md:px-8 md:py-3 rounded-full border-2 border-[#1a1a1a] text-[#1a1a1a] bg-transparent hover:bg-[#1a1a1a] hover:text-white transition-all text-xs md:text-sm font-bold uppercase tracking-wide overflow-hidden"
           >
             <span className="relative z-10 block group-hover:hidden">레이어링 랩</span>
             <span className="relative z-10 hidden group-hover:block">GO TO LAYERING</span>

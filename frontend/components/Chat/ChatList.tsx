@@ -95,7 +95,7 @@ const ChatList = ({ messages, loading, messagesEndRef, scrollToBottom, statusLog
                         {/* 1. 백엔드에서 전달된 단계별 상태 로그 표시 */}
                         {statusLog ? (
                             <div className="flex justify-start animate-pulse px-1">
-                                <div className="flex items-center gap-2 rounded-2xl bg-white/50 border border-pink-500/20 px-4 py-2 text-xs text-pink-500 shadow-sm backdrop-blur-sm">
+                                <div className="flex items-center gap-2 rounded-2xl bg-white/50 border border-[#57B898]/30 px-4 py-2 text-xs text-[#57B898] shadow-sm backdrop-blur-sm">
                                     {/* 회전하는 모래시계 아이콘 */}
                                     <span className="animate-spin text-base">⏳</span>
                                     {statusLog}
