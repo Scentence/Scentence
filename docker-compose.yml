@@ -37,9 +37,9 @@ services:
     ports:
       - "3000:3000"
     volumes:
-      - ./frontend:/app          # [핵심 1] 내 컴퓨터 코드를 컨테이너와 연결
-      - /app/node_modules        # [핵심 2] 컨테이너 내부의 라이브러리 보호
-      - /app/.next               # [핵심 3] 빌드 캐시 충돌 방지
+      - ./frontend:/app # [핵심 1] 내 컴퓨터 코드를 컨테이너와 연결
+      - /app/node_modules # [핵심 2] 컨테이너 내부의 라이브러리 보호
+      - /app/.next # [핵심 3] 빌드 캐시 충돌 방지
     env_file: .env
     environment:
       - BACKEND_INTERNAL_URL=${BACKEND_INTERNAL_URL:-http://backend:8000}
@@ -50,6 +50,9 @@ services:
       - INTERNAL_REQUEST_SECRET=${INTERNAL_REQUEST_SECRET}
       - WATCHPACK_POLLING=true
       - NEXT_PUBLIC_ENABLE_AUTH=true
+      - NEXTAUTH_URL=${NEXTAUTH_URL}
+      - NEXTAUTH_SECRET=${NEXTAUTH_SECRET}
+      - AUTH_TRUST_HOST=true
     depends_on:
       - backend
     # [추가 2] 개발 모드로 강제 실행 (Dockerfile 설정 무시)
@@ -114,7 +117,6 @@ services:
     extra_hosts:
       - "host.docker.internal:host-gateway"
     command: uvicorn main:app --host 0.0.0.0 --port 8002 --reload
-
 
 volumes:
   pgdata:
