@@ -228,7 +228,6 @@ export default function ArchivesPage() {
                             y: [0, 80, 0],
                             scale: [1, 1.2, 1],
                         }}
-                        transition={{ duration: 25, repeat: Infinity, ease: "linear" }}
                         className="absolute bottom-[10%] -left-[10%] w-[50%] h-[50%] bg-[#FADBD8]/20 rounded-full blur-[100px]"
                     />
                 </div>

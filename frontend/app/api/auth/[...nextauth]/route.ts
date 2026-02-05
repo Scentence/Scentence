@@ -55,6 +55,7 @@ const handler = NextAuth({
     async signIn({ user, account }) {
       if (account?.provider === "kakao") {
         try {
+          console.log("[NextAuth] Sending Kakao login request to Backend...");
           const response = await fetch(`${BACKEND_URL}/users/login`, {
             method: "POST",
             headers: { "Content-Type": "application/json" },
@@ -66,8 +67,13 @@ const handler = NextAuth({
             }),
           });
 
-          if (!response.ok) return true;
+          if (!response.ok) {
+            console.error(`[NextAuth] Backend Login Failed. Status: ${response.status}`);
+            return true; // Allow login but as guest-like state (fallback)
+          }
+
           const data = await response.json();
+          console.log("[NextAuth] Backend Response:", data);
 
           if (data?.withdraw_pending && data?.member_id) {
             return `/recover?memberId=${data.member_id}`;
@@ -84,13 +90,15 @@ const handler = NextAuth({
             return `/link-account?${params.toString()}`;
           }
 
-          user.id = data.member_id;
+          // [Fix] Ensure ID is string to match NextAuth types
+          user.id = String(data.member_id);
           (user as any).roleType = data.role_type || "USER";
           (user as any).userMode = data.user_mode || "BEGINNER";
           return true;
-        } catch {
+        } catch (error) {
+          console.error("[NextAuth] SignIn Error:", error);
           if (account?.providerAccountId) {
-            user.id = account.providerAccountId;
+            user.id = String(account.providerAccountId);
           }
           return true;
         }
@@ -100,6 +108,7 @@ const handler = NextAuth({
 
     async jwt({ token, user }) {
       if (user) {
+        console.log("[NextAuth] JWT Callback - User Logged In:", { id: user.id });
         token.id = (user as any).id;
         token.roleType = (user as any).roleType || "USER";
         token.userMode = (user as any).userMode || "BEGINNER";
@@ -108,6 +117,7 @@ const handler = NextAuth({
     },
 
     async session({ session, token }) {
+      console.log("[NextAuth] Session Callback Triggered:", { tokenId: token.id });
       if (session.user) {
         session.user.id = token.id as string;
         (session.user as any).roleType = token.roleType as string;
