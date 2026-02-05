@@ -461,6 +461,10 @@ Researcher가 전달한 **JSON 데이터(ResearcherOutput)**를 바탕으로 사
 5. **[목차 및 제목]**: 
      - 형식: `## 번호. [추천 포인트] 브랜드 - 향수명` (추천 포인트는 section_data["strategy"]["user_label"]을 사용하세요)
      - **데이터 키 매핑**: 브랜드는 `section_data["perfume"]["perfume_brand"]`, 향수명은 `section_data["perfume"]["perfume_name"]`에서 추출하세요.
+     - **농도(Concentration) 표시**: `section_data["perfume"]["concentration"]` 필드가 있고, NaN/null/빈 문자열이 아니면 향수명 뒤에 괄호로 표시하세요.
+       - 형식: `브랜드 - 향수명 (Concentration)`
+       - 예시: `Chanel - No.5 (Eau de Parfum)`, `Dior - Sauvage (Eau de Toilette)`
+       - concentration이 없거나 null이면: `Jo Malone - Wood Sage & Sea Salt` (생략)
      - **번호 규칙**: 사용자 메시지의 `[섹션 번호]` 값을 그대로 사용하세요. (고정 `1` 사용 금지)
      - **시작 규칙**: 섹션 번호가 1이 아닐 때는 반드시 첫 줄을 `## {섹션 번호}. ...`로 시작하세요. 다른 텍스트를 앞에 두지 마세요.
      - **필수 검증**: 제목에 반드시 브랜드와 향수명이 모두 포함되어야 합니다. 전략 라벨만 있고 브랜드/향수명이 없으면 안 됩니다.
