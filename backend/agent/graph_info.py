@@ -35,8 +35,8 @@ from .expression_loader import ExpressionLoader
 load_dotenv()
 
 # [LLM 이원화]
-INFO_LLM = ChatOpenAI(model="gpt-4o", temperature=0, streaming=True)
-ROUTER_LLM = ChatOpenAI(model="gpt-4o", temperature=0, streaming=False)
+INFO_LLM = ChatOpenAI(model="gpt-4.1", temperature=0, streaming=True)
+ROUTER_LLM = ChatOpenAI(model="gpt-4.1", temperature=0, streaming=False)
 
 
 # ==========================================
