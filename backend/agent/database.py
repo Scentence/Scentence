@@ -201,7 +201,7 @@ def search_perfumes(
     cur = conn.cursor(cursor_factory=RealDictCursor)
     try:
         sql = """
-            SELECT DISTINCT m.perfume_id as id, m.perfume_brand as brand, m.perfume_name as name, m.img_link as image_url,
+            SELECT DISTINCT m.perfume_id as id, m.perfume_brand as brand, m.perfume_name as name, m.concentration, m.img_link as image_url,
             (SELECT STRING_AGG(DISTINCT accord, ', ') FROM TB_PERFUME_ACCORD_R WHERE perfume_id = m.perfume_id) as accords,
             (SELECT gender FROM TB_PERFUME_GENDER_R WHERE perfume_id = m.perfume_id LIMIT 1) as gender,
             (SELECT STRING_AGG(DISTINCT n.note, ', ') FROM TB_PERFUME_NOTES_M n WHERE n.perfume_id = m.perfume_id AND UPPER(n.type) = 'TOP') as top_notes,

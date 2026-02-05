@@ -34,15 +34,6 @@ NORMALIZER_LLM = ChatOpenAI(
 _expression_loader = ExpressionLoader()
 
 
-def format_perfume_name(perfume: Dict) -> str:
-    """향수명 포맷팅 (concentration 포함)"""
-    name = perfume.get("name", "")
-    concentration = perfume.get("concentration")
-    if concentration and str(concentration).strip() and str(concentration).lower() != "nan":
-        return f"{name} ({concentration})"
-    return name
-
-
 @tool(args_schema=LookupNoteInput)
 async def lookup_note_by_string_tool(keyword: str) -> List[str]:
     """

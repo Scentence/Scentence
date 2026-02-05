@@ -61,11 +61,6 @@ class AgentState(Dict):
     # [★추가] DB 백업을 위한 스레드 ID
     thread_id: Optional[str]
 
-    # [★추가] Pre-Validator 결과 필드
-    validation_result: Optional[str] = None  # "supported" | "unsupported"
-    unsupported_category: Optional[str] = None  # "제형", "성능", "가격" 등
-    unsupported_reason: Optional[str] = None
-
 
 # =================================================================
 # 2. 인터뷰 및 라우팅 (Interviewer & Router)

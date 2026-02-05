@@ -113,7 +113,7 @@ def generate_pre_notice(
 
     # 케이스 1: 과다 요청 (명시적일 때만)
     if is_explicit and requested > MAX_COUNT:
-        return (f"\n💡 안내: 한 번에 최대 {MAX_COUNT}개까지만 추천이 가능합니다. "
+        return (f"💡 안내: 한 번에 최대 {MAX_COUNT}개까지만 추천이 가능합니다. "
                 f"{MAX_COUNT}개의 향수를 엄선하여 추천드렸습니다.\n\n")
 
     return ""
@@ -138,7 +138,7 @@ def generate_post_notice(
     """
     # 케이스 2: 부분 실패 (명시적 요청일 때만!)
     if is_explicit and actual < requested:
-        return (f"\n💡 안내: 요청하신 {requested}개 중 {actual}개의 향수를 찾았습니다. "
+        return (f"\n\n💡 안내: 요청하신 {requested}개 중 {actual}개의 향수를 찾았습니다. "
                 f"조건에 맞는 향수가 제한적이었습니다.")
 
     return ""
@@ -338,27 +338,13 @@ def interviewer_node(state: AgentState):
             current_constraints=current_prefs,
         )
 
-        # [★추가] 브랜드 제외 파싱 (세션 레벨 유지)
-        session_exclude_brands = state.get("exclude_brands", [])
-        current_exclude_brands, has_exclusion = parse_brand_exclusions(current_query)
-        
-        # 새로운 제외 요청이 있으면 누적
+        # [★추가] 브랜드 제외 파싱
+        exclude_brands, has_exclusion = parse_brand_exclusions(current_query)
         if has_exclusion:
-            session_exclude_brands = list(set(session_exclude_brands + current_exclude_brands))
             print(
-                f"🚫 [Exclusion] Detected exclude_brands: {current_exclude_brands}, Session: {session_exclude_brands}",
+                f"🚫 [Exclusion] Detected exclude_brands: {exclude_brands}",
                 flush=True,
             )
-        
-        # 명시적 브랜드 요청 시 해당 브랜드 제외 목록에서 해제
-        if current_prefs and current_prefs.get("brand"):
-            requested_brand = current_prefs.get("brand")
-            if requested_brand in session_exclude_brands:
-                session_exclude_brands.remove(requested_brand)
-                print(
-                    f"   🔄 [Exclusion] Removed {requested_brand} from exclusion list due to explicit request",
-                    flush=True,
-                )
 
         current_frame_id = state.get("frame_id")
         if classification.intent in ["NEW_RECO", "RESET"]:
@@ -389,15 +375,16 @@ def interviewer_node(state: AgentState):
             merged_prefs[key] = value
 
         # [★추가] 브랜드 제외 처리
-        merged_prefs["exclude_brands"] = session_exclude_brands
-        # 제외 브랜드가 있으면 brand, reference_brand 클리어
-        if should_clear_brand_fields(session_exclude_brands):
-            merged_prefs["brand"] = None
-            merged_prefs["reference_brand"] = None
-            print(
-                f"   → brand/reference_brand cleared due to exclusions",
-                flush=True,
-            )
+        if has_exclusion:
+            merged_prefs["exclude_brands"] = exclude_brands
+            # 제외 브랜드가 있으면 brand, reference_brand 클리어
+            if should_clear_brand_fields(exclude_brands):
+                merged_prefs["brand"] = None
+                merged_prefs["reference_brand"] = None
+                print(
+                    f"   → brand/reference_brand cleared due to exclusions",
+                    flush=True,
+                )
 
         for slot in classification.drop_slots:
             if slot not in merged_prefs:
@@ -433,7 +420,6 @@ def interviewer_node(state: AgentState):
                 "fallback_triggered": False,
                 "frame_id": frame_id,
                 "recommended_history": new_recommended_history if new_recommended_history is not None else state.get("recommended_history", []),
-                "exclude_brands": session_exclude_brands,  # [★추가] 세션 레벨 제외 브랜드 유지
             }
 
         return {
@@ -447,7 +433,6 @@ def interviewer_node(state: AgentState):
             "fallback_triggered": False,
             "frame_id": frame_id,
             "recommended_history": new_recommended_history if new_recommended_history is not None else state.get("recommended_history", []),
-            "exclude_brands": session_exclude_brands,  # [★추가] 세션 레벨 제외 브랜드 유지
         }
     except Exception as e:
         print(f"Interviewer Error: {e}")
@@ -1306,55 +1291,26 @@ async def unsupported_request_handler(_state: AgentState):
 
     category = _state.get("unsupported_category", "")
 
-    # 카테고리별 메시지 (이유 + 대안)
+    # 카테고리별 메시지
     category_messages = {
-        "제형": {
-            "reason": "워터 퍼퓸, 오일 퍼퓸, 고체 향수 등 제형별 검색은 현재 지원하지 않습니다.",
-            "alternative": "대신 원하시는 느낌(가벼운, 시원한, 물기 있는 등)을 말씀해주시면 비슷한 향수를 추천해드리겠습니다."
-        },
-        "성능": {
-            "reason": "발향력, 지속력, 잔향 등 성능 정보는 데이터베이스에 없습니다.",
-            "alternative": "대신 계절이나 상황에 맞는 향수를 추천해드릴 수 있습니다."
-        },
-        "가격": {
-            "reason": "가격대별 검색은 지원하지 않습니다.",
-            "alternative": "브랜드나 분위기로 검색하시면 원하시는 스타일을 찾으실 수 있습니다."
-        },
-        "레이어링": {
-            "reason": "레이어링이나 조합 추천은 현재 지원하지 않습니다.",
-            "alternative": "개별 향수 추천은 가능합니다!"
-        },
-        "구매정보": {
-            "reason": "구매처나 매장 정보는 제공하지 않습니다.",
-            "alternative": "특정 향수 정보를 알려드릴 수 있습니다."
-        },
-        "물리적": {
-            "reason": "용량, 크기 등 물리적 정보는 보유하고 있지 않습니다.",
-            "alternative": "향수의 특성(어코드, 노트 등)으로 검색해드릴 수 있습니다."
-        },
-        "추천_이유": {
-            "reason": "추천 기준이나 이유에 대한 정보는 제공되지 않습니다.",
-            "alternative": "대신 추천된 향수의 특성(어코드, 노트 등)에 대해 자세히 설명해드릴까요?"
-        },
-        "브랜드_전체": {
-            "reason": "브랜드 전체 설명이나 브랜드의 모든 향수 나열은 지원하지 않습니다.",
-            "alternative": "특정 향수명을 말씀해주시면 해당 향수에 대해 상세히 설명해드리겠습니다."
-        },
-        "향수_비교": {
-            "reason": "두 향수를 비교하는 기능은 현재 지원하지 않습니다.",
-            "alternative": "각 향수의 특성을 개별적으로 설명해드릴까요?"
-        },
+        "제형": "죄송하지만 저희는 향수의 제형(오일/워터/고체 등) 정보를 보유하고 있지 않아 해당 기준으로 추천이 어렵습니다.",
+        "성능": "죄송하지만 발향력, 지속력 등 성능 정보는 보유하고 있지 않아 해당 기준으로 추천이 어렵습니다.",
+        "가격": "죄송하지만 가격 정보를 보유하고 있지 않아 가격 기반 추천이 어렵습니다.",
+        "레이어링": "죄송하지만 레이어링이나 조합 추천은 현재 지원하지 않습니다. 개별 향수 추천은 가능합니다!",
+        "구매정보": "죄송하지만 구매처나 매장 정보는 제공하지 않습니다.",
+        "물리적": "죄송하지만 용량, 크기 등 물리적 정보는 보유하고 있지 않습니다.",
     }
 
-    msg_data = category_messages.get(category, {
-        "reason": "해당 요청은 현재 지원하지 않습니다.",
-        "alternative": "다른 방식으로 질문해주시면 도움드리겠습니다."
-    })
-    
-    specific_msg = f"죄송합니다. {msg_data['reason']}\n\n💡 {msg_data['alternative']}"
+    specific_msg = category_messages.get(category, "죄송하지만 해당 요청은 현재 지원하지 않습니다.")
+
+    guidance = "\n\n💡 대신 이런 방식으로 질문해주시면 도움드릴 수 있습니다:\n" \
+               "- 분위기나 느낌 (사랑스러운, 시원한, 우아한 등)\n" \
+               "- 계절이나 상황 (여름용, 데일리, 데이트용 등)\n" \
+               "- 어코드나 노트 (플로랄, 우디, 시트러스 등)\n" \
+               "- 특정 향수 정보나 유사 향수 추천"
 
     return {
-        "messages": [AIMessage(content=specific_msg)],
+        "messages": [AIMessage(content=specific_msg + guidance)],
         "chat_outcome_status": "UNSUPPORTED_REQUEST"
     }
 
