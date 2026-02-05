@@ -1,4 +1,5 @@
 import json
+import re
 import time
 from typing import Generator, List
 from fastapi import FastAPI
@@ -256,15 +257,30 @@ async def stream_generator(
                         if hasattr(last_msg, "content") and last_msg.content:
                             if did_stream_parallel_reco:
                                 # [★수정] 스트리밍 후 추가된 내용(안내 메시지) 전송
-                                if last_msg.content != full_ai_response:
-                                    additional_content = last_msg.content[len(full_ai_response):]
-                                    if additional_content:
-                                        full_ai_response += additional_content
-                                        data = json.dumps(
-                                            {"type": "answer", "content": additional_content},
-                                            ensure_ascii=False,
-                                        )
-                                        yield f"data: {data}\n\n"
+                                # 정규식으로 안내 메시지만 추출 (슬라이싱 오류 방지)
+                                
+                                # 안내 메시지 패턴
+                                notice_patterns = [
+                                    r'💡\s*안내:.*',  # 기본 안내 패턴
+                                ]
+                                
+                                additional_content = ""
+                                for pattern in notice_patterns:
+                                    match = re.search(pattern, last_msg.content, re.DOTALL)
+                                    if match:
+                                        notice_text = match.group(0)
+                                        # 이미 전송된 부분인지 확인
+                                        if notice_text not in full_ai_response:
+                                            additional_content = notice_text
+                                            break
+                                
+                                if additional_content:
+                                    full_ai_response += additional_content
+                                    data = json.dumps(
+                                        {"type": "answer", "content": additional_content},
+                                        ensure_ascii=False,
+                                    )
+                                    yield f"data: {data}\n\n"
                                 continue
                             full_ai_response += last_msg.content
                             data = json.dumps(
