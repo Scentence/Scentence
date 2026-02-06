@@ -33,7 +33,6 @@ next-env.d.ts
 
 # [6. AI 협업 지침서 - 사용자님 전용]
 .*
-.github/
 .gitkeep
 .gitignore
 
