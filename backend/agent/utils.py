@@ -170,20 +170,33 @@ def sanitize_filters(h_filters: dict, s_filters: dict) -> tuple:
 
 def extract_save_refs(messages: List) -> List[Dict[str, Any]]:
     """
-    Extract SAVE tags from most recent AIMessage containing recommendations.
-    Returns list of {id: int, name: str} in order of appearance.
+    Extract SAVE tags with section numbers from messages.
+    Returns list of {number: int, id: int, name: str}.
     """
     from langchain_core.messages import AIMessage
 
     save_pattern = re.compile(r'\[\[SAVE:(\d+):([^\]]+)\]\]')
-
-    for msg in reversed(messages):
+    section_pattern = re.compile(r'##\s*(\d+)\.')
+    
+    all_refs = []
+    
+    for msg in messages:
         if isinstance(msg, AIMessage) and msg.content:
-            matches = save_pattern.findall(msg.content)
-            if matches:
-                return [{"id": int(m[0]), "name": m[1]} for m in matches]
-
-    return []
+            content = msg.content
+            save_matches = save_pattern.findall(content)
+            
+            if save_matches:
+                section_matches = section_pattern.findall(content)
+                
+                for i, (perfume_id, name) in enumerate(save_matches):
+                    number = int(section_matches[i]) if i < len(section_matches) else i + 1
+                    all_refs.append({
+                        "number": number,
+                        "id": int(perfume_id),
+                        "name": name
+                    })
+    
+    return all_refs
 
 
 def parse_ordinal(user_query: str) -> Optional[int]:
@@ -224,7 +237,7 @@ def resolve_target_from_ordinal_or_pronoun(
 ) -> Optional[Dict[str, Any]]:
     """
     Resolve target perfume from ordinal numbers or pronouns.
-    Returns {id: int, name: str} or None if resolution fails.
+    Returns {number: int, id: int, name: str} or None if resolution fails.
     """
     pronouns = ['이거', '그거', '이 향수', '저거']
     generic_terms = ['추천해줘', '비슷한거']
@@ -234,10 +247,11 @@ def resolve_target_from_ordinal_or_pronoun(
     is_generic = router_target_name in generic_terms or any(g in router_target_name for g in generic_terms)
 
     if ordinal:
-        if 1 <= ordinal <= len(save_refs):
-            return save_refs[ordinal - 1]
-        else:
-            return None
+        # number 필드를 기준으로 검색
+        for ref in save_refs:
+            if ref.get("number") == ordinal:
+                return ref
+        return None
 
     if is_pronoun or is_generic:
         if save_refs:

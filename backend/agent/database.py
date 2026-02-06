@@ -677,3 +677,43 @@ def clear_recommended_history(thread_id: str):
     finally:
         cur.close()
         release_recom_db_connection(conn)
+
+
+def get_perfumes_by_note(note_name: str, limit: int = 5) -> List[Dict]:
+    """
+    특정 노트가 포함된 향수 목록을 반환합니다.
+    
+    Args:
+        note_name: 노트 이름 (예: "Bergamot", "장미")
+        limit: 최대 반환 개수
+    
+    Returns:
+        향수 목록 [{perfume_id, name, brand}, ...]
+    """
+    conn = get_db_connection()
+    cur = conn.cursor(cursor_factory=RealDictCursor)
+    
+    try:
+        sql = """
+            SELECT DISTINCT 
+                p.perfume_id,
+                p.perfume_name as name,
+                p.perfume_brand as brand
+            FROM TB_PERFUME_BASIC_M p
+            JOIN TB_PERFUME_NOTES_M n ON p.perfume_id = n.perfume_id
+            WHERE n.note ILIKE %s
+            ORDER BY p.perfume_id
+            LIMIT %s
+        """
+        
+        cur.execute(sql, (f"%{note_name}%", limit))
+        results = cur.fetchall()
+        
+        return [dict(row) for row in results]
+        
+    except Exception as e:
+        print(f"   ⚠️ [DB] get_perfumes_by_note error: {e}", flush=True)
+        return []
+    finally:
+        cur.close()
+        release_db_connection(conn)
