@@ -42,23 +42,28 @@ jobs:
           AWS_TOKEN: ${{ secrets.AWS_REPO_TOKEN }}
           GH_TOKEN: ${{ secrets.AWS_REPO_TOKEN }}
         run: |
+          SOURCE_SHA=$(git rev-parse HEAD)
           git remote add deploy https://x-access-token:${AWS_TOKEN}@github.com/${DEPLOY_REPO}.git
+          git fetch deploy main
 
           TIMESTAMP=$(date +%Y%m%d-%H%M%S)
           BRANCH_NAME="sync-from-main-${TIMESTAMP}"
-          SHORT_SHA=$(git rev-parse --short HEAD)
+          git checkout -b "$BRANCH_NAME" deploy/main
+          git checkout "$SOURCE_SHA" -- .
+          comm -23 <(git ls-tree -r --name-only HEAD) <(git ls-tree -r --name-only $SOURCE_SHA) | xargs -r git rm -f
+          git rm -f .github/workflows/sync-to-aws-test.yml
+          git add -A
+          git diff --staged --quiet && echo "Already in sync." && exit 0
+          git commit -m "chore: sync from main $(echo $SOURCE_SHA | cut -c1-7)"
+          git push deploy "$BRANCH_NAME"
 
-          git checkout -b $BRANCH_NAME
-          git rm .github/workflows/sync-to-aws-test.yml
-          git commit -m "chore: remove sync workflow from deployment artifact"
-          git push deploy $BRANCH_NAME
           gh label create "auto-sync" --repo ${{ env.DEPLOY_REPO }} --color "0E8A16" --description "Auto Sync" || true
           gh label create "deployment" --repo ${{ env.DEPLOY_REPO }} --color "0075ca" --description "Deployment" || true
           gh pr create \
             --repo ${{ env.DEPLOY_REPO }} \
             --base main \
-            --head $BRANCH_NAME \
-            --title "🧪 Test sync: ${SHORT_SHA}" \
+            --head "$BRANCH_NAME" \
+            --title "🧪 Test sync: $(echo $SOURCE_SHA | cut -c1-7)" \
             --body "## 🧪 배포 전 테스트 동기화
 
           **소스**: [Scentence/Scentence](https://github.com/Scentence/Scentence)
