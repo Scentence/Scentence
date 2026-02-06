@@ -1,0 +1,86 @@
+name: Sync to AWS Test Repository
+
+on:
+  workflow_dispatch:  # 수동 실행만 (배포 전 테스트용)
+
+jobs:
+  # 1단계: CI 통과 확인
+  wait-for-ci:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Wait for other checks to complete
+        uses: lewagon/wait-on-check-action@v1.3.1
+        with:
+          ref: ${{ github.sha }}
+          repo-token: ${{ secrets.GITHUB_TOKEN }}
+          wait-interval: 10
+          running-workflow-name: 'wait-for-ci'
+
+  # 2단계: 테스트 레포에 PR 생성
+  create-pr-to-aws-test:
+    needs: wait-for-ci
+    runs-on: ubuntu-latest
+    env:
+      # 레포 변경 시 이 값만 수정
+      DEPLOY_REPO: Scentence/Scentence_aws_test
+    steps:
+      - name: Checkout main repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+      - name: Setup Git
+        run: |
+          git config --global user.name "github-actions[bot]"
+          git config --global user.email "github-actions[bot]@users.noreply.github.com"
+
+      - name: Add deploy remote and create PR
+        env:
+          AWS_TOKEN: ${{ secrets.AWS_REPO_TOKEN }}
+          GH_TOKEN: ${{ secrets.AWS_REPO_TOKEN }}
+        run: |
+          git remote add deploy https://x-access-token:${AWS_TOKEN}@github.com/${DEPLOY_REPO}.git
+
+          TIMESTAMP=$(date +%Y%m%d-%H%M%S)
+          BRANCH_NAME="sync-from-main-${TIMESTAMP}"
+          SHORT_SHA=$(git rev-parse --short HEAD)
+
+          git checkout -b $BRANCH_NAME
+          git rm .github/workflows/sync-to-aws-test.yml
+          git commit -m "chore: remove sync workflow from deployment artifact"
+          git push deploy $BRANCH_NAME
+          gh label create "auto-sync" --repo ${{ env.DEPLOY_REPO }} --color "0E8A16" --description "Auto Sync" || true
+          gh label create "deployment" --repo ${{ env.DEPLOY_REPO }} --color "0075ca" --description "Deployment" || true
+          gh pr create \
+            --repo ${{ env.DEPLOY_REPO }} \
+            --base main \
+            --head $BRANCH_NAME \
+            --title "🧪 Test sync: ${SHORT_SHA}" \
+            --body "## 🧪 배포 전 테스트 동기화
+
+          **소스**: [Scentence/Scentence](https://github.com/Scentence/Scentence)
+          **대상**: [Scentence/Scentence_aws_test](https://github.com/Scentence/Scentence_aws_test) (배포 전 테스트용)
+          **커밋**: \`${{ github.sha }}\`
+          **작성자**: @${{ github.actor }}
+          **시간**: $(date -u '+%Y-%m-%d %H:%M:%S UTC')
+
+          ---
+
+          ### ✅ 체크리스트
+          - [x] 메인 레포 CI 통과
+          - [ ] 테스트 환경 배포 검증
+          - [ ] 프로덕션 배포 여부 결정
+
+          ### 📝 최근 커밋
+          \`\`\`
+          ${{ github.event.head_commit.message }}
+          \`\`\`
+
+          **배포 전 테스트용 레포입니다. 머지 후 테스트 서버에 반영됩니다.**" \
+            --label "auto-sync" \
+            --label "deployment"
+
+          echo "✅ 테스트 레포 PR 생성 완료: https://github.com/${DEPLOY_REPO}/pulls"
