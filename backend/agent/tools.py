@@ -15,6 +15,7 @@ from .database import (
     lookup_note_by_vector,
     search_perfumes,
     rerank_perfumes_async,
+    get_perfumes_by_note,
 )
 from .expression_loader import ExpressionLoader
 from .schemas import (
@@ -459,9 +460,18 @@ def lookup_similar_perfumes_tool(user_input: str) -> Dict[str, Any] | List:
         Exception: DB 에러 또는 검색 실패
     """
 
+    # [Phase 0] 노트 이름인지 확인하고 변환
+    note_perfumes = get_perfumes_by_note(user_input)
+    if note_perfumes:
+        # 노트가 포함된 향수가 있으면 첫 번째 향수를 기준으로 검색
+        search_input = note_perfumes[0]['name']
+        print(f"📝 [Note Detected] '{user_input}' 노트가 포함된 향수로 검색: {search_input}", flush=True)
+    else:
+        search_input = user_input
+
     # [Phase 4] 파이프 구분자 파싱 (브랜드|영어명|한글명)
-    if "|" in user_input:
-        parts = user_input.split("|")
+    if "|" in search_input:
+        parts = search_input.split("|")
         target_brand = parts[0].strip() if len(parts) > 0 and parts[0] else ""
         target_name = parts[1].strip() if len(parts) > 1 and parts[1] else ""
         target_name_kr = parts[2].strip() if len(parts) > 2 and parts[2] else ""
@@ -471,7 +481,7 @@ def lookup_similar_perfumes_tool(user_input: str) -> Dict[str, Any] | List:
     else:
         # 기존 로직 (하위 호환): LLM으로 파싱
         normalization_prompt = f"""
-        User Input: "{user_input}"
+        User Input: "{search_input}"
         Task: Extract the Target Perfume Name user likes.
         Output JSON: {{"brand": "Brand", "name": "Name"}}
         """
@@ -485,8 +495,8 @@ def lookup_similar_perfumes_tool(user_input: str) -> Dict[str, Any] | List:
         except Exception as e:
             # LLM 변환 실패 시 원본 입력 사용
             target_brand = ""
-            target_name = user_input
-            search_name = user_input
+            target_name = search_input
+            search_name = search_input
 
     conn = get_db_connection()
     cur = conn.cursor(cursor_factory=RealDictCursor)
@@ -602,6 +612,56 @@ def lookup_similar_perfumes_tool(user_input: str) -> Dict[str, Any] | List:
         # SQL 완성 및 실행
         cur.execute(sql, params_target)
         results = cur.fetchall()
+
+        # [Fallback] 결과가 3개 미만이면 계열/브랜드 기반 Fallback 검색
+        if len(results) < 3:
+            print(f"   🔄 [Fallback] Similar perfumes insufficient ({len(results)} found), trying fallback...", flush=True)
+            
+            # 타겟 향수의 계열과 브랜드 조회
+            fallback_sql = """
+                SELECT 
+                    p.perfume_id,
+                    p.perfume_brand,
+                    p.perfume_name,
+                    p.img_link,
+                    COALESCE(
+                        (SELECT STRING_AGG(accord, ', ') 
+                         FROM TB_PERFUME_ACCORD_R 
+                         WHERE perfume_id = p.perfume_id),
+                        ''
+                    ) as accords
+                FROM TB_PERFUME_BASIC_M p
+                WHERE p.perfume_id != (SELECT perfume_id FROM TARGET_PERFUME)
+                  AND (
+                      p.perfume_brand = (SELECT perfume_brand FROM TARGET_PERFUME)
+                      OR EXISTS (
+                          SELECT 1 FROM TB_PERFUME_ACCORD_R a1
+                          JOIN TB_PERFUME_ACCORD_R a2 ON a1.accord = a2.accord
+                          WHERE a1.perfume_id = p.perfume_id
+                            AND a2.perfume_id = (SELECT perfume_id FROM TARGET_PERFUME)
+                      )
+                  )
+                ORDER BY 
+                    CASE WHEN p.perfume_brand = (SELECT perfume_brand FROM TARGET_PERFUME) 
+                         THEN 0 ELSE 1 END,
+                    p.perfume_id
+                LIMIT 5;
+            """
+            
+            try:
+                cur.execute(fallback_sql)
+                fallback_results = cur.fetchall()
+                
+                # 기존 결과와 병합 (중복 제거)
+                existing_ids = {r['perfume_id'] for r in results}
+                for r in fallback_results:
+                    if r['perfume_id'] not in existing_ids:
+                        results.append(r)
+                        existing_ids.add(r['perfume_id'])
+                        
+                print(f"   ✅ [Fallback] Total {len(results)} perfumes after fallback", flush=True)
+            except Exception as fallback_error:
+                print(f"   ⚠️ [Fallback] Fallback query failed: {fallback_error}", flush=True)
 
         if not results:
             return []  # 빈 리스트 반환
