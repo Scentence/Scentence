@@ -50,8 +50,10 @@ jobs:
           BRANCH_NAME="sync-from-main-${TIMESTAMP}"
           git checkout -b "$BRANCH_NAME" deploy/main
           git checkout "$SOURCE_SHA" -- .
+          comm -23 <(git ls-tree -r --name-only HEAD) <(git ls-tree -r --name-only $SOURCE_SHA) | xargs -r git rm -f
           git rm -f .github/workflows/sync-to-aws-test.yml
           git add -A
+          git diff --staged --quiet && echo "Already in sync." && exit 0
           git commit -m "chore: sync from main $(echo $SOURCE_SHA | cut -c1-7)"
           git push deploy "$BRANCH_NAME"
 
