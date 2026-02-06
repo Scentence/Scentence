@@ -19,9 +19,10 @@ interface Props {
     onUpdateStatus: (id: number, status: string) => void;
     onDelete: (id: number, rating: number) => void;
     onUpdatePreference: (id: number, preference: string) => void;
+    isKorean?: boolean;
 }
 
-export default function PerfumeDetailModal({ perfume, onClose, onUpdateStatus, onDelete, onUpdatePreference }: Props) {
+export default function PerfumeDetailModal({ perfume, onClose, onUpdateStatus, onDelete, onUpdatePreference, isKorean = false }: Props) {
     const [isDeleting, setIsDeleting] = useState(false);
 
     const handleDeleteWithRating = (rating: number) => {

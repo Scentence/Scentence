@@ -1,6 +1,7 @@
 "use client";
 
 import React from "react";
+import { motion, AnimatePresence } from "framer-motion";
 import { usePerfumeNetwork } from "./use-perfume-network";
 import NMapHeader from "./components/NMapHeader";
 import NMapFilters from "./components/NMapFilters";
@@ -10,6 +11,7 @@ import CardTriggerBanner from "@/app/perfume-network/shared/CardTriggerBanner";
 import LoadingOverlay from "@/app/perfume-network/shared/LoadingOverlay";
 import ScentCardModal from "@/app/perfume-network/ncard/ScentCardModal";
 import { NScentCard } from "@/app/perfume-network/ncard/NScentCard";
+import { useSession } from "next-auth/react";
 
 export default function NMapView({ sessionUserId }: { sessionUserId?: string | number }) {
   const {
@@ -25,6 +27,7 @@ export default function NMapView({ sessionUserId }: { sessionUserId?: string | n
     selectedOccasions, setSelectedOccasions,
     selectedGenders, setSelectedGenders,
     selectedPerfumeId, setSelectedPerfumeId,
+    selectedAccordName, setSelectedAccordName,
     memberId,
     displayLimit, setDisplayLimit,
     showMyPerfumesOnly, setShowMyPerfumesOnly,
@@ -43,11 +46,13 @@ export default function NMapView({ sessionUserId }: { sessionUserId?: string | n
     isSavingCard,
     saveSuccess,
     setSaveSuccess,
+    dismissTrigger,
     myPerfumeIds,
     myPerfumeFilters,
     interactionCount,
   } = usePerfumeNetwork(sessionUserId);
 
+  const { data: session } = useSession();
   const [showLoginPrompt, setShowLoginPrompt] = React.useState(false);
 
   // 어코드 클릭 시 지도 필터 업데이트 핸들러
@@ -69,11 +74,35 @@ export default function NMapView({ sessionUserId }: { sessionUserId?: string | n
     }, 0);
   };
 
+  const handleResetAccords = () => {
+    setSelectedAccords([]);
+    setSelectedPerfumeId(null);
+    setSelectedAccordName(null);
+    logActivity({ filter_changed: "분위기 필터 초기화" });
+  };
+
+  const handleResetDetailFilters = () => {
+    setSelectedBrands([]);
+    setSelectedSeasons([]);
+    setSelectedOccasions([]);
+    setSelectedGenders([]);
+    setSelectedPerfumeId(null);
+    setSelectedAccordName(null);
+    logActivity({ filter_changed: "세부 필터 초기화" });
+  };
+
   const isLoading = status === "전체 데이터 로드 중..." || status === "대기 중";
+
+  const [dimensions, setDimensions] = React.useState({ width: 1200, height: 800 });
+  React.useEffect(() => {
+    if (typeof window !== "undefined") {
+      setDimensions({ width: window.innerWidth, height: window.innerHeight });
+    }
+  }, []);
 
   return (
     <div className="min-h-screen bg-[#FDFBF8] text-black relative overflow-x-hidden">
-      <div className={`max-w-7xl mx-auto px-6 py-12 space-y-12 transition-all duration-500 ${showCardModal && generatedCard ? 'mr-[440px]' : ''}`}>
+      <div className={`max-w-[1800px] mx-auto px-4 pt-[96px] sm:pt-[120px] pb-12 space-y-8 transition-all duration-500 ${(selectedPerfumeId || selectedAccordName) ? 'lg:mr-[340px]' : ''}`}>
         <NMapHeader />
 
         {isLoading ? (
@@ -114,6 +143,8 @@ export default function NMapView({ sessionUserId }: { sessionUserId?: string | n
             logActivity={logActivity}
             showMyPerfumesOnly={showMyPerfumesOnly}
             myPerfumeFilters={myPerfumeFilters}
+            onResetAccords={handleResetAccords}
+            onResetDetailFilters={handleResetDetailFilters}
           />
         )}
 
@@ -127,71 +158,66 @@ export default function NMapView({ sessionUserId }: { sessionUserId?: string | n
 
           {isLoading ? (
             // 지도 영역 로딩 UI
-            <div className="grid gap-6 lg:grid-cols-[1fr_340px]">
-              <div className="bg-white rounded-3xl shadow-lg border border-[#E6DDCF] p-8 flex flex-col items-center justify-center min-h-[600px]">
-                <div className="relative w-24 h-24 mb-6">
-                  <div className="absolute inset-0 border-4 border-[#E6DDCF] rounded-full"></div>
-                  <div className="absolute inset-0 border-4 border-[#C8A24D] border-t-transparent rounded-full animate-spin"></div>
-                </div>
-                <h3 className="text-xl font-bold text-[#2E2B28] mb-2">향수 정보를 불러오는 중...</h3>
-                <p className="text-sm text-[#7A6B57] text-center max-w-md">
-                  수천 개의 향수 데이터를 분석하고 있어요.<br />
-                  잠시만 기다려주세요! 🌸
-                </p>
-                <div className="mt-8 flex gap-2">
-                  <div className="w-2 h-2 bg-[#C8A24D] rounded-full animate-bounce" style={{ animationDelay: '0s' }}></div>
-                  <div className="w-2 h-2 bg-[#C8A24D] rounded-full animate-bounce" style={{ animationDelay: '0.2s' }}></div>
-                  <div className="w-2 h-2 bg-[#C8A24D] rounded-full animate-bounce" style={{ animationDelay: '0.4s' }}></div>
-                </div>
+            <div className="bg-white rounded-3xl shadow-lg border border-[#E6DDCF] p-8 flex flex-col items-center justify-center min-h-[600px]">
+              <div className="relative w-24 h-24 mb-6">
+                <div className="absolute inset-0 border-4 border-[#E6DDCF] rounded-full"></div>
+                <div className="absolute inset-0 border-4 border-[#C8A24D] border-t-transparent rounded-full animate-spin"></div>
               </div>
-              <div className="bg-white rounded-3xl shadow-lg border border-[#E6DDCF] p-6 min-h-[600px]">
-                <div className="space-y-4 animate-pulse">
-                  <div className="h-6 w-3/4 bg-[#E6DDCF] rounded"></div>
-                  <div className="h-4 w-full bg-[#E6DDCF] rounded"></div>
-                  <div className="h-4 w-5/6 bg-[#E6DDCF] rounded"></div>
-                  <div className="h-48 w-full bg-[#E6DDCF] rounded-xl mt-6"></div>
-                  <div className="space-y-2 mt-6">
-                    <div className="h-4 w-full bg-[#E6DDCF] rounded"></div>
-                    <div className="h-4 w-4/5 bg-[#E6DDCF] rounded"></div>
-                  </div>
-                </div>
+              <h3 className="text-xl font-bold text-[#2E2B28] mb-2">향수 정보를 불러오는 중...</h3>
+              <p className="text-sm text-[#7A6B57] text-center max-w-md">
+                수천 개의 향수 데이터를 분석하고 있어요.<br />
+                잠시만 기다려주세요! 🌸
+              </p>
+              <div className="mt-8 flex gap-2">
+                <div className="w-2 h-2 bg-[#C8A24D] rounded-full animate-bounce" style={{ animationDelay: '0s' }}></div>
+                <div className="w-2 h-2 bg-[#C8A24D] rounded-full animate-bounce" style={{ animationDelay: '0.2s' }}></div>
+                <div className="w-2 h-2 bg-[#C8A24D] rounded-full animate-bounce" style={{ animationDelay: '0.4s' }}></div>
               </div>
             </div>
           ) : (
-            <div className="grid gap-6 lg:grid-cols-[1fr_340px]">
-              <NMapGraphSection
-                fullPayload={fullPayload}
-                labelsData={labelsData}
-                selectedPerfumeId={selectedPerfumeId}
-                setSelectedPerfumeId={setSelectedPerfumeId}
-                displayLimit={displayLimit}
-                setDisplayLimit={setDisplayLimit}
-                minSimilarity={minSimilarity}
-                setMinSimilarity={setMinSimilarity}
-                topAccords={topAccords}
-                selectedAccords={selectedAccords}
-                selectedBrands={selectedBrands}
-                selectedSeasons={selectedSeasons}
-                selectedOccasions={selectedOccasions}
-                selectedGenders={selectedGenders}
-                showMyPerfumesOnly={showMyPerfumesOnly}
-                myPerfumeIds={myPerfumeIds}
-                logActivity={logActivity}
-                memberId={memberId}
-                setShowLoginPrompt={setShowLoginPrompt}
-                setShowMyPerfumesOnly={setShowMyPerfumesOnly}
-              />
-              <NMapDetailPanel
-                selectedPerfumeId={selectedPerfumeId}
-                fullPayload={fullPayload}
-                labelsData={labelsData}
-                selectedAccords={selectedAccords}
-                logActivity={logActivity}
-              />
-            </div>
+            <NMapGraphSection
+              fullPayload={fullPayload}
+              labelsData={labelsData}
+              selectedPerfumeId={selectedPerfumeId}
+              setSelectedPerfumeId={setSelectedPerfumeId}
+              selectedAccordName={selectedAccordName}
+              setSelectedAccordName={setSelectedAccordName}
+              displayLimit={displayLimit}
+              setDisplayLimit={setDisplayLimit}
+              minSimilarity={minSimilarity}
+              setMinSimilarity={setMinSimilarity}
+              topAccords={topAccords}
+              selectedAccords={selectedAccords}
+              selectedBrands={selectedBrands}
+              selectedSeasons={selectedSeasons}
+              selectedOccasions={selectedOccasions}
+              selectedGenders={selectedGenders}
+              showMyPerfumesOnly={showMyPerfumesOnly}
+              myPerfumeIds={myPerfumeIds}
+              logActivity={logActivity}
+              memberId={memberId}
+              setShowLoginPrompt={setShowLoginPrompt}
+              setShowMyPerfumesOnly={setShowMyPerfumesOnly}
+            />
           )}
         </section>
       </div>
+
+      {/* 상세 패널 (고정 사이드 패널) */}
+      {(selectedPerfumeId || selectedAccordName) && (
+        <NMapDetailPanel
+          selectedPerfumeId={selectedPerfumeId}
+          selectedAccordName={selectedAccordName}
+          onClose={() => {
+            setSelectedPerfumeId(null);
+            setSelectedAccordName(null);
+          }}
+          fullPayload={fullPayload}
+          labelsData={labelsData}
+          selectedAccords={selectedAccords}
+          logActivity={logActivity}
+        />
+      )}
 
       {showLoginPrompt && (
         <div className="fixed inset-0 z-50 bg-black/40 backdrop-blur-sm flex items-center justify-center p-6">
@@ -211,90 +237,114 @@ export default function NMapView({ sessionUserId }: { sessionUserId?: string | n
         <CardTriggerBanner
           message={triggerMessage}
           onAccept={handleGenerateCard}
-          onDismiss={() => setShowCardTrigger(false)}
+          onDismiss={dismissTrigger}
         />
       )}
 
       {isGeneratingCard && <LoadingOverlay />}
 
-      {error && (
-        <div className="fixed bottom-24 left-1/2 transform -translate-x-1/2 z-50 max-w-md w-full mx-6 animate-fade-in">
-          <div className="bg-white border-2 border-red-300 rounded-2xl shadow-2xl p-6">
-            <div className="flex items-start gap-4">
-              <div className="flex-shrink-0 w-12 h-12 rounded-full bg-red-100 flex items-center justify-center"><span className="text-2xl">⚠️</span></div>
-              <div className="flex-1">
-                <h3 className="text-base font-bold text-red-700 mb-1">오류가 발생했습니다</h3>
-                <p className="text-sm text-red-600 leading-relaxed">{error}</p>
+      {
+        error && (
+          <div className="fixed bottom-24 left-1/2 transform -translate-x-1/2 z-50 max-w-md w-full mx-6 animate-fade-in">
+            <div className="bg-white border-2 border-red-300 rounded-2xl shadow-2xl p-6">
+              <div className="flex items-start gap-4">
+                <div className="flex-shrink-0 w-12 h-12 rounded-full bg-red-100 flex items-center justify-center"><span className="text-2xl">⚠️</span></div>
+                <div className="flex-1">
+                  <h3 className="text-base font-bold text-red-700 mb-1">오류가 발생했습니다</h3>
+                  <p className="text-sm text-red-600 leading-relaxed">{error}</p>
+                </div>
+                <button onClick={() => setError(null)} className="flex-shrink-0 w-8 h-8 rounded-full hover:bg-red-100 flex items-center justify-center transition-colors"><span className="text-xl">×</span></button>
               </div>
-              <button onClick={() => setError(null)} className="flex-shrink-0 w-8 h-8 rounded-full hover:bg-red-100 flex items-center justify-center transition-colors"><span className="text-xl">×</span></button>
-            </div>
-            <div className="mt-4 flex gap-2">
-              <button onClick={handleGenerateCard} className="flex-1 py-2.5 bg-gradient-to-r from-red-500 to-red-600 text-white rounded-xl font-semibold">다시 시도하기</button>
-              <button onClick={() => setError(null)} className="px-6 py-2.5 border-2 border-red-200 text-red-600 rounded-xl font-semibold">닫기</button>
+              <div className="mt-4 flex gap-2">
+                <button onClick={handleGenerateCard} className="flex-1 py-2.5 bg-gradient-to-r from-red-500 to-red-600 text-white rounded-xl font-semibold">다시 시도하기</button>
+                <button onClick={() => setError(null)} className="px-6 py-2.5 border-2 border-red-200 text-red-600 rounded-xl font-semibold">닫기</button>
+              </div>
             </div>
           </div>
-        </div>
-      )}
+        )
+      }
 
-      {/* 고정 버튼 (하단 우측) */}
-      <div className="fixed bottom-6 right-6 z-50 flex flex-col items-end gap-3">
-        {/* 클릭 카운트 표시 (개발 확인용) */}
-        <div className="bg-white/80 backdrop-blur-md border border-[#E2D7C5] px-3 py-1.5 rounded-full text-[10px] font-bold text-[#7A6B57] shadow-sm animate-fade-in">
+      {/* 고정 버튼 (하단 우측) - 드래그 가능하도록 motion.div로 감싸기 */}
+      <motion.div
+        drag
+        dragConstraints={{ left: -dimensions.width + 100, right: 0, top: -dimensions.height + 100, bottom: 0 }}
+        dragElastic={0.1}
+        className="fixed bottom-6 right-6 z-50 flex flex-col items-end gap-2 cursor-grab active:cursor-grabbing select-none"
+      >
+        {/* 클릭 카운트 표시 */}
+        <div className="bg-white/90 backdrop-blur-md border border-[#E2D7C5] px-2.5 py-1 rounded-full text-[9px] font-bold text-[#7A6B57] shadow-sm animate-fade-in flex items-center gap-1">
+          <span className="w-1.5 h-1.5 rounded-full bg-[#C8A24D] animate-pulse"></span>
           탐색 활동: <span className="text-[#C8A24D]">{interactionCount}</span>
         </div>
 
-        <button
-          onClick={() => cardTriggerReady ? handleGenerateCard() : alert("아직 정보가 충분하지 않아요. 관심있는 향이나 필터를 더 클릭해보세요!")}
-          className={`relative w-16 h-16 rounded-full shadow-2xl flex items-center justify-center text-3xl transition-all duration-300 group ${cardTriggerReady ? "bg-gradient-to-br from-[#6B4E71] via-[#8B6E8F] to-[#9B7EAC] animate-pulse-glow hover:scale-110" : "bg-gradient-to-br from-[#6B4E71] to-[#8B6E8F] hover:scale-105"}`}
-          title={generatedCard ? (cardTriggerReady ? "새로운 정보를 토대로 향 MBTI 다시 만들기" : "더 탐색하면 다시 만들 수 있어요") : (cardTriggerReady ? "나의 향 MBTI 확인하기 (준비 완료!)" : "더 많은 향기를 탐색해보세요")}
-        >
-          {cardTriggerReady && <div className="absolute inset-0 rounded-full bg-gradient-to-r from-transparent via-white to-transparent opacity-30 animate-shimmer"></div>}
-          <span className={`relative z-10 transition-transform duration-300 ${cardTriggerReady ? "group-hover:rotate-12" : "group-hover:scale-110"}`}>
-            {generatedCard ? "🔄" : "🫧"}
-          </span>
-          {cardTriggerReady && <span className="absolute -top-1 -right-1 w-5 h-5 bg-red-500 rounded-full flex items-center justify-center text-white text-xs font-bold animate-bounce">!</span>}
-        </button>
-        {cardTriggerReady && (
-          <div className="absolute bottom-full right-0 mb-3 bg-[#2E2B28] text-white px-4 py-2 rounded-lg text-xs font-medium whitespace-nowrap shadow-lg">
-            {generatedCard ? "새로운 분석 결과가 준비되었어요! 🎉" : "나의 향 MBTI 확인 준비 완료! 🎉"}
-          </div>
-        )}
-      </div>
+        <div className="relative">
+          <button
+            onClick={() => cardTriggerReady ? handleGenerateCard() : alert("아직 정보가 충분하지 않아요. 관심있는 향이나 필터를 더 클릭해보세요!")}
+            className={`relative w-12 h-12 sm:w-14 sm:h-14 rounded-full shadow-2xl flex items-center justify-center text-2xl sm:text-3xl transition-all duration-300 group ${cardTriggerReady ? "bg-gradient-to-br from-[#6B4E71] via-[#8B6E8F] to-[#9B7EAC] animate-pulse-glow hover:scale-110" : "bg-gradient-to-br from-[#6B4E71] to-[#8B6E8F] hover:scale-105"}`}
+            title={generatedCard ? (cardTriggerReady ? "새로운 정보를 토대로 향 MBTI 다시 만들기" : "더 탐색하면 다시 만들 수 있어요") : (cardTriggerReady ? "나의 향 MBTI 확인 준비 완료!" : "더 많은 향기를 탐색해보세요")}
+          >
+            {cardTriggerReady && <div className="absolute inset-0 rounded-full bg-gradient-to-r from-transparent via-white to-transparent opacity-30 animate-shimmer"></div>}
+            <span className={`relative z-10 transition-transform duration-300 ${cardTriggerReady ? "group-hover:rotate-12" : "group-hover:scale-110"}`}>
+              {generatedCard ? "🔄" : "🫧"}
+            </span>
+            {cardTriggerReady && <span className="absolute -top-0.5 -right-0.5 w-4 h-4 bg-red-500 rounded-full flex items-center justify-center text-white text-[10px] font-bold animate-bounce shadow-md">!</span>}
+          </button>
+
+          {cardTriggerReady && (
+            <motion.div
+              initial={{ scale: 0.8, opacity: 0, y: 10 }}
+              animate={{ scale: 1, opacity: 1, y: 0 }}
+              className="absolute bottom-full right-0 mb-3 bg-[#2E2B28] text-white px-3 py-1.5 rounded-xl text-[10px] font-medium whitespace-nowrap shadow-xl pointer-events-none"
+            >
+              <div className="flex items-center gap-1.5">
+                <span>🎉</span>
+                {generatedCard ? "새로운 분석 완료!" : "확인 준비 완료!"}
+              </div>
+              {/* 말풍선 꼬리 */}
+              <div className="absolute top-full right-5 -mt-px w-2 h-2 bg-[#2E2B28] rotate-45"></div>
+            </motion.div>
+          )}
+        </div>
+      </motion.div>
 
       {/* 향기 분석 사이드 패널 (기존 모달 대체) */}
-      {showCardModal && generatedCard && (
-        <NScentCard
-          card={generatedCard}
-          userName={memberId ? "Member" : "Guest"}
-          onClose={() => { setShowCardModal(false); setGeneratedCard(null); setGeneratedCardId(null); }}
-          onAccordClick={handleAccordClick}
-          onSave={memberId ? handleSaveCard : undefined}
-          isSaving={isSavingCard}
-        />
-      )}
+      {
+        showCardModal && generatedCard && (
+          <NScentCard
+            card={generatedCard}
+            userName={(session?.user as any)?.nickname || session?.user?.name || (memberId ? "Member" : "Guest")}
+            onClose={() => { setShowCardModal(false); setGeneratedCard(null); setGeneratedCardId(null); }}
+            onAccordClick={handleAccordClick}
+            onSave={memberId ? handleSaveCard : undefined}
+            isSaving={isSavingCard}
+          />
+        )
+      }
 
       {/* 카드 저장 성공 메시지 */}
-      {saveSuccess && (
-        <div className="fixed bottom-24 left-1/2 transform -translate-x-1/2 z-50 max-w-md w-full mx-6 animate-fade-in">
-          <div className="bg-white border-2 border-green-300 rounded-2xl shadow-2xl p-6">
-            <div className="flex items-start gap-4">
-              <div className="flex-shrink-0 w-12 h-12 rounded-full bg-green-100 flex items-center justify-center">
-                <span className="text-2xl">✅</span>
+      {
+        saveSuccess && (
+          <div className="fixed bottom-24 left-1/2 transform -translate-x-1/2 z-50 max-w-md w-full mx-6 animate-fade-in">
+            <div className="bg-white border-2 border-green-300 rounded-2xl shadow-2xl p-6">
+              <div className="flex items-start gap-4">
+                <div className="flex-shrink-0 w-12 h-12 rounded-full bg-green-100 flex items-center justify-center">
+                  <span className="text-2xl">✅</span>
+                </div>
+                <div className="flex-1">
+                  <h3 className="text-base font-bold text-green-700 mb-1">카드 저장 완료!</h3>
+                  <p className="text-sm text-green-600 leading-relaxed">나의 보관함에 성공적으로 저장되었습니다. 새로운 세션이 시작되었어요!</p>
+                </div>
+                <button
+                  onClick={() => setSaveSuccess(false)}
+                  className="flex-shrink-0 w-8 h-8 rounded-full hover:bg-green-100 flex items-center justify-center transition-colors"
+                >
+                  <span className="text-xl">×</span>
+                </button>
               </div>
-              <div className="flex-1">
-                <h3 className="text-base font-bold text-green-700 mb-1">카드 저장 완료!</h3>
-                <p className="text-sm text-green-600 leading-relaxed">나의 보관함에 성공적으로 저장되었습니다. 새로운 세션이 시작되었어요!</p>
-              </div>
-              <button
-                onClick={() => setSaveSuccess(false)}
-                className="flex-shrink-0 w-8 h-8 rounded-full hover:bg-green-100 flex items-center justify-center transition-colors"
-              >
-                <span className="text-xl">×</span>
-              </button>
             </div>
           </div>
-        </div>
-      )}
-    </div>
+        )
+      }
+    </div >
   );
 }

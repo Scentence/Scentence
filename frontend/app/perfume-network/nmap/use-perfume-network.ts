@@ -39,6 +39,7 @@ export function usePerfumeNetwork(sessionUserId?: string | number) {
   const [selectedOccasions, setSelectedOccasions] = useState<string[]>([]);
   const [selectedGenders, setSelectedGenders] = useState<string[]>([]);
   const [selectedPerfumeId, setSelectedPerfumeId] = useState<string | null>(null);
+  const [selectedAccordName, setSelectedAccordName] = useState<string | null>(null);
 
   const [memberId, setMemberId] = useState<string | null>(null);
   const [memberIdReady, setMemberIdReady] = useState(false);
@@ -57,6 +58,7 @@ export function usePerfumeNetwork(sessionUserId?: string | number) {
   const [error, setError] = useState<string | null>(null);
   const [isSavingCard, setIsSavingCard] = useState(false);
   const [saveSuccess, setSaveSuccess] = useState(false);
+  const [hasTriggerDismissed, setHasTriggerDismissed] = useState(false);
 
   // 1. 로그인 정보 로드 (localAuth 제거: 세션 ID만 사용)
   useEffect(() => {
@@ -155,7 +157,7 @@ export function usePerfumeNetwork(sessionUserId?: string | number) {
         const result = await response.json();
         console.log("[Activity Log] Server Response:", result);
         setCardTriggerReady(result.card_trigger_ready);
-        if (result.card_trigger_ready && !showCardTrigger) {
+        if (result.card_trigger_ready && !showCardTrigger && !hasTriggerDismissed) {
           setShowCardTrigger(true);
           setTriggerMessage(result.trigger_message || "탐색 데이터가 충분해요! 나의 향 MBTI를 확인해볼까요?");
         }
@@ -275,6 +277,24 @@ export function usePerfumeNetwork(sessionUserId?: string | number) {
     }
   };
 
+  const dismissTrigger = () => {
+    setShowCardTrigger(false);
+    setHasTriggerDismissed(true);
+  };
+
+  // [추가] 필터(어코드, 브랜드 등) 변경 시 배너 다시 뜨기 상태 초기화 (다시 찾기)
+  useEffect(() => {
+    setHasTriggerDismissed(false);
+  }, [
+    selectedAccords,
+    selectedBrands,
+    selectedSeasons,
+    selectedOccasions,
+    selectedGenders,
+    minSimilarity,
+    topAccords
+  ]);
+
   // [개선] 6. 라벨 및 필터 옵션 로드 (필터는 정적 파일 사용)
   useEffect(() => {
     const fetchLabels = async () => {
@@ -383,6 +403,7 @@ export function usePerfumeNetwork(sessionUserId?: string | number) {
     selectedOccasions, setSelectedOccasions,
     selectedGenders, setSelectedGenders,
     selectedPerfumeId, setSelectedPerfumeId,
+    selectedAccordName, setSelectedAccordName,
     memberId,
     displayLimit, setDisplayLimit,
     showMyPerfumesOnly, setShowMyPerfumesOnly,
@@ -401,6 +422,7 @@ export function usePerfumeNetwork(sessionUserId?: string | number) {
     isSavingCard,
     saveSuccess,
     setSaveSuccess,
+    dismissTrigger,
     myPerfumeIds,
     myPerfumeFilters,
     interactionCount,

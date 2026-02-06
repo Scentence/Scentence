@@ -29,6 +29,18 @@ export interface ScentCard {
   summary: string;
 }
 
+// [추가] NMap 요약(payload) 기반 카드 생성용 타입
+export interface GenerateCardPayload {
+  top_notes: string[];
+  middle_notes: string[];
+  base_notes: string[];
+  mood_keywords: string[];
+  analysis_text?: string;
+  representative_color?: string;
+  member_id?: number;
+  mbti?: string;
+}
+
 import { API_CONFIG } from '@/app/perfume-network/config';
 import axios from 'axios';
 
@@ -74,10 +86,16 @@ export const ncardService = {
 
   // 추가
   // 향수 맵 분석 데이터를 기반으로 실제 향기 카드를 생성하고 저장
-  generateAndSaveCard: async (sessionId: string): Promise<ScentCard> => {
+  generateAndSaveCard: async (payload: string | GenerateCardPayload): Promise<ScentCard> => {
     try {
-      // 세션 기반 카드 생성 API 호출 (세션에서 MBTI와 어코드 정보 자동 조회)
-      const response = await axios.post(`${API_CONFIG.BASE_URL}/session/${sessionId}/generate-card`);
+      if (typeof payload === "string") {
+        // 세션 기반 카드 생성 API 호출 (세션에서 MBTI와 어코드 정보 자동 조회)
+        const response = await axios.post(`${API_CONFIG.BASE_URL}/session/${payload}/generate-card`);
+        return response.data.card;
+      }
+
+      // 요약(payload) 기반 카드 생성 (정식 백엔드 엔드포인트)
+      const response = await axios.post(`${API_CONFIG.BASE_URL}/ncard/generate-from-summary`, payload);
       return response.data.card;
     } catch (error) {
       console.error('Failed to generate card:', error);

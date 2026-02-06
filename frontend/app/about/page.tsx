@@ -4,10 +4,10 @@ import { useState, useRef, useEffect } from "react";
 import Link from "next/link";
 import { useSession } from "next-auth/react";
 import PageLayout from "@/components/common/PageLayout";
-import { motion, useScroll, useTransform, useInView } from "framer-motion";
+import { motion, useScroll, useTransform, useInView, Variants } from "framer-motion";
 
 // [Animation Variants]
-const containerVariants = {
+const containerVariants: Variants = {
     hidden: { opacity: 0 },
     show: {
         opacity: 1,
@@ -18,7 +18,7 @@ const containerVariants = {
     }
 };
 
-const textRevealVariants = {
+const textRevealVariants: Variants = {
     hidden: { y: "110%", opacity: 0 },
     show: {
         y: "0%",
@@ -30,7 +30,7 @@ const textRevealVariants = {
     }
 };
 
-const fadeUpVariants = {
+const fadeUpVariants: Variants = {
     hidden: { opacity: 0, y: 50 },
     visible: {
         opacity: 1,

@@ -1,10 +1,9 @@
-import { NextResponse } from "next/server";
+import { NextResponse, NextRequest } from "next/server";
 import { getToken } from "next-auth/jwt";
 
 // BFF 게이트키퍼: 세션을 해독해 백엔드로 전달할 헤더를 주입
-export async function middleware(req: Request) {
-  const url = new URL(req.url);
-  const pathname = url.pathname;
+export async function middleware(req: NextRequest) {
+  const pathname = req.nextUrl.pathname;
 
   // API 경로만 적용 (NextAuth 내부 경로 제외)
   if (!pathname.startsWith("/api/")) return NextResponse.next();
