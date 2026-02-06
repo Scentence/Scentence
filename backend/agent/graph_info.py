@@ -85,31 +85,52 @@ def info_supervisor_node(state: InfoState):
     save_refs = extract_save_refs(chat_history)
     ordinal = parse_ordinal(user_query)
     
-    if ordinal and save_refs and 1 <= ordinal <= len(save_refs):
-        # Ordinal로 직접 타겟 결정 (LLM 호출 불필요)
-        target_id = save_refs[ordinal - 1]['id']
-        target_name = save_refs[ordinal - 1]['name']
+    if ordinal and save_refs:
+        # number 필드 기준으로 검색
+        target_ref = None
+        for ref in save_refs:
+            if ref.get("number") == ordinal:
+                target_ref = ref
+                break
         
-        # info_type 결정: "비슷한/추천/대체" 키워드 체크
-        if any(kw in user_query for kw in ['비슷', '추천', '대체', '같은']):
-            info_type = "similarity"
+        if target_ref:
+            # Ordinal로 직접 타겟 결정 (LLM 호출 불필요)
+            target_id = target_ref['id']
+            target_name = target_ref['name']
+            
+            # info_type 결정: "비슷한/추천/대체" 키워드 체크
+            if any(kw in user_query for kw in ['비슷', '추천', '대체', '같은']):
+                info_type = "similarity"
+            else:
+                info_type = "perfume"
+            
+            print(f"   ✅ [Ordinal] {ordinal}번째 향수 직접 선택: {target_name} (type: {info_type})", flush=True)
+            
+            return {
+                "info_type": info_type,
+                "target_id": target_id,
+                "target_name": target_name,
+                "target_brand": None,
+                "target_name_kr": None
+            }
         else:
-            info_type = "perfume"
-        
-        print(f"   ✅ [Ordinal] {ordinal}번째 향수 직접 선택: {target_name} (type: {info_type})", flush=True)
-        
-        return {
-            "info_type": info_type,
-            "target_id": target_id,
-            "target_name": target_name,
-            "target_brand": None,
-            "target_name_kr": None
-        }
+            fail_msg = f"지금 추천은 1~{len(save_refs)}번째까지 있어요. 원하시는 번호로 다시 말씀해 주세요."
+            return {"info_type": "unknown", "target_name": "unknown", "fail_msg": fail_msg}
     
     try:
         decision = ROUTER_LLM.with_structured_output(InfoRoutingDecision).invoke(
             messages
         )
+
+        # [Phase 1] 기본 지식 질문이면 save_refs 체크 없이 바로 처리
+        if decision.info_type in ["note", "accord", "ingredient"]:
+            print(f"   📚 Basic knowledge query detected: {decision.info_type}", flush=True)
+            return {
+                "info_type": decision.info_type,
+                "target_name": decision.target_name,
+                "target_brand": decision.target_brand,
+                "target_name_kr": decision.target_name_kr
+            }
 
         # [Phase 3] 브랜드 및 이중 언어 추출
         final_target = decision.target_name
