@@ -29,7 +29,7 @@ export interface ScentCard {
   summary: string;
 }
 
-// [추가] NMap 요약(payload) 기반 카드 생성용 타입
+// NMap 요약(payload) 기반 카드 생성용 타입
 export interface GenerateCardPayload {
   top_notes: string[];
   middle_notes: string[];
