@@ -196,7 +196,11 @@ const parseMessageContent = (text: string) => {
 };
 
 // ✅ 3. 최종 조립 (기존 유지)
-const MessageItem = ({ message }: { message: Message }) => {
+const MessageItem = ({ message, onScroll }: { message: Message; onScroll?: () => void }) => {
+    // 새 메시지 렌더링/스트리밍 갱신 시 스크롤 콜백 호출
+    useEffect(() => {
+        onScroll?.();
+    }, [message.text, message.isStreaming, onScroll]);
     if (message.role === "assistant" && !message.text) return null;
 
     return (

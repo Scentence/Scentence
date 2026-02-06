@@ -7,7 +7,14 @@ from typing import List, Dict, Optional, Any
 import psycopg2.extras
 from openai import OpenAI
 from scentmap.db import get_recom_db_connection, get_db_connection
-from scentmap.app.schemas.ncard_schemas import ScentCard, MBTIComponent, AccordDetail, ScentCardBase
+from scentmap.app.schemas.ncard_schemas import (
+    ScentCard,
+    MBTIComponent,
+    AccordDetail,
+    ScentCardBase,
+    GenerateFromSummaryRequest,
+)
+from scentmap.app.services.session_service import create_session, update_session_context
 from .scent_analysis_service import (
     analyze_scent_type, 
     get_accord_descriptions, 
@@ -265,6 +272,46 @@ class NCardService:
         except Exception as e:
             logger.error(f"카드 생성 실패: {e}", exc_info=True)
             raise
+
+    async def generate_card_from_summary(self, req: GenerateFromSummaryRequest) -> Dict:
+        """NMap 요약(payload) 기반 카드 생성 (정식 엔드포인트용)"""
+        # 1) 요약 노트(top/middle/base)를 합쳐 어코드 목록 구성
+        merged = []
+        seen = set()
+        for bucket in (req.top_notes, req.middle_notes, req.base_notes):
+            for acc in bucket:
+                if acc and acc not in seen:
+                    seen.add(acc)
+                    merged.append(acc)
+
+        if not merged:
+            raise ValueError("No accords in summary payload")
+
+        # 2) 세션 생성 및 컨텍스트 저장
+        session = create_session(member_id=req.member_id, mbti=req.mbti)
+        session_id = session["session_id"]
+
+        update_session_context(
+            session_id=session_id,
+            member_id=req.member_id,
+            mbti=req.mbti,
+            selected_accords=merged,
+        )
+
+        # 3) 기존 카드 생성 엔진 사용 (LLM 포함)
+        result = await self.generate_card(session_id, mbti=req.mbti, selected_accords=merged)
+
+        # 4) 요약 텍스트/키워드가 있으면 카드에 반영 (디자인 영향 최소)
+        if req.analysis_text:
+            result["card"]["summary"] = req.analysis_text
+        if req.mood_keywords:
+            existing = result["card"].get("keywords") or []
+            # mood_keywords를 앞에 두고 중복 제거
+            merged_keywords = list(dict.fromkeys(req.mood_keywords + existing))
+            result["card"]["keywords"] = merged_keywords
+
+        result["generation_method"] = "nmap_summary"
+        return result
 
     def _generate_mbti_components(self, axis_scores: Dict, scent_code: str) -> List[Dict]:
         """4축 점수 기반 MBTI 컴포넌트 생성 (E/I, S/N, T/F, J/P)"""

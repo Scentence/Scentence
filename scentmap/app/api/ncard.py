@@ -1,6 +1,10 @@
-from fastapi import APIRouter, Body, Query
+from fastapi import APIRouter, Body, Query, HTTPException
 from typing import List, Optional
-from scentmap.app.schemas.ncard_schemas import ScentCard
+from scentmap.app.schemas.ncard_schemas import (
+    ScentCard,
+    GenerateFromSummaryRequest,
+    GenerateFromSummaryResponse,
+)
 from scentmap.app.services.ncard_service import ncard_service
 
 """
@@ -48,3 +52,21 @@ async def generate_scent_card(
 async def save_card(card_id: int, member_id: int = Body(..., embed=True)):
     """생성된 카드를 회원 계정에 저장"""
     return ncard_service.save_member_card(str(card_id), member_id)
+
+
+@router.post("/generate-from-summary", response_model=GenerateFromSummaryResponse)
+async def generate_from_summary(req: GenerateFromSummaryRequest):
+    """NMap 요약(payload) 기반 카드 생성 (정식 버전)"""
+    try:
+        result = await ncard_service.generate_card_from_summary(req)
+        card = result["card"]
+        if result.get("card_id"):
+            card["id"] = int(result["card_id"])
+        return {
+            "card": card,
+            "session_id": result.get("session_id"),
+            "card_id": result.get("card_id"),
+            "generation_method": result.get("generation_method", "nmap_summary"),
+        }
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e)) from e

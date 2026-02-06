@@ -8,6 +8,8 @@ interface Props {
   labelsData: LabelsData | null;
   selectedPerfumeId: string | null;
   setSelectedPerfumeId: (id: string | null) => void;
+  selectedAccordName: string | null;
+  setSelectedAccordName: (name: string | null) => void;
   displayLimit: number;
   setDisplayLimit: (limit: number) => void;
   minSimilarity: number;
@@ -31,6 +33,8 @@ export default function NMapGraphSection({
   labelsData,
   selectedPerfumeId,
   setSelectedPerfumeId,
+  selectedAccordName,
+  setSelectedAccordName,
   displayLimit,
   setDisplayLimit,
   minSimilarity,
@@ -174,10 +178,10 @@ export default function NMapGraphSection({
         const statusBadge = getStatusBadge(n.register_status);
         return {
           id: n.id, label: isHov || isSel ? n.label : "", title: `${n.label}\n${fmtBrand(n.brand || "")}${statusBadge ? `\n내 향수 상태: ${statusBadge.label}` : ""}`,
-          shape: "circularImage", image: n.image, size: isSel ? 40 : (isSim || isHov ? 32 : (isBlur ? 20 : 26)),
-          borderWidth: isSel ? 8 : (isHov ? 7 : (isBlur ? 1 : 4)),
+          shape: "circularImage", image: n.image, size: isSel ? 80 : (isSim || isHov ? 65 : (isBlur ? 35 : 50)),
+          borderWidth: isSel ? 12 : (isHov ? 10 : (isBlur ? 3 : 8)),
           color: { border: isHov ? "#FFD700" : (isSel ? border : hexToRgba(border, isBlur ? 0.08 : 1)), background: isBlur ? "rgba(255, 251, 243, 0.15)" : "#FFFBF3" },
-          opacity: isBlur ? 0.08 : 1, font: { size: isSel ? 14 : 12, bold: true, background: "white", color: isSel ? "#C8A24D" : "#2E2B28" },
+          opacity: isBlur ? 0.08 : 1, font: { size: isSel ? 18 : 16, bold: true, background: "white", color: isSel ? "#C8A24D" : "#2E2B28" },
           fixed: isSel ? { x: true, y: true } : false, x: isSel ? 0 : undefined, y: isSel ? 0 : undefined,
         };
       }
@@ -185,16 +189,18 @@ export default function NMapGraphSection({
       const isBlurAccord = selectedPerfumeId && !isHigh;
       return {
         id: n.id, label: isBlurAccord ? "" : fmtAccord(n.label), title: `${fmtAccord(n.label)}\n${ACCORD_DESCRIPTIONS[n.label] || ""}`,
-        shape: "dot", size: isHigh ? 24 : (isBlurAccord ? 12 : 18),
+        shape: "dot", size: isHigh ? 50 : (isBlurAccord ? 25 : 35),
         color: { background: hexToRgba(getAccordColor(n.label), isHigh ? 0.7 : (isBlurAccord ? 0.03 : 0.1)) },
-        font: { size: isHigh ? 12 : 10, bold: isHigh }, opacity: isBlurAccord ? 0.15 : 1, mass: 5
+        font: { size: isHigh ? 16 : 14, bold: isHigh }, opacity: isBlurAccord ? 0.15 : 1, mass: 5
       };
     });
 
     const edges = displayPayload.edges.map(e => {
-      if (e.type === "SIMILAR_TO") return { from: e.from, to: e.to, hidden: true };
+      const edgeId = `${e.from}-${e.to}-${e.type}`;
+      if (e.type === "SIMILAR_TO") return { id: edgeId, from: e.from, to: e.to, hidden: true };
       const isFromSelected = selectedPerfumeId && (e.from === selectedPerfumeId || top5SimilarIds.has(e.from));
       return {
+        id: edgeId,
         from: e.from, to: e.to, value: e.weight, hidden: selectedPerfumeId && !isFromSelected,
         color: { color: "#9C8D7A", opacity: isFromSelected ? 0.3 : 0.08 }, width: isFromSelected ? 1.2 : 0.4, dashes: true, smooth: { type: "continuous" }
       };
@@ -205,7 +211,7 @@ export default function NMapGraphSection({
       edgesDataRef.current = new vis.DataSet(edges);
       networkRef.current = new vis.Network(containerRef.current, { nodes: nodesDataRef.current, edges: edgesDataRef.current }, {
         interaction: { hover: true, navigationButtons: true, tooltipDelay: 200 },
-        physics: { enabled: !freezeMotion, solver: "forceAtlas2Based", forceAtlas2Based: { gravitationalConstant: -140, centralGravity: 0.01, springLength: 240, springConstant: 0.04, damping: 0.9, avoidOverlap: 2.5 }, stabilization: { enabled: true, iterations: 200 } }
+        physics: { enabled: !freezeMotion, solver: "forceAtlas2Based", forceAtlas2Based: { gravitationalConstant: -200, centralGravity: 0.01, springLength: 240, springConstant: 0.04, damping: 0.4, avoidOverlap: 2.5 }, stabilization: false }
       });
       networkRef.current.on("click", (p: any) => {
         const nodeId = p.nodes[0];
@@ -215,18 +221,45 @@ export default function NMapGraphSection({
           const perfumeIdNum = nodeId.match(/\d+/)?.[0];
           if (perfumeIdNum) logActivity({ perfume_id: Number(perfumeIdNum) });
         } else if (nodeId && nodeId.startsWith("accord_")) {
-          // 어코드 노드 클릭 시
+          // 어코드 노드 클릭 시 상세 모달 표시
           const accordName = nodeId.replace("accord_", "");
+          setSelectedAccordName(accordName);
+          setSelectedPerfumeId(null);
           logActivity({ accord_selected: accordName });
-        } else setSelectedPerfumeId(null);
+        } else {
+          setSelectedPerfumeId(null);
+          setSelectedAccordName(null);
+        }
       });
+
+      // 초기 로드 시 화면에 맞게 줌 조정 (Stabilization이 꺼져 있으므로 약간의 지연 후 실행)
+      setTimeout(() => {
+        if (networkRef.current) {
+          networkRef.current.fit({
+            animation: { duration: 1000, easingFunction: 'easeInOutQuad' }
+          });
+        }
+      }, 500);
     } else {
       nodesDataRef.current.update(nodes);
-      const toRemove = (nodesDataRef.current.getIds() as string[]).filter(id => !nodes.some(n => n.id === id));
-      if (toRemove.length > 0) nodesDataRef.current.remove(toRemove);
-      edgesDataRef.current.clear(); edgesDataRef.current.add(edges);
+      const toRemoveNodes = (nodesDataRef.current.getIds() as string[]).filter(id => !nodes.some(n => n.id === id));
+      if (toRemoveNodes.length > 0) nodesDataRef.current.remove(toRemoveNodes);
+
+      edgesDataRef.current.update(edges);
+      const toRemoveEdges = (edgesDataRef.current.getIds() as string[]).filter(id => !edges.some(e => e.id === id));
+      if (toRemoveEdges.length > 0) edgesDataRef.current.remove(toRemoveEdges);
+
       if (selectedPerfumeId) try { networkRef.current.moveNode(selectedPerfumeId, 0, 0); } catch (e) { }
-      networkRef.current.setOptions({ physics: { enabled: !freezeMotion } });
+      networkRef.current.setOptions({ physics: { enabled: !freezeMotion, stabilization: false } });
+
+      // 데이터 업데이트 후에도 화면에 맞춤 (선택된 향수가 없을 때만)
+      if (!selectedPerfumeId) {
+        networkRef.current.fit({ animation: { duration: 500, easingFunction: 'easeInOutQuad' } });
+      }
+
+      if (!freezeMotion) {
+        networkRef.current.startSimulation();
+      }
     }
   }, [scriptReady, displayPayload, selectedPerfumeId, freezeMotion, hoveredSimilarPerfumeId]);
 
@@ -244,12 +277,12 @@ export default function NMapGraphSection({
             <input type="range" min="0" max="1" step="0.05" value={minSimilarity} onChange={e => setMinSimilarity(Number(e.target.value))} className="w-full h-1.5 accent-[#C8A24D]" />
           </div>
         </div>
-        <div className="flex justify-between items-center pt-4 border-t border-[#E6DDCF]">
+        <div className="flex flex-col sm:flex-row justify-between items-center gap-4 pt-4 border-t border-[#E6DDCF]">
           <span className="text-xs text-[#7A6B57]">{filteredPayload?.nodes.filter(n => n.type === "perfume").length || 0}개 향수 발견 • {displayLimit}개 표시 중</span>
-          <div className="flex gap-2">
-            <button onClick={() => networkRef.current?.fit()} className="h-9 px-4 rounded-full border border-[#E2D7C5] bg-white text-xs font-semibold">화면 맞춤</button>
-            <button onClick={() => setFreezeMotion(!freezeMotion)} className="h-9 px-4 rounded-full border border-[#E2D7C5] bg-white text-xs font-semibold">{freezeMotion ? "움직임 재개" : "움직임 멈춤"}</button>
-            <button onClick={() => { if (!memberId) setShowLoginPrompt(true); else setShowMyPerfumesOnly(!showMyPerfumesOnly); }} className={`h-9 px-4 rounded-full text-xs font-semibold border transition ${showMyPerfumesOnly ? "bg-[#C8A24D] text-white border-[#C8A24D]" : "bg-white text-[#7A6B57] border-[#E2D7C5] hover:bg-[#F8F4EC]"}`}>{showMyPerfumesOnly ? "전체 향수 보기" : "내 향수 보기"}</button>
+          <div className="flex flex-col sm:flex-row gap-2 w-full sm:w-auto justify-center sm:justify-end">
+            <button onClick={() => networkRef.current?.fit()} className="h-9 px-4 rounded-full border border-[#E2D7C5] bg-white text-xs font-semibold whitespace-nowrap">화면 맞춤</button>
+            <button onClick={() => setFreezeMotion(!freezeMotion)} className="h-9 px-4 rounded-full border border-[#E2D7C5] bg-white text-xs font-semibold whitespace-nowrap">{freezeMotion ? "움직임 재개" : "움직임 멈춤"}</button>
+            <button onClick={() => { if (!memberId) setShowLoginPrompt(true); else setShowMyPerfumesOnly(!showMyPerfumesOnly); }} className={`h-9 px-4 rounded-full text-xs font-semibold border transition whitespace-nowrap ${showMyPerfumesOnly ? "bg-[#C8A24D] text-white border-[#C8A24D]" : "bg-white text-[#7A6B57] border-[#E2D7C5] hover:bg-[#F8F4EC]"}`}>{showMyPerfumesOnly ? "전체 향수 보기" : "내 향수 보기"}</button>
           </div>
         </div>
       </div>

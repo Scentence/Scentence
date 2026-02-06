@@ -27,7 +27,7 @@ export default function PageLayout({
     const [isProfileMenuOpen, setIsProfileMenuOpen] = useState(false);
 
     return (
-        <div className={className}>
+        <div className={`${className} ${disableContentPadding ? 'h-[100dvh] overflow-hidden' : ''}`}>
             <Sidebar
                 isOpen={isNavOpen}
                 onClose={() => setIsNavOpen(false)}

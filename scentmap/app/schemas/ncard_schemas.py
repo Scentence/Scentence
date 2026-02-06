@@ -46,3 +46,20 @@ class ScentCard(ScentCardBase):
 
     class Config:
         from_attributes = True
+
+# [추가] NMap 요약(payload) 기반 카드 생성 요청/응답 스키마
+class GenerateFromSummaryRequest(BaseModel):
+    top_notes: List[str]
+    middle_notes: List[str]
+    base_notes: List[str]
+    mood_keywords: Optional[List[str]] = None
+    analysis_text: Optional[str] = None
+    representative_color: Optional[str] = None
+    member_id: Optional[int] = None
+    mbti: Optional[str] = None
+
+class GenerateFromSummaryResponse(BaseModel):
+    card: ScentCard
+    session_id: str
+    card_id: Optional[str] = None
+    generation_method: str

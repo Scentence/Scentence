@@ -215,7 +215,7 @@ export default function ChatPage() {
                 subTitle="AI Perfume Advisor"
                 sidebarContext="chat"
                 disableContentPadding={true}
-                className="flex flex-col h-[100dvh] bg-[#FDFBF8] overflow-hidden text-black relative font-sans"
+                className="flex flex-col h-[100dvh] bg-[#FDFBF8] overflow-hidden overscroll-behavior-none text-black relative font-sans"
             >
                 {/* 3. Content Wrapper (Sidebar + Main) */}
                 <div className="flex-1 flex relative overflow-hidden pt-[72px]">
@@ -282,7 +282,7 @@ export default function ChatPage() {
                             [수정] pt-5: 헤더와 너무 딱 붙지 않도록 상단에 살짝 여백 추가
                             [수정] no-scrollbar 제거: 스크롤바 노출 (사용자 요청)
                          */}
-                        <div className="flex-1 overflow-y-auto pt-5 pb-10 custom-scrollbar">
+                        <div className="flex-1 overflow-y-auto pt-5 pb-10 custom-scrollbar overscroll-behavior-contain touch-pan-y">
                             {/* [수정 가이드] 챗봇 출력창 너비 조절
                                 - max-w-5xl: 가장 표준적인 챗봇 너비 (약 1024px).
                                 - w-full: 반응형 대응
@@ -293,7 +293,7 @@ export default function ChatPage() {
                                     messages={messages}
                                     loading={loading}
                                     statusLog={statusLog}
-                                    messagesEndRef={messagesEndRef}
+                                    messagesEndRef={messagesEndRef as any}
                                     scrollToBottom={scrollToBottom}
                                     userName={displayName}
                                 />
@@ -306,7 +306,7 @@ export default function ChatPage() {
                             - w-full: 화면이 좁아질 때 유연하게 줄어듦
                             - px-4: 좌우 여백 확보
                         */}
-                        <div className="shrink-0 px-4 pb-5 z-30 w-[80%] max-w-3xl mx-auto">
+                        <div className="shrink-0 px-4 pb-5 z-30 w-full md:w-[80%] max-w-3xl mx-auto">
                             <form onSubmit={handleSubmit} className="relative bg-white rounded-[26px] shadow-sm border border-[#E5E4DE] focus-within:ring-1 focus-within:ring-[#D97757]/30 transition-all">
                                 <div className="flex items-center min-h-[50px] pr-2">
                                     <textarea

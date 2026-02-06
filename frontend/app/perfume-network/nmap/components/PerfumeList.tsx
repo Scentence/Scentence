@@ -18,7 +18,7 @@ const PerfumeList = ({ nodes, selectedId, onSelect }: PerfumeListProps) => {
 
   const getBrandLabel = (brand?: string) => (brand ? BRAND_LABELS[brand] || brand : 'Unknown Brand');
 
-  const getStatusBadge = (status?: string) => {
+  const getStatusBadge = (status?: string | null) => {
     if (!status) return null;
     const map: Record<string, { label: string; className: string }> = {
       HAVE: { label: '보유', className: 'bg-[#E8F0FF] text-[#3B5CC9]' },

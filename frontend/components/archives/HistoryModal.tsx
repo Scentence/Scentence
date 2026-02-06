@@ -15,8 +15,9 @@ interface Props {
     historyItems: MyPerfume[];
     onClose: () => void;
     onSelect: (perfume: MyPerfume) => void;
+    isKorean: boolean;
 }
-export default function HistoryModal({ historyItems, onClose, onSelect }: Props) {
+export default function HistoryModal({ historyItems, onClose, onSelect, isKorean }: Props) {
     return (
         <>
             {/* [Backdrop] 배경 블러 & 어둡게 처리 */}
@@ -69,6 +70,7 @@ export default function HistoryModal({ historyItems, onClose, onSelect }: Props)
                                             onClose();
                                             onSelect(p);
                                         }}
+                                        isKorean={isKorean}
                                     />
                                     {item.preference && (
                                         <div className="absolute top-2 right-2 bg-white/90 backdrop-blur-md w-8 h-8 flex items-center justify-center rounded-full text-sm shadow-sm border border-gray-100 z-10 pointer-events-none">
