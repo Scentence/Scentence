@@ -73,7 +73,7 @@ export default function NMapView({ sessionUserId }: { sessionUserId?: string | n
 
   return (
     <div className="min-h-screen bg-[#FDFBF8] text-black relative overflow-x-hidden">
-      <div className={`max-w-7xl mx-auto px-6 py-12 space-y-12 transition-all duration-500 ${showCardModal && generatedCard ? 'mr-[440px]' : ''}`}>
+      <div className={`max-w-7xl mx-auto px-4 sm:px-6 pt-2 sm:pt-12 pb-10 sm:pb-12 space-y-10 sm:space-y-12 transition-all duration-500 ${showCardModal && generatedCard ? 'mr-[440px]' : ''}`}>
         <NMapHeader />
 
         {isLoading ? (

@@ -99,7 +99,7 @@ export default function UserProfileMenu({ isOpen, onClose }: UserProfileMenuProp
     };
 
     // [HYPER-REALISTIC LIQUID GLASS BLOCK]
-    const liquidGlassBlock = "transform-gpu bg-gradient-to-br from-white/20 to-transparent border border-white/40 shadow-[inset_0_1px_1px_rgba(255,255,255,0.9),inset_0_15px_30px_rgba(255,255,255,0.15),inset_0_-2px_10px_rgba(0,0,0,0.05),0_20px_40px_-10px_rgba(0,0,0,0.2)] overflow-hidden rounded-[24px] md:rounded-[32px] will-change-transform backdrop-blur-[20px]";
+    const liquidGlassBlock = "transform-gpu bg-gradient-to-br from-white/80 to-white/40 border border-white/40 shadow-[inset_0_1px_1px_rgba(255,255,255,0.9),inset_0_15px_30px_rgba(255,255,255,0.15),inset_0_-2px_10px_rgba(0,0,0,0.05),0_20px_40px_-10px_rgba(0,0,0,0.2)] overflow-hidden rounded-[24px] md:rounded-[32px] will-change-transform backdrop-blur-md";
 
     return (
         <AnimatePresence>

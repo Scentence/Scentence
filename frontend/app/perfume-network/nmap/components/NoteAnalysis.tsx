@@ -1,4 +1,5 @@
 import React from 'react';
+import { Sparkles } from "lucide-react";
 import { ACCORD_COLORS, ACCORD_ICONS, ACCORD_LABELS } from '@/app/perfume-network/config';
 
 interface NoteAnalysisProps {
@@ -19,7 +20,7 @@ const NoteAnalysis = ({ topNotes, middleNotes, baseNotes }: NoteAnalysisProps) =
   ];
 
   const getAccordLabel = (acc: string) => ACCORD_LABELS[acc] || acc;
-  const getAccordIcon = (acc: string) => ACCORD_ICONS[acc] || '✨';
+  const getAccordIcon = (acc: string) => ACCORD_ICONS[acc] || Sparkles;
   const getAccordColor = (acc: string) => ACCORD_COLORS[acc] || '#E6DDCF';
 
   return (
@@ -47,20 +48,23 @@ const NoteAnalysis = ({ topNotes, middleNotes, baseNotes }: NoteAnalysisProps) =
             
             <div className="space-y-3">
               {group.notes.length > 0 ? (
-                group.notes.map((note) => (
-                  <div key={note} className="flex items-center justify-between group">
-                    <div className="flex items-center gap-2">
-                      <span className="text-lg">{getAccordIcon(note)}</span>
-                      <span className="text-sm font-medium text-[#5C5448] group-hover:text-[#C8A24D] transition-colors">
-                        {getAccordLabel(note)}
-                      </span>
+                group.notes.map((note) => {
+                  const Icon = getAccordIcon(note);
+                  return (
+                    <div key={note} className="flex items-center justify-between group">
+                      <div className="flex items-center gap-2">
+                        <Icon className="w-4 h-4 text-[#7A6B57]" strokeWidth={1.75} />
+                        <span className="text-sm font-medium text-[#5C5448] group-hover:text-[#C8A24D] transition-colors">
+                          {getAccordLabel(note)}
+                        </span>
+                      </div>
+                      <div 
+                        className="w-1.5 h-1.5 rounded-full opacity-0 group-hover:opacity-100 transition-opacity"
+                        style={{ backgroundColor: getAccordColor(note) }}
+                      />
                     </div>
-                    <div 
-                      className="w-1.5 h-1.5 rounded-full opacity-0 group-hover:opacity-100 transition-opacity"
-                      style={{ backgroundColor: getAccordColor(note) }}
-                    />
-                  </div>
-                ))
+                  );
+                })
               ) : (
                 <p className="text-xs text-[#E2D7C5] italic py-2">분석된 노트가 없습니다.</p>
               )}

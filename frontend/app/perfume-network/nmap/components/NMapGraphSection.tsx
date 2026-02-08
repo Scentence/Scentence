@@ -244,12 +244,12 @@ export default function NMapGraphSection({
             <input type="range" min="0" max="1" step="0.05" value={minSimilarity} onChange={e => setMinSimilarity(Number(e.target.value))} className="w-full h-1.5 accent-[#C8A24D]" />
           </div>
         </div>
-        <div className="flex justify-between items-center pt-4 border-t border-[#E6DDCF]">
+        <div className="flex flex-col sm:flex-row justify-between items-center gap-4 pt-4 border-t border-[#E6DDCF]">
           <span className="text-xs text-[#7A6B57]">{filteredPayload?.nodes.filter(n => n.type === "perfume").length || 0}개 향수 발견 • {displayLimit}개 표시 중</span>
-          <div className="flex gap-2">
-            <button onClick={() => networkRef.current?.fit()} className="h-9 px-4 rounded-full border border-[#E2D7C5] bg-white text-xs font-semibold">화면 맞춤</button>
-            <button onClick={() => setFreezeMotion(!freezeMotion)} className="h-9 px-4 rounded-full border border-[#E2D7C5] bg-white text-xs font-semibold">{freezeMotion ? "움직임 재개" : "움직임 멈춤"}</button>
-            <button onClick={() => { if (!memberId) setShowLoginPrompt(true); else setShowMyPerfumesOnly(!showMyPerfumesOnly); }} className={`h-9 px-4 rounded-full text-xs font-semibold border transition ${showMyPerfumesOnly ? "bg-[#C8A24D] text-white border-[#C8A24D]" : "bg-white text-[#7A6B57] border-[#E2D7C5] hover:bg-[#F8F4EC]"}`}>{showMyPerfumesOnly ? "전체 향수 보기" : "내 향수 보기"}</button>
+          <div className="flex flex-col sm:flex-row gap-2 w-full sm:w-auto justify-center sm:justify-end">
+            <button onClick={() => networkRef.current?.fit()} className="h-9 px-4 rounded-full border border-[#E2D7C5] bg-white text-xs font-semibold whitespace-nowrap">화면 맞춤</button>
+            <button onClick={() => setFreezeMotion(!freezeMotion)} className="h-9 px-4 rounded-full border border-[#E2D7C5] bg-white text-xs font-semibold whitespace-nowrap">{freezeMotion ? "움직임 재개" : "움직임 멈춤"}</button>
+            <button onClick={() => { if (!memberId) setShowLoginPrompt(true); else setShowMyPerfumesOnly(!showMyPerfumesOnly); }} className={`h-9 px-4 rounded-full text-xs font-semibold border transition whitespace-nowrap ${showMyPerfumesOnly ? "bg-[#C8A24D] text-white border-[#C8A24D]" : "bg-white text-[#7A6B57] border-[#E2D7C5] hover:bg-[#F8F4EC]"}`}>{showMyPerfumesOnly ? "전체 향수 보기" : "내 향수 보기"}</button>
           </div>
         </div>
       </div>

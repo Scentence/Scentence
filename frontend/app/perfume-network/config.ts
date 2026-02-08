@@ -1,4 +1,28 @@
 // 향수 네트워크 설정
+import type { LucideIcon } from "lucide-react";
+import {
+  PawPrint,
+  Waves,
+  LeafyGreen,
+  Citrus,
+  Milk,
+  Earth,
+  Flower2,
+  Feather,
+  Cherry,
+  CakeSlice,
+  Sprout,
+  Handbag,
+  MoonStar,
+  Cloud,
+  Droplet,
+  FlameKindling,
+  Flame,
+  Candy,
+  Beaker,
+  TreePine,
+  Wind,
+} from "lucide-react";
 
 // API 설정
 export const API_CONFIG = {
@@ -87,29 +111,29 @@ export const ACCORD_COLORS: Record<string, string> = {
   Fresh: "#8FB5FF",
 };
 
-export const ACCORD_ICONS: Record<string, string> = {
-  Animal: "🦁",
-  Aquatic: "🌊",
-  Chypre: "🍃",
-  Citrus: "🍊",
-  Creamy: "🥛",
-  Earthy: "🌍",
-  Floral: "🌸",
-  "Foug\\u00e8re": "🌿",
-  Fougère: "🌿",
-  Fruity: "🍓",
-  Gourmand: "🍰",
-  Green: "🌱",
-  Leathery: "👜",
-  Oriental: "🌺",
-  Powdery: "💨",
-  Resinous: "🍯",
-  Smoky: "💨",
-  Spicy: "🌶️",
-  Sweet: "🍬",
-  Synthetic: "🔬",
-  Woody: "🌲",
-  Fresh: "💨",
+export const ACCORD_ICONS: Record<string, LucideIcon> = {
+  Animal: PawPrint,
+  Aquatic: Waves,
+  Chypre: LeafyGreen,
+  Citrus: Citrus,
+  Creamy: Milk,
+  Earthy: Earth,
+  Floral: Flower2,
+  "Foug\\u00e8re": Feather,
+  Fougère: Feather,
+  Fruity: Cherry,
+  Gourmand: CakeSlice,
+  Green: Sprout,
+  Leathery: Handbag,
+  Oriental: MoonStar,
+  Powdery: Cloud,
+  Resinous: Droplet,
+  Smoky: FlameKindling,
+  Spicy: Flame,
+  Sweet: Candy,
+  Synthetic: Beaker,
+  Woody: TreePine,
+  Fresh: Wind,
 };
 
 export const ACCORD_LABELS: Record<string, string> = {

@@ -34,7 +34,7 @@ export default function NMapPage() {
 
   return (
     <PageLayout subTitle="PERFUME MAP">
-      <main className="pt-[72px]">
+      <main className="pt-14 sm:pt-[72px]">
         <NMapView sessionUserId={sessionUserId} />
       </main>
     </PageLayout>

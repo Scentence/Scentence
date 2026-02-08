@@ -1,6 +1,6 @@
 "use client";
 
-import { FormEvent, useState, useEffect, useRef, useCallback } from "react";
+import { FormEvent, useState, useEffect, useRef } from "react";
 import Link from "next/link";
 import { useSession } from "next-auth/react";
 import { useRouter } from "next/navigation";
@@ -67,18 +67,77 @@ export default function ChatPage() {
 
     const displayName = session?.user?.name || session?.user?.email?.split('@')[0] || "Guest";
 
-    const scrollToBottom = useCallback(() => {
-        if (messagesEndRef.current) {
-            messagesEndRef.current.scrollIntoView({ behavior: "smooth", block: "end" });
+    const chatContainerRef = useRef<HTMLDivElement>(null);
+    const [isUserScrolledUp, setIsUserScrolledUp] = useState(false);
+    const [showScrollButton, setShowScrollButton] = useState(false);
+
+    // [New] Add ArrowDown icon import manually if not present, or use SVG. 
+    // Since we can't see imports easily without context re-read, I'll allow Lucide import at top if I can, OR just use SVG inline.
+    // Given previous file view show Lucide imports like Home, Sparkles etc.. I assume I can add ArrowDown.
+    // But I will stick to inline SVG to be safe and avoid multi-file edits for imports.
+
+
+
+    // [Simple IsUserScrolledUp State Logic]
+    // No complex locking refs. Trust the state.
+    // If user scrolls up, state becomes true -> auto-scroll stops.
+    // If user is at bottom, state becomes false -> auto-scroll works.
+    const handleScroll = () => {
+        if (!chatContainerRef.current) return;
+        const { scrollTop, scrollHeight, clientHeight } = chatContainerRef.current;
+        const isAtBottom = scrollHeight - scrollTop - clientHeight <= 30; // 30px Threshold
+
+        // Only update state if it changes to prevent re-renders
+        if (isAtBottom && isUserScrolledUp) {
+            setIsUserScrolledUp(false);
+            setShowScrollButton(false);
+        } else if (!isAtBottom && !isUserScrolledUp) {
+            setIsUserScrolledUp(true);
+            setShowScrollButton(true);
         }
-    }, []);
+    };
+
+    const forceScrollToBottom = () => {
+        if (chatContainerRef.current) {
+            chatContainerRef.current.scrollTo({ top: chatContainerRef.current.scrollHeight, behavior: 'smooth' });
+            // Optimistic update
+            setIsUserScrolledUp(false);
+            setShowScrollButton(false);
+        }
+    };
 
     useEffect(() => {
-        // DOM 렌더링 딜레이를 고려해 약간 지연
-        setTimeout(() => scrollToBottom(), 50);
-    }, [messages, scrollToBottom]);
+        const lastMsg = messages[messages.length - 1];
+        if (!lastMsg) return;
+
+        const isUserMsg = lastMsg.role === 'user';
+
+        if (isUserMsg) {
+            // User's message: Always scroll to bottom (smooth)
+            setTimeout(() => {
+                if (chatContainerRef.current) {
+                    chatContainerRef.current.scrollTo({ top: chatContainerRef.current.scrollHeight, behavior: 'smooth' });
+                }
+            }, 50);
+        } else {
+            // Bot's message: Only scroll if user WAS at the bottom before this update.
+            if (!isUserScrolledUp) {
+                setTimeout(() => {
+                    if (chatContainerRef.current) {
+                        // Use instant behavior for rapid updates to avoid animation queue issues.
+                        chatContainerRef.current.scrollTo({ top: chatContainerRef.current.scrollHeight, behavior: 'instant' });
+                    }
+                }, 10);
+            }
+        }
+    }, [messages, isUserScrolledUp]);
+    // Note: isUserScrolledUp dependency ensures that if user scrolls down manually to bottom, it re-enables auto-scroll for NEXT render, 
+    // but doesn't necessarily trigger scroll immediately unless messages change. 
+    // Actually, if messages change, effect runs. It reads current isUserScrolledUp. 
+    // If isUserScrolledUp is true, it skips scroll. That's correct.
 
     if (!isMounted) return <div className="min-h-screen bg-[#FAF8F5]" />;
+
 
     const handleNewChat = () => {
         if (loading) return;
@@ -220,7 +279,13 @@ export default function ChatPage() {
                 {/* 3. Content Wrapper (Sidebar + Main) */}
                 <div className="flex-1 flex relative overflow-hidden pt-[72px]">
 
-                    {/* Left Chat Sidebar Container: 데스크탑에서 영역을 실제로 차지하여 본문을 밀어냄 */}
+                    {/* ... Sidebars ... (Skipping 50 lines to keep context manageable if needed, but tool replaces contiguous block) */}
+                    {/* Actually I need to replace from start of component to end of chat area to be safe? 
+                       No, I can target specific range. 
+                       I will replace the main chat area div.
+                    */}
+
+                    {/* Left Chat Sidebar Container */}
                     <div
                         className={`hidden md:block overflow-hidden transition-all duration-300 ease-in-out ${isSidebarOpen ? "w-64" : "w-0"}`}
                     >
@@ -232,11 +297,11 @@ export default function ChatPage() {
                             onSelectThread={handleSelectThread}
                             loading={loading}
                             showToggleButton={false}
-                            currentMemberId={memberId} // ✅ [수정] Page에서 파악한 MemberID 전달
+                            currentMemberId={memberId}
                         />
                     </div>
 
-                    {/* Mobile Sidebar: 모바일에서는 화면을 덮는 기존 방식 유지 */}
+                    {/* Mobile Sidebar */}
                     <div className="md:hidden">
                         <ChatSidebar
                             isOpen={isSidebarOpen}
@@ -246,20 +311,17 @@ export default function ChatPage() {
                             onSelectThread={handleSelectThread}
                             loading={loading}
                             showToggleButton={false}
-                            currentMemberId={memberId} // ✅ [수정] Page에서 파악한 MemberID 전달
+                            currentMemberId={memberId}
                         />
                     </div>
 
-                    {/* Main Chat Area: 
-                        - Mobile: translate-x-64 ensures the entire area (including toggle) slides right.
-                        - This creates an "open" feel without squishing the text.
-                    */}
+                    {/* Main Chat Area */}
                     <main
                         className={`flex-1 flex flex-col relative bg-[#FDFBF8] overflow-hidden gap-3 transition-transform duration-300 ease-in-out
                             ${isSidebarOpen ? "translate-x-64 md:translate-x-0" : "translate-x-0"}
                         `}
                     >
-                        {/* Mobile Shift Overlay: Clicking the shifted content closes the sidebar */}
+                        {/* Mobile Shift Overlay */}
                         {isSidebarOpen && (
                             <div
                                 className="absolute inset-0 z-[35] bg-black/[0.03] md:hidden cursor-pointer"
@@ -267,7 +329,7 @@ export default function ChatPage() {
                             />
                         )}
 
-                        {/* ✅ 사이드바 토글 버튼 (헤더 바로 아래 좌측) */}
+                        {/* Sidebar Toggle Button */}
                         <div className="absolute top-2 left-4 z-40">
                             <button onClick={() => setIsSidebarOpen(!isSidebarOpen)} className="p-1.5 md:p-2 hover:bg-gray-100 rounded-lg transition-colors text-black">
                                 <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor" className="w-5 h-5 md:w-6 md:h-6">
@@ -277,24 +339,34 @@ export default function ChatPage() {
                             </button>
                         </div>
 
-                        {/* Chat Messages: 너비를 제한하여 가독성을 높이고 입력창과 밸런스를 맞춤
-                            [수정] pb-10: 사용자가 직접 조정한 하단 여백 유지
-                            [수정] pt-5: 헤더와 너무 딱 붙지 않도록 상단에 살짝 여백 추가
-                            [수정] no-scrollbar 제거: 스크롤바 노출 (사용자 요청)
-                         */}
-                        <div className="flex-1 overflow-y-auto pt-5 pb-10 custom-scrollbar overscroll-behavior-contain touch-pan-y">
-                            {/* [수정 가이드] 챗봇 출력창 너비 조절
-                                - max-w-5xl: 가장 표준적인 챗봇 너비 (약 1024px).
-                                - w-full: 반응형 대응
-                                - mx-auto: 중앙 정렬
-                             */}
+                        {/* ✅ Smart Scroll-to-Bottom Button */}
+                        <div
+                            className={`absolute bottom-24 left-1/2 transform -translate-x-1/2 z-50 transition-all duration-300 ${showScrollButton ? 'opacity-100 translate-y-0' : 'opacity-0 translate-y-4 pointer-events-none'
+                                }`}
+                        >
+                            <button
+                                onClick={forceScrollToBottom}
+                                className="flex items-center gap-2 bg-black/80 backdrop-blur-md text-white px-4 py-2 rounded-full shadow-lg hover:bg-black transition-colors"
+                            >
+                                <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor" className="w-4 h-4">
+                                    <path strokeLinecap="round" strokeLinejoin="round" d="M19.5 8.25l-7.5 7.5-7.5-7.5" />
+                                </svg>
+                                <span className="text-xs font-medium">최신 메시지 보기</span>
+                            </button>
+                        </div>
+
+                        {/* Chat Messages */}
+                        <div
+                            ref={chatContainerRef}
+                            onScroll={handleScroll}
+                            className="flex-1 overflow-y-auto pt-5 pb-10 custom-scrollbar overscroll-behavior-contain touch-pan-y"
+                        >
                             <div className={`w-full max-w-5xl mx-auto px-4 ${messages.length === 0 ? "h-full" : ""}`}>
                                 <ChatList
                                     messages={messages}
                                     loading={loading}
                                     statusLog={statusLog}
                                     messagesEndRef={messagesEndRef as any}
-                                    scrollToBottom={scrollToBottom}
                                     userName={displayName}
                                 />
                             </div>
@@ -310,7 +382,7 @@ export default function ChatPage() {
                             <form onSubmit={handleSubmit} className="relative bg-white rounded-[26px] shadow-sm border border-[#E5E4DE] focus-within:ring-1 focus-within:ring-[#D97757]/30 transition-all">
                                 <div className="flex items-center min-h-[50px] pr-2">
                                     <textarea
-                                        className="flex-1 w-full bg-transparent py-3 pl-5 text-[#393939] placeholder:text-gray-400 outline-none resize-none text-sm md:text-base custom-scrollbar"
+                                        className="flex-1 w-full bg-transparent py-3 pl-5 text-[#393939] placeholder:text-gray-400 outline-none resize-none text-base custom-scrollbar"
                                         placeholder={placeholder}
                                         rows={1}
                                         value={inputValue}

@@ -3,6 +3,7 @@
  ************************************************************** */
 import React, { useState, useRef } from 'react';
 import { ScentCard } from './ncard-service';
+import { Sparkles } from "lucide-react";
 import { ACCORD_ICONS, ACCORD_COLORS, hexToRgba } from '../config';
 
 interface NScentCardProps {
@@ -42,7 +43,7 @@ export const NScentCard: React.FC<NScentCardProps> = ({ card, userName, onClose,
     );
     
     return {
-      icon: key ? ACCORD_ICONS[key] : '✨',
+      icon: key ? ACCORD_ICONS[key] : Sparkles,
       color: key ? ACCORD_COLORS[key] : theme.primary
     };
   };
@@ -305,10 +306,13 @@ export const NScentCard: React.FC<NScentCardProps> = ({ card, userName, onClose,
               <div style={{ flex: 1, display: 'grid', gridTemplateRows: 'repeat(3, auto)', gap: '10px' }}>
                 {card.recommends.slice(0, 3).map((acc, idx) => {
                   const info = getAccordInfo(acc.name);
+                  const Icon = info.icon;
                   return (
                     <div key={idx} style={{ backgroundColor: hexToRgba(info.color, 0.05), padding: '12px 15px', borderRadius: '15px', border: `1px solid ${hexToRgba(info.color, 0.2)}`, display: 'flex', flexDirection: 'column', justifyContent: 'center' }}>
                       <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '6px' }}>
-                        <span style={{ width: '28px', height: '28px', backgroundColor: info.color, borderRadius: '50%', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '16px', flexShrink: 0 }}>{info.icon}</span>
+                        <span style={{ width: '28px', height: '28px', backgroundColor: info.color, borderRadius: '50%', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+                          <Icon size={16} color="#fff" strokeWidth={1.8} />
+                        </span>
                         <span style={{ fontWeight: 800, fontSize: '15px', color: theme.text }}>{acc.name}</span>
                       </div>
                       <p style={{ fontSize: '12px', lineHeight: '1.4', color: theme.subText, marginBottom: '8px', wordBreak: 'break-word', overflowWrap: 'break-word' }}>{acc.reason}</p>
@@ -336,10 +340,13 @@ export const NScentCard: React.FC<NScentCardProps> = ({ card, userName, onClose,
               <div style={{ flex: 1, display: 'grid', gridTemplateRows: 'repeat(3, auto)', gap: '10px' }}>
                 {card.avoids.slice(0, 3).map((acc, idx) => {
                   const info = getAccordInfo(acc.name);
+                  const Icon = info.icon;
                   return (
                     <div key={idx} style={{ backgroundColor: hexToRgba(info.color, 0.05), padding: '12px 15px', borderRadius: '15px', border: `1px dashed ${hexToRgba(info.color, 0.3)}`, display: 'flex', flexDirection: 'column', justifyContent: 'center' }}>
                       <div style={{ fontWeight: 800, fontSize: '15px', marginBottom: '6px', display: 'flex', alignItems: 'center', gap: '8px', color: theme.text }}>
-                        <span style={{ width: '28px', height: '28px', backgroundColor: info.color, borderRadius: '50%', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '16px', flexShrink: 0 }}>{info.icon}</span>
+                        <span style={{ width: '28px', height: '28px', backgroundColor: info.color, borderRadius: '50%', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+                          <Icon size={16} color="#fff" strokeWidth={1.8} />
+                        </span>
                         {acc.name}
                       </div>
                       <p style={{ fontSize: '12px', lineHeight: '1.4', color: theme.subText, wordBreak: 'break-word', overflowWrap: 'break-word' }}>{acc.reason}</p>

@@ -1,5 +1,6 @@
 import React, { useState } from "react";
 import { FilterOptions, LabelsData } from "../types";
+import { Sparkles } from "lucide-react";
 import { ACCORD_ICONS, ACCORD_LABELS, BRAND_LABELS, SEASON_LABELS, OCCASION_LABELS, GENDER_TARGET_LABELS } from "../../config";
 
 interface Props {
@@ -69,18 +70,23 @@ export default function NMapFilters({
     <>
       {/* 1단계: 분위기 필터 */}
       <section className="space-y-4">
-        <div className="flex items-center justify-between">
+        <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
           <div>
-            <h2 className="text-lg font-semibold">어떤 분위기를 원하세요?</h2>
+            <h2 className="text-[15px] sm:text-lg font-semibold">어떤 분위기를 원하세요?</h2>
             <p className="text-xs text-[#7A6B57]">관심 있는 분위기를 선택해 원하는 향수를 찾아보세요.</p>
           </div>
-          <button onClick={() => setIsAccordFilterOpen(!isAccordFilterOpen)} className="h-9 px-4 rounded-full border border-[#E2D7C5] bg-white text-xs font-semibold">
+          <button
+            onClick={() => setIsAccordFilterOpen(!isAccordFilterOpen)}
+            className="h-8 px-3 rounded-full border border-[#E2D7C5] bg-white text-[11px] font-semibold whitespace-nowrap sm:h-9 sm:px-4 sm:text-xs"
+          >
             {isAccordFilterOpen ? "▲ 접기" : "▼ 펼치기"}
           </button>
         </div>
         {isAccordFilterOpen && (
           <div className="grid grid-cols-4 sm:grid-cols-5 md:grid-cols-7 lg:grid-cols-10 gap-3">
-            {effectiveFilterOptions.accords.map(acc => (
+            {effectiveFilterOptions.accords.map(acc => {
+              const Icon = ACCORD_ICONS[acc] ?? Sparkles;
+              return (
               <button key={acc} onClick={() => {
                 const isAdding = !selectedAccords.includes(acc);
                 const newAccords = isAdding ? [...selectedAccords, acc] : selectedAccords.filter(a => a !== acc);
@@ -93,24 +99,28 @@ export default function NMapFilters({
                 });
               }}
                 className={`relative aspect-square rounded-2xl border-2 transition-all ${selectedAccords.includes(acc) ? "border-[#C8A24D] bg-[#C8A24D]/10" : "border-[#E2D7C5] bg-white"}`}>
-                <div className="absolute inset-0 flex flex-col items-center justify-center p-2">
-                  <span className="text-2xl mb-1">{ACCORD_ICONS[acc] || "✨"}</span>
-                  <span className="text-[10px] font-semibold text-center">{fmtAccord(acc)}</span>
+                <div className="absolute inset-0 flex flex-col items-center justify-center p-1 sm:p-2">
+                  <Icon className="w-6 h-6 sm:w-7 sm:h-7 md:w-8 md:h-8 text-[#7A6B57] mb-1 sm:mb-2" strokeWidth={1.75} />
+                  <span className="text-[10px] sm:text-xs md:text-sm font-semibold text-center leading-tight">{fmtAccord(acc)}</span>
                 </div>
               </button>
-            ))}
+              );
+            })}
           </div>
         )}
       </section>
 
       {/* 2단계: 세부 필터 */}
       <section className="space-y-4">
-        <div className="flex items-center justify-between">
+        <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
           <div>
-            <h2 className="text-lg font-semibold">더 꼼꼼하게 찾아보고 싶다면</h2>
+            <h2 className="text-[15px] sm:text-lg font-semibold">더 꼼꼼하게 찾아보고 싶다면</h2>
             <p className="text-xs text-[#7A6B57]">브랜드와 계절, 특별한 순간을 더해 나만의 취향을 더 선명하게 찾아보세요.</p>
           </div>
-          <button onClick={() => setIsDetailFilterOpen(!isDetailFilterOpen)} className="h-9 px-4 rounded-full border border-[#E2D7C5] bg-white text-xs font-semibold">
+          <button
+            onClick={() => setIsDetailFilterOpen(!isDetailFilterOpen)}
+            className="h-8 px-3 rounded-full border border-[#E2D7C5] bg-white text-[11px] font-semibold whitespace-nowrap sm:h-9 sm:px-4 sm:text-xs"
+          >
             {isDetailFilterOpen ? "▲ 접기" : "▼ 펼치기"}
           </button>
         </div>

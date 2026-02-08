@@ -7,7 +7,6 @@ interface ChatListProps {
     messages: Message[];
     loading: boolean;
     messagesEndRef: RefObject<HTMLDivElement>;
-    scrollToBottom: () => void;
     statusLog?: string;
     userName?: string; // 사용자 이름 추가
 }
@@ -19,12 +18,7 @@ const GREETINGS = [
     "무엇을 도와드릴까요?"
 ];
 
-const ChatList = ({ messages, loading, messagesEndRef, scrollToBottom, statusLog, userName = "Guest" }: ChatListProps) => {
-    // 메시지나 로딩 상태, 로그 문구가 변할 때마다 바닥으로 자동 스크롤합니다.
-    useEffect(() => {
-        scrollToBottom();
-    }, [messages, loading, statusLog, scrollToBottom]);
-
+const ChatList = ({ messages, loading, messagesEndRef, statusLog, userName = "Guest" }: ChatListProps) => {
     // 인사말 회전 로직
     const [greetingIndex, setGreetingIndex] = useState(0);
 
@@ -86,7 +80,7 @@ const ChatList = ({ messages, loading, messagesEndRef, scrollToBottom, statusLog
             <div className="space-y-6">
                 {/* 기존 메시지 목록 렌더링 */}
                 {messages.map((msg, idx) => (
-                    <MessageItem key={idx} message={msg} onScroll={scrollToBottom} />
+                    <MessageItem key={idx} message={msg} />
                 ))}
 
                 {/* ✅ 실시간 진행 상태(statusLog) 표시 영역 */}
@@ -95,9 +89,9 @@ const ChatList = ({ messages, loading, messagesEndRef, scrollToBottom, statusLog
                         {/* 1. 백엔드에서 전달된 단계별 상태 로그 표시 */}
                         {statusLog ? (
                             <div className="flex justify-start animate-pulse px-1">
-                                <div className="flex items-center gap-2 rounded-2xl bg-white/50 border border-[#57B898]/30 px-4 py-2 text-xs text-[#57B898] shadow-sm backdrop-blur-sm">
-                                    {/* 회전하는 모래시계 아이콘 */}
-                                    <span className="animate-spin text-base">⏳</span>
+                                <div className="flex items-center gap-2 rounded-2xl bg-white/50 border border-gray-300 px-4 py-2 text-xs text-gray-700 shadow-sm backdrop-blur-sm">
+                                    {/* 향수 GIF 아이콘 */}
+                                    <img src="/perfume.gif" alt="Loading" className="w-5 h-5 object-contain" />
                                     {statusLog}
                                 </div>
                             </div>

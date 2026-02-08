@@ -86,8 +86,8 @@ export default function Header({
             {/* Right Actions */}
             <div className="flex items-center gap-3 md:gap-4">
                 {!isLoggedIn ? (
-                    <div className={`flex items-center gap-2 text-sm md:text-base font-medium ${theme === 'dark' ? 'text-white/70' : 'text-gray-400'}`}>
-                        <Link href="/login" className={`hover:text-${theme === 'dark' ? 'white' : 'black'} transition-colors font-semibold`}>Join us</Link>
+                    <div className={`flex items-center text-sm md:text-base font-medium`}>
+                        <Link href="/login" className={`flex items-center justify-center rounded-full px-4 py-1.5 bg-gradient-to-br from-white/20 to-transparent border border-white/40 shadow-sm transition-all hover:scale-105 active:scale-95 hover:bg-white/10 ${theme === 'dark' ? 'text-white' : 'text-gray-600'} font-semibold`}>Join us</Link>
                     </div>
                 ) : (
                     <div className="flex items-center gap-2 md:gap-3">
