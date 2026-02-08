@@ -215,6 +215,7 @@ export default function ChatPage() {
                 subTitle="AI Perfume Advisor"
                 sidebarContext="chat"
                 disableContentPadding={true}
+                disableScroll={true}
                 className="flex flex-col h-[100dvh] bg-[#FDFBF8] overflow-hidden overscroll-behavior-none text-black relative font-sans"
             >
                 {/* 3. Content Wrapper (Sidebar + Main) */}

@@ -13,6 +13,7 @@ interface PageLayoutProps {
     mainClassName?: string; // Main className passed to children wrapper if needed, or consumers handle it
     sidebarContext?: "home" | "chat"; // [NEW] Context for Sidebar
     disableContentPadding?: boolean; // [NEW] Disable default padding for full-screen apps like Chat
+    disableScroll?: boolean; // [NEW] Explicitly disable scrolling (e.g. for Chat)
 }
 
 export default function PageLayout({
@@ -22,12 +23,13 @@ export default function PageLayout({
     className = "min-h-screen bg-[#FDFBF8] text-[#2B2B2B] font-sans",
     sidebarContext = "home", // Default to home
     disableContentPadding = false, // Default to false (standard padding enabled)
+    disableScroll = false, // Default to false (scrolling enabled)
 }: PageLayoutProps) {
     const [isNavOpen, setIsNavOpen] = useState(false);
     const [isProfileMenuOpen, setIsProfileMenuOpen] = useState(false);
 
     return (
-        <div className={`${className} ${disableContentPadding ? 'h-[100dvh] overflow-hidden' : ''}`}>
+        <div className={`${className} ${disableScroll ? 'h-[100dvh] overflow-hidden' : ''}`}>
             <Sidebar
                 isOpen={isNavOpen}
                 onClose={() => setIsNavOpen(false)}

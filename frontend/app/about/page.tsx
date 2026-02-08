@@ -72,7 +72,7 @@ export default function AboutPage() {
     return (
         <PageLayout
             disableContentPadding={true}
-            className="min-h-screen bg-[#FDFBF8] text-black font-sans relative selection:bg-black selection:text-white overflow-x-hidden"
+            className="min-h-screen bg-[#FDFBF8] text-black font-sans relative selection:bg-black selection:text-white"
         >
 
             <main className="w-full">

@@ -147,7 +147,7 @@ export default function LoginPage() {
               <button
                 type="submit"
                 disabled={isSubmitting}
-                className={`w-full py-3 md:py-4 rounded-full font-bold text-lg transition-all shadow-md ${isSubmitting
+                className={`w-full h-[56px] md:h-[64px] rounded-full font-bold text-lg transition-all shadow-md flex items-center justify-center ${isSubmitting
                   ? "bg-gray-200 text-gray-400 cursor-not-allowed"
                   : "bg-black text-white hover:bg-gray-900 active:scale-[0.99]"
                   }`}
@@ -164,12 +164,13 @@ export default function LoginPage() {
               <button
                 type="button"
                 onClick={handleKakaoPopup}
-                className="w-full bg-[#FEE500] text-[#3c1e1e] py-3 md:py-4 rounded-full font-bold flex items-center justify-center gap-2.5 hover:bg-[#ffe812] transition-colors active:scale-[0.99] shadow-sm"
+                onClick={handleKakaoPopup}
+                className="w-full h-[56px] md:h-[64px] bg-[#FEE500] text-[#3c1e1e] rounded-full font-bold text-lg flex items-center justify-center gap-2.5 hover:bg-[#ffe812] transition-colors active:scale-[0.99] shadow-md"
               >
-                <svg viewBox="0 0 24 24" fill="currentColor" className="w-5 h-5">
+                <svg viewBox="0 0 24 24" fill="currentColor" className="w-6 h-6">
                   <path d="M12 3C5.373 3 0 7.373 0 12.768c0 3.657 2.456 6.829 6.138 8.49L4.2 24l5.414-3.606c.767.098 1.556.15 2.386.15 6.627 0 12-4.373 12-9.768C24 7.373 18.627 3 12 3z" />
                 </svg>
-                <span className="text-sm">카카오 로그인</span>
+                <span>카카오 로그인</span>
               </button>
             </div>
 
