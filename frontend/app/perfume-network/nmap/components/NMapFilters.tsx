@@ -87,23 +87,23 @@ export default function NMapFilters({
             {effectiveFilterOptions.accords.map(acc => {
               const Icon = ACCORD_ICONS[acc] ?? Sparkles;
               return (
-              <button key={acc} onClick={() => {
-                const isAdding = !selectedAccords.includes(acc);
-                const newAccords = isAdding ? [...selectedAccords, acc] : selectedAccords.filter(a => a !== acc);
-                setSelectedAccords(newAccords);
-                setSelectedPerfumeId(null);
-                // 어코드 추가/제거 시 즉시 DB 업데이트 (업데이트된 배열 직접 전달)
-                logActivity({
-                  accord_selected: isAdding ? acc : undefined,
-                  selected_accords_override: newAccords
-                });
-              }}
-                className={`relative aspect-square rounded-2xl border-2 transition-all ${selectedAccords.includes(acc) ? "border-[#C8A24D] bg-[#C8A24D]/10" : "border-[#E2D7C5] bg-white"}`}>
-                <div className="absolute inset-0 flex flex-col items-center justify-center p-1 sm:p-2">
-                  <Icon className="w-6 h-6 sm:w-7 sm:h-7 md:w-8 md:h-8 text-[#7A6B57] mb-1 sm:mb-2" strokeWidth={1.75} />
-                  <span className="text-[10px] sm:text-xs md:text-sm font-semibold text-center leading-tight">{fmtAccord(acc)}</span>
-                </div>
-              </button>
+                <button key={acc} onClick={() => {
+                  const isAdding = !selectedAccords.includes(acc);
+                  const newAccords = isAdding ? [...selectedAccords, acc] : selectedAccords.filter(a => a !== acc);
+                  setSelectedAccords(newAccords);
+                  setSelectedPerfumeId(null);
+                  // 어코드 추가/제거 시 즉시 DB 업데이트 (업데이트된 배열 직접 전달)
+                  logActivity({
+                    accord_selected: isAdding ? acc : undefined,
+                    selected_accords_override: newAccords
+                  });
+                }}
+                  className={`relative aspect-square rounded-2xl border-2 transition-all ${selectedAccords.includes(acc) ? "border-[#C8A24D] bg-[#C8A24D]/10" : "border-[#E2D7C5] bg-white"}`}>
+                  <div className="absolute inset-0 flex flex-col items-center justify-center p-1 sm:p-2">
+                    <Icon className="w-7 h-7 sm:w-8 sm:h-8 md:w-9 md:h-9 text-[#7A6B57] mb-1 sm:mb-2" strokeWidth={1.75} />
+                    <span className="text-[10px] sm:text-xs md:text-sm font-semibold text-center leading-tight">{fmtAccord(acc)}</span>
+                  </div>
+                </button>
               );
             })}
           </div>
@@ -141,9 +141,9 @@ export default function NMapFilters({
                   <div className="flex-1 overflow-y-auto">
                     {group.options.map(opt => (
                       <label key={opt} className="flex items-center gap-2 px-2 py-1.5 hover:bg-[#F5F2EA] text-sm cursor-pointer">
-                        <input type="checkbox" checked={group.selected.includes(opt)} onChange={() => { 
-                          group.setter((prev: string[]) => prev.includes(opt) ? prev.filter(v => v !== opt) : [...prev, opt]); 
-                          setSelectedPerfumeId(null); 
+                        <input type="checkbox" checked={group.selected.includes(opt)} onChange={() => {
+                          group.setter((prev: string[]) => prev.includes(opt) ? prev.filter(v => v !== opt) : [...prev, opt]);
+                          setSelectedPerfumeId(null);
                           logActivity({ filter_changed: group.label });
                         }} className="accent-[#C8A24D]" />
                         <span className="text-xs">{formatLabelWithEnglishPair(opt, group.formatter)}</span>

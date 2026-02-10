@@ -1,7 +1,7 @@
 "use client";
 
 import React from 'react';
-import { motion, AnimatePresence } from 'framer-motion';
+import { motion } from 'framer-motion';
 
 interface CardTriggerBannerProps {
   message: string;
@@ -41,7 +41,12 @@ const CardTriggerBanner = ({ message, onAccept, onDismiss }: CardTriggerBannerPr
                 onClick={onAccept}
                 className="flex-1 py-2.5 rounded-xl bg-white text-[#2E2B28] text-xs font-bold hover:bg-[#F8F4EC] transition-colors active:scale-95"
               >
-                향 MBTI 확인하기
+                <span className="block sm:hidden leading-tight text-center">
+                  향 MBTI
+                  <br />
+                  확인하기
+                </span>
+                <span className="hidden sm:inline">향 MBTI 확인하기</span>
               </button>
               <button
                 onClick={onDismiss}

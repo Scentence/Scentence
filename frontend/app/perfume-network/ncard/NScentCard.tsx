@@ -9,18 +9,21 @@ import { ACCORD_ICONS, ACCORD_COLORS, hexToRgba } from '../config';
 interface NScentCardProps {
   card: ScentCard;
   userName?: string; // 회원 이름 (미구현)
+  userImageUrl?: string | null;
   onClose?: () => void; // 패널 닫기 콜백
   onAccordClick?: (accordName: string) => void; // 어코드 클릭 콜백
   onSave?: () => void; // 카드 저장 콜백
   isSaving?: boolean; // 저장 중 상태
 }
 
-export const NScentCard: React.FC<NScentCardProps> = ({ card, userName, onClose, onAccordClick, onSave, isSaving = false }) => {
+export const NScentCard: React.FC<NScentCardProps> = ({ card, userName, userImageUrl, onClose, onAccordClick, onSave, isSaving = false }) => {
   const [currentPage, setCurrentPage] = useState(0);
   const [isOpen, setIsOpen] = useState(true); // 패널 열림 상태
   const [isLiked, setIsLiked] = useState(false); // 하트 상태
   const scrollRef = useRef<HTMLDivElement>(null);
   const cardRef = useRef<HTMLDivElement>(null);
+  const baseUserName = (userName || 'Guest').replace(/\s*님$/, '').trim() || 'Guest';
+  const displayUserName = `${baseUserName} 님`;
 
   // 메인 컬러 테마
   const theme = {
@@ -189,12 +192,24 @@ export const NScentCard: React.FC<NScentCardProps> = ({ card, userName, onClose,
               display: 'flex',
               alignItems: 'center',
               justifyContent: 'center',
-              fontSize: '12px'
+              fontSize: '12px',
+              overflow: 'hidden'
             }}>
-              👤
+              {userImageUrl ? (
+                <img
+                  src={userImageUrl}
+                  alt="Profile"
+                  style={{ width: '100%', height: '100%', objectFit: 'cover' }}
+                  onError={(e) => {
+                    e.currentTarget.style.display = 'none';
+                  }}
+                />
+              ) : (
+                "👤"
+              )}
             </div>
           </div>
-          <span style={{ fontSize: '14px', fontWeight: 700 }}>{userName || 'Guest'}</span>
+          <span style={{ fontSize: '14px', fontWeight: 700 }}>{displayUserName}</span>
         </div>
         <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
           <div style={{ fontSize: '18px', cursor: 'pointer', color: '#262626' }}>•••</div>

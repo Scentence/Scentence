@@ -9,6 +9,7 @@ interface PageLayoutProps {
     children: React.ReactNode;
     subTitle?: string;
     isTransparent?: boolean;
+    headerTheme?: "light" | "dark";
     className?: string; // Wrapper className
     mainClassName?: string; // Main className passed to children wrapper if needed, or consumers handle it
     sidebarContext?: "home" | "chat"; // [NEW] Context for Sidebar
@@ -19,6 +20,7 @@ export default function PageLayout({
     children,
     subTitle,
     isTransparent = false,
+    headerTheme = "light",
     className = "min-h-screen bg-[#FDFBF8] text-[#2B2B2B] font-sans",
     sidebarContext = "home", // Default to home
     disableContentPadding = false, // Default to false (standard padding enabled)
@@ -59,6 +61,7 @@ export default function PageLayout({
                 isProfileMenuOpen={isProfileMenuOpen} // Pass state
                 subTitle={subTitle}
                 isTransparent={isTransparent}
+                theme={headerTheme}
             />
 
             {disableContentPadding ? (

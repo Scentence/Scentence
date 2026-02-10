@@ -1,6 +1,7 @@
 "use client";
 
 import React from "react";
+import { useSession } from "next-auth/react";
 import { usePerfumeNetwork } from "./use-perfume-network";
 import NMapHeader from "./components/NMapHeader";
 import NMapFilters from "./components/NMapFilters";
@@ -12,6 +13,7 @@ import ScentCardModal from "@/app/perfume-network/ncard/ScentCardModal";
 import { NScentCard } from "@/app/perfume-network/ncard/NScentCard";
 
 export default function NMapView({ sessionUserId }: { sessionUserId?: string | number }) {
+  const { data: session } = useSession();
   const {
     fullPayload,
     labelsData,
@@ -29,7 +31,8 @@ export default function NMapView({ sessionUserId }: { sessionUserId?: string | n
     displayLimit, setDisplayLimit,
     showMyPerfumesOnly, setShowMyPerfumesOnly,
     scentSessionId,
-    showCardTrigger, setShowCardTrigger,
+    showCardTrigger,
+    handleDismissCardTrigger,
     triggerMessage,
     isGeneratingCard,
     showCardModal, setShowCardModal,
@@ -49,6 +52,21 @@ export default function NMapView({ sessionUserId }: { sessionUserId?: string | n
   } = usePerfumeNetwork(sessionUserId);
 
   const [showLoginPrompt, setShowLoginPrompt] = React.useState(false);
+  const [isKorean, setIsKorean] = React.useState(true);
+  const [highlightedSimilarPerfumeId, setHighlightedSimilarPerfumeId] = React.useState<string | null>(null);
+  const [profileNickname, setProfileNickname] = React.useState<string | null>(null);
+  const [profileImageUrl, setProfileImageUrl] = React.useState<string | null>(null);
+  const [mobileSheetOffsetY, setMobileSheetOffsetY] = React.useState(0);
+  const [isDraggingSheet, setIsDraggingSheet] = React.useState(false);
+  const sheetTouchStartYRef = React.useRef<number | null>(null);
+  const sessionFallbackName = session?.user?.name || session?.user?.email?.split("@")[0] || null;
+  const sessionFallbackImage = session?.user?.image || null;
+  const normalizedSessionFallbackName = React.useMemo(() => {
+    const name = sessionFallbackName?.trim();
+    if (!name) return null;
+    if (/^(member|user|guest)$/i.test(name)) return null;
+    return name;
+  }, [sessionFallbackName]);
 
   // 어코드 클릭 시 지도 필터 업데이트 핸들러
   const handleAccordClick = (accordName: string) => {
@@ -71,9 +89,76 @@ export default function NMapView({ sessionUserId }: { sessionUserId?: string | n
 
   const isLoading = status === "전체 데이터 로드 중..." || status === "대기 중";
 
+  React.useEffect(() => {
+    if (!selectedPerfumeId) {
+      setMobileSheetOffsetY(0);
+      setIsDraggingSheet(false);
+      sheetTouchStartYRef.current = null;
+    }
+  }, [selectedPerfumeId]);
+
+  React.useEffect(() => {
+    setHighlightedSimilarPerfumeId(null);
+  }, [selectedPerfumeId]);
+
+  React.useEffect(() => {
+    if (!memberId) {
+      setProfileNickname(null);
+      setProfileImageUrl(null);
+      return;
+    }
+
+    let isCancelled = false;
+    fetch(`/api/users/profile/${memberId}`, { cache: "no-store" })
+      .then((res) => (res.ok ? res.json() : null))
+      .then((data) => {
+        if (isCancelled) return;
+        setProfileNickname(data?.nickname || null);
+
+        const rawUrl = data?.profile_image_url;
+        if (!rawUrl) {
+          setProfileImageUrl(null);
+          return;
+        }
+        const finalUrl =
+          rawUrl.startsWith("http") || rawUrl.startsWith("/uploads")
+            ? rawUrl
+            : `/api${rawUrl}`;
+        setProfileImageUrl(finalUrl);
+      })
+      .catch(() => {
+        if (isCancelled) return;
+        setProfileImageUrl(null);
+      });
+
+    return () => {
+      isCancelled = true;
+    };
+  }, [memberId]);
+
+  const handleSheetTouchStart = (e: React.TouchEvent<HTMLDivElement>) => {
+    sheetTouchStartYRef.current = e.touches[0]?.clientY ?? null;
+    setIsDraggingSheet(true);
+  };
+
+  const handleSheetTouchMove = (e: React.TouchEvent<HTMLDivElement>) => {
+    if (sheetTouchStartYRef.current === null) return;
+    const deltaY = e.touches[0].clientY - sheetTouchStartYRef.current;
+    setMobileSheetOffsetY(Math.max(0, deltaY));
+  };
+
+  const handleSheetTouchEnd = () => {
+    if (sheetTouchStartYRef.current === null) return;
+    const shouldClose = mobileSheetOffsetY > 90;
+    sheetTouchStartYRef.current = null;
+    setIsDraggingSheet(false);
+    setMobileSheetOffsetY(0);
+    if (shouldClose) setSelectedPerfumeId(null);
+  };
+
   return (
     <div className="min-h-screen bg-[#FDFBF8] text-black relative overflow-x-hidden">
-      <div className={`max-w-7xl mx-auto px-4 sm:px-6 pt-2 sm:pt-12 pb-10 sm:pb-12 space-y-10 sm:space-y-12 transition-all duration-500 ${showCardModal && generatedCard ? 'mr-[440px]' : ''}`}>
+      <div className={`max-w-7xl mx-auto px-3 sm:px-6 pt-0 sm:pt-12 pb-10 sm:pb-12 space-y-2 sm:space-y-12 transition-all duration-500 ${showCardModal && generatedCard ? 'mr-[440px]' : ''}`}>
         <NMapHeader />
 
         {isLoading ? (
@@ -127,7 +212,7 @@ export default function NMapView({ sessionUserId }: { sessionUserId?: string | n
 
           {isLoading ? (
             // 지도 영역 로딩 UI
-            <div className="grid gap-6 lg:grid-cols-[1fr_340px]">
+            <div className="grid gap-6 lg:grid-cols-[minmax(0,1fr)_380px]">
               <div className="bg-white rounded-3xl shadow-lg border border-[#E6DDCF] p-8 flex flex-col items-center justify-center min-h-[600px]">
                 <div className="relative w-24 h-24 mb-6">
                   <div className="absolute inset-0 border-4 border-[#E6DDCF] rounded-full"></div>
@@ -158,12 +243,15 @@ export default function NMapView({ sessionUserId }: { sessionUserId?: string | n
               </div>
             </div>
           ) : (
-            <div className="grid gap-6 lg:grid-cols-[1fr_340px]">
+            <div className="grid gap-6 lg:grid-cols-[minmax(0,1fr)_380px]">
               <NMapGraphSection
                 fullPayload={fullPayload}
                 labelsData={labelsData}
+                isKorean={isKorean}
+                setIsKorean={setIsKorean}
                 selectedPerfumeId={selectedPerfumeId}
                 setSelectedPerfumeId={setSelectedPerfumeId}
+                highlightedSimilarPerfumeId={highlightedSimilarPerfumeId}
                 displayLimit={displayLimit}
                 setDisplayLimit={setDisplayLimit}
                 minSimilarity={minSimilarity}
@@ -181,17 +269,59 @@ export default function NMapView({ sessionUserId }: { sessionUserId?: string | n
                 setShowLoginPrompt={setShowLoginPrompt}
                 setShowMyPerfumesOnly={setShowMyPerfumesOnly}
               />
-              <NMapDetailPanel
-                selectedPerfumeId={selectedPerfumeId}
-                fullPayload={fullPayload}
-                labelsData={labelsData}
-                selectedAccords={selectedAccords}
-                logActivity={logActivity}
-              />
+              <div className="hidden lg:block self-stretch">
+                <NMapDetailPanel
+                  selectedPerfumeId={selectedPerfumeId}
+                  highlightedSimilarPerfumeId={highlightedSimilarPerfumeId}
+                  setHighlightedSimilarPerfumeId={setHighlightedSimilarPerfumeId}
+                  fullPayload={fullPayload}
+                  labelsData={labelsData}
+                  isKorean={isKorean}
+                  selectedAccords={selectedAccords}
+                  logActivity={logActivity}
+                />
+              </div>
             </div>
           )}
         </section>
       </div>
+
+      {selectedPerfumeId && !isLoading && (
+        <div
+          className="lg:hidden fixed inset-0 z-[80] bg-black/35 backdrop-blur-[2px] flex items-end"
+          onClick={() => setSelectedPerfumeId(null)}
+        >
+          <div
+            className="w-full h-[88vh] bg-[#FDFBF8] rounded-t-[28px] border-t border-[#E2D7C5] shadow-2xl overflow-hidden"
+            onClick={(e) => e.stopPropagation()}
+            style={{
+              transform: `translateY(${mobileSheetOffsetY}px)`,
+              transition: isDraggingSheet ? "none" : "transform 220ms ease-out",
+            }}
+          >
+            <div
+              className="pt-2 pb-2 flex justify-center touch-none"
+              onTouchStart={handleSheetTouchStart}
+              onTouchMove={handleSheetTouchMove}
+              onTouchEnd={handleSheetTouchEnd}
+              onTouchCancel={handleSheetTouchEnd}
+            >
+              <div className="h-1.5 w-14 rounded-full bg-[#D9CFBE]" />
+            </div>
+            <NMapDetailPanel
+              selectedPerfumeId={selectedPerfumeId}
+              highlightedSimilarPerfumeId={highlightedSimilarPerfumeId}
+              setHighlightedSimilarPerfumeId={setHighlightedSimilarPerfumeId}
+              fullPayload={fullPayload}
+              labelsData={labelsData}
+              isKorean={isKorean}
+              selectedAccords={selectedAccords}
+              logActivity={logActivity}
+              mode="modal"
+            />
+          </div>
+        </div>
+      )}
 
       {showLoginPrompt && (
         <div className="fixed inset-0 z-50 bg-black/40 backdrop-blur-sm flex items-center justify-center p-6">
@@ -211,7 +341,7 @@ export default function NMapView({ sessionUserId }: { sessionUserId?: string | n
         <CardTriggerBanner
           message={triggerMessage}
           onAccept={handleGenerateCard}
-          onDismiss={() => setShowCardTrigger(false)}
+          onDismiss={handleDismissCardTrigger}
         />
       )}
 
@@ -265,7 +395,8 @@ export default function NMapView({ sessionUserId }: { sessionUserId?: string | n
       {showCardModal && generatedCard && (
         <NScentCard
           card={generatedCard}
-          userName={memberId ? "Member" : "Guest"}
+          userName={profileNickname || normalizedSessionFallbackName || (memberId ? "회원" : "Guest")}
+          userImageUrl={profileImageUrl || sessionFallbackImage}
           onClose={() => { setShowCardModal(false); setGeneratedCard(null); setGeneratedCardId(null); }}
           onAccordClick={handleAccordClick}
           onSave={memberId ? handleSaveCard : undefined}

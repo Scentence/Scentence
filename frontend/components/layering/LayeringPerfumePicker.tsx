@@ -15,9 +15,10 @@ interface Perfume {
 interface Props {
     memberId: number;
     onSelect: (name: string) => void;
+    compact?: boolean;
 }
 
-export default function LayeringPerfumePicker({ memberId, onSelect }: Props) {
+export default function LayeringPerfumePicker({ memberId, onSelect, compact = false }: Props) {
     const [isOpen, setIsOpen] = useState(false);
     const [perfumes, setPerfumes] = useState<Perfume[]>([]);
     const [loading, setLoading] = useState(false);
@@ -54,6 +55,14 @@ export default function LayeringPerfumePicker({ memberId, onSelect }: Props) {
                 .finally(() => setLoading(false));
         }
     }, [isOpen, memberId]);
+
+    const triggerSizeClass = compact
+        ? "w-8 h-8 sm:w-9 sm:h-9 rounded-lg"
+        : "w-10 h-10 sm:w-[72px] sm:h-[72px] rounded-lg sm:rounded-xl";
+
+    const iconSizeClass = compact
+        ? "w-[14px] h-[14px] sm:w-[16px] sm:h-[16px]"
+        : "w-[19px] h-[19px] sm:w-7 sm:h-7";
 
     return (
         <div className="relative" ref={containerRef}>
@@ -109,10 +118,10 @@ export default function LayeringPerfumePicker({ memberId, onSelect }: Props) {
             {/* 트리거 버튼 (입력창 옆에 보일 아이콘) */}
             <button
                 onClick={() => setIsOpen(!isOpen)}
-                className={`w-12 h-12 sm:w-[72px] sm:h-[72px] flex items-center justify-center rounded-xl transition-all ${isOpen ? 'bg-[#C5A55D] text-white shadow-md' : 'text-gray-400 hover:text-[#C5A55D] hover:bg-[#F5F2EA]'}`}
+                className={`${triggerSizeClass} flex items-center justify-center transition-all ${isOpen ? 'bg-[#C5A55D] text-white shadow-md' : 'text-gray-400 hover:text-[#C5A55D] hover:bg-[#F5F2EA]'}`}
                 title="내 향수 불러오기"
             >
-                <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" className="w-7 h-7">
+                <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" className={iconSizeClass}>
                     <path strokeLinecap="round" strokeLinejoin="round" d="M21 11.25v8.25a1.5 1.5 0 0 1-1.5 1.5H4.5a1.5 1.5 0 0 1-1.5-1.5v-8.25M12 4.875A2.625 2.625 0 1 0 9.375 7.5H12m0-2.625V7.5m0-2.625A2.625 2.625 0 1 1 14.625 7.5H12m0 0V21m-8.625-9.75h1.875c.621 0 1.125-.504 1.125-1.125v-1.5c0-.621-.504-1.125-1.125-1.125H3.375c-.621 0-1.125.504-1.125 1.125v1.5c0 .621.504 1.125 1.125 1.125Zm17.25 0h1.875c.621 0 1.125-.504 1.125-1.125v-1.5c0-.621-.504-1.125-1.125-1.125h-1.875c-.621 0-1.125.504-1.125 1.125v1.5c0 .621.504 1.125 1.125 1.125Z" />
                 </svg>
             </button>

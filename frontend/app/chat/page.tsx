@@ -27,6 +27,7 @@ export default function ChatPage() {
     const [threadId, setThreadId] = useState("");
     const [memberId, setMemberId] = useState<number | null>(null);
     const messagesEndRef = useRef<HTMLDivElement>(null);
+    const inputRef = useRef<HTMLTextAreaElement>(null);
 
     // localAuth 제거: 세션 기반으로만 사용자 상태 관리
 
@@ -71,6 +72,19 @@ export default function ChatPage() {
     const [isUserScrolledUp, setIsUserScrolledUp] = useState(false);
     const [showScrollButton, setShowScrollButton] = useState(false);
 
+    const scrollToLatestMessage = (behavior: ScrollBehavior = "auto") => {
+        if (messagesEndRef.current) {
+            messagesEndRef.current.scrollIntoView({ behavior, block: "end" });
+            return;
+        }
+        if (chatContainerRef.current) {
+            chatContainerRef.current.scrollTo({
+                top: chatContainerRef.current.scrollHeight,
+                behavior,
+            });
+        }
+    };
+
     // [New] Add ArrowDown icon import manually if not present, or use SVG. 
     // Since we can't see imports easily without context re-read, I'll allow Lucide import at top if I can, OR just use SVG inline.
     // Given previous file view show Lucide imports like Home, Sparkles etc.. I assume I can add ArrowDown.
@@ -98,12 +112,10 @@ export default function ChatPage() {
     };
 
     const forceScrollToBottom = () => {
-        if (chatContainerRef.current) {
-            chatContainerRef.current.scrollTo({ top: chatContainerRef.current.scrollHeight, behavior: 'smooth' });
-            // Optimistic update
-            setIsUserScrolledUp(false);
-            setShowScrollButton(false);
-        }
+        scrollToLatestMessage("smooth");
+        // Optimistic update
+        setIsUserScrolledUp(false);
+        setShowScrollButton(false);
     };
 
     useEffect(() => {
@@ -115,22 +127,24 @@ export default function ChatPage() {
         if (isUserMsg) {
             // User's message: Always scroll to bottom (smooth)
             setTimeout(() => {
-                if (chatContainerRef.current) {
-                    chatContainerRef.current.scrollTo({ top: chatContainerRef.current.scrollHeight, behavior: 'smooth' });
-                }
+                scrollToLatestMessage("smooth");
             }, 50);
         } else {
             // Bot's message: Only scroll if user WAS at the bottom before this update.
             if (!isUserScrolledUp) {
                 setTimeout(() => {
-                    if (chatContainerRef.current) {
-                        // Use instant behavior for rapid updates to avoid animation queue issues.
-                        chatContainerRef.current.scrollTo({ top: chatContainerRef.current.scrollHeight, behavior: 'instant' });
-                    }
+                    // Use auto behavior for rapid updates to avoid animation queue issues.
+                    scrollToLatestMessage("auto");
                 }, 10);
             }
         }
     }, [messages, isUserScrolledUp]);
+
+    useEffect(() => {
+        if (!loading) {
+            setTimeout(() => inputRef.current?.focus(), 0);
+        }
+    }, [loading]);
     // Note: isUserScrolledUp dependency ensures that if user scrolls down manually to bottom, it re-enables auto-scroll for NEXT render, 
     // but doesn't necessarily trigger scroll immediately unless messages change. 
     // Actually, if messages change, effect runs. It reads current isUserScrolledUp. 
@@ -277,7 +291,7 @@ export default function ChatPage() {
                 className="flex flex-col h-[100dvh] bg-[#FDFBF8] overflow-hidden overscroll-behavior-none text-black relative font-sans"
             >
                 {/* 3. Content Wrapper (Sidebar + Main) */}
-                <div className="flex-1 flex relative overflow-hidden pt-[72px]">
+                <div className="flex-1 flex relative overflow-hidden pt-[56px] sm:pt-[64px] md:pt-[72px]">
 
                     {/* ... Sidebars ... (Skipping 50 lines to keep context manageable if needed, but tool replaces contiguous block) */}
                     {/* Actually I need to replace from start of component to end of chat area to be safe? 
@@ -318,7 +332,7 @@ export default function ChatPage() {
                     {/* Main Chat Area */}
                     <main
                         className={`flex-1 flex flex-col relative bg-[#FDFBF8] overflow-hidden gap-3 transition-transform duration-300 ease-in-out
-                            ${isSidebarOpen ? "translate-x-64 md:translate-x-0" : "translate-x-0"}
+                            ${isSidebarOpen ? "translate-x-[248px] max-[360px]:translate-x-[232px] md:translate-x-0" : "translate-x-0"}
                         `}
                     >
                         {/* Mobile Shift Overlay */}
@@ -330,9 +344,9 @@ export default function ChatPage() {
                         )}
 
                         {/* Sidebar Toggle Button */}
-                        <div className="absolute top-2 left-4 z-40">
-                            <button onClick={() => setIsSidebarOpen(!isSidebarOpen)} className="p-1.5 md:p-2 hover:bg-gray-100 rounded-lg transition-colors text-black">
-                                <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor" className="w-5 h-5 md:w-6 md:h-6">
+                        <div className="absolute top-1.5 left-2 sm:left-3 md:left-4 z-40">
+                            <button onClick={() => setIsSidebarOpen(!isSidebarOpen)} className="p-1 md:p-2 hover:bg-gray-100 rounded-lg transition-colors text-black">
+                                <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor" className="w-4 h-4 md:w-6 md:h-6">
                                     <rect x="3" y="3" width="18" height="18" rx="2" ry="2" strokeLinecap="round" strokeLinejoin="round" />
                                     <path strokeLinecap="round" strokeLinejoin="round" d="M9 3v18" />
                                 </svg>
@@ -359,14 +373,14 @@ export default function ChatPage() {
                         <div
                             ref={chatContainerRef}
                             onScroll={handleScroll}
-                            className="flex-1 overflow-y-auto pt-5 pb-10 custom-scrollbar overscroll-behavior-contain touch-pan-y"
+                            className="flex-1 overflow-y-auto pt-5 pb-3 custom-scrollbar overscroll-behavior-contain touch-pan-y"
                         >
                             <div className={`w-full max-w-5xl mx-auto px-4 ${messages.length === 0 ? "h-full" : ""}`}>
                                 <ChatList
                                     messages={messages}
                                     loading={loading}
                                     statusLog={statusLog}
-                                    messagesEndRef={messagesEndRef as any}
+                                    messagesEndRef={messagesEndRef}
                                     userName={displayName}
                                 />
                             </div>
@@ -382,6 +396,7 @@ export default function ChatPage() {
                             <form onSubmit={handleSubmit} className="relative bg-white rounded-[26px] shadow-sm border border-[#E5E4DE] focus-within:ring-1 focus-within:ring-[#D97757]/30 transition-all">
                                 <div className="flex items-center min-h-[50px] pr-2">
                                     <textarea
+                                        ref={inputRef}
                                         className="flex-1 w-full bg-transparent py-3 pl-5 text-[#393939] placeholder:text-gray-400 outline-none resize-none text-base custom-scrollbar"
                                         placeholder={placeholder}
                                         rows={1}

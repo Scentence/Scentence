@@ -44,9 +44,9 @@ export default function PerfumeWikiPage() {
 
 
   return (
-    <PageLayout subTitle="Perfume Wiki">
+    <PageLayout subTitle="Perfume Wiki" disableContentPadding>
 
-      <main className="pt-[120px] pb-24 px-6 md:px-10 max-w-6xl mx-auto space-y-16">
+      <main className="pt-[120px] pb-24 px-3 sm:px-6 max-w-7xl mx-auto space-y-16">
         <section className="space-y-3">
           <h1 className="text-3xl md:text-4xl font-bold text-[#1F1F1F]">
             향수 백과

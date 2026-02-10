@@ -94,53 +94,54 @@ export default async function EpisodePage({ params }: EpisodePageProps) {
   const tags = episode.tags || ["향수입문", "향의변화", "탑노트", "미들노트"];
 
   return (
-    <PageLayout subTitle="Perfume Wiki">
-
-      <main className="pt-[80px] pb-32">
-        {/* Hero Section */}
-        <div className="px-6 md:px-10 max-w-4xl mx-auto mb-16">
-          <EpisodeHero
-            episode={episode}
-            seriesTitle={series.title}
-            seriesId={seriesId}
-            episodeNumber={episodeNumber}
-          />
-        </div>
-
-        {/* Like & Share Buttons */}
-        <div className="px-6 md:px-10 max-w-4xl mx-auto mb-16">
-          <div className="flex items-center gap-3 justify-center md:justify-start">
-            <LikeButton />
-            <ShareButton />
+    <PageLayout subTitle="Perfume Wiki" disableContentPadding>
+      <main className="pt-[80px] pb-32 px-3 sm:px-6 max-w-7xl mx-auto">
+        <div className="max-w-4xl mx-auto">
+          {/* Hero Section */}
+          <div className="mb-16">
+            <EpisodeHero
+              episode={episode}
+              seriesTitle={series.title}
+              seriesId={seriesId}
+              episodeNumber={episodeNumber}
+            />
           </div>
-        </div>
 
-        {/* Content Section */}
-        <div className="px-6 md:px-10 max-w-4xl mx-auto mb-20">
-          <EpisodeContentSection content={content} />
-        </div>
-
-        {/* Divider */}
-        <div className="px-6 md:px-10 max-w-4xl mx-auto mb-16">
-          <div className="h-px bg-gradient-to-r from-transparent via-[#E0E0E0] to-transparent" />
-        </div>
-
-        {/* Tags Section */}
-        <div className="px-6 md:px-10 max-w-4xl mx-auto mb-20">
-          <div className="space-y-5">
-            <h3 className="text-sm font-bold text-[#555]">관련 키워드</h3>
-            <TagList tags={tags} />
+          {/* Like & Share Buttons */}
+          <div className="mb-16">
+            <div className="flex items-center gap-3 justify-center md:justify-start">
+              <LikeButton />
+              <ShareButton />
+            </div>
           </div>
-        </div>
 
-        {/* Series Related Section */}
-        <div className="px-6 md:px-10 max-w-4xl mx-auto mb-20">
-          <SeriesRelatedCard series={series} currentEpisodeId={episode.id} />
-        </div>
+          {/* Content Section */}
+          <div className="mb-20">
+            <EpisodeContentSection content={content} />
+          </div>
 
-        {/* CTA Section */}
-        <div className="px-6 md:px-10 max-w-4xl mx-auto">
-          <EpisodeCTA />
+          {/* Divider */}
+          <div className="mb-16">
+            <div className="h-px bg-gradient-to-r from-transparent via-[#E0E0E0] to-transparent" />
+          </div>
+
+          {/* Tags Section */}
+          <div className="mb-20">
+            <div className="space-y-5">
+              <h3 className="text-sm font-bold text-[#555]">관련 키워드</h3>
+              <TagList tags={tags} />
+            </div>
+          </div>
+
+          {/* Series Related Section */}
+          <div className="mb-20">
+            <SeriesRelatedCard series={series} currentEpisodeId={episode.id} />
+          </div>
+
+          {/* CTA Section */}
+          <div>
+            <EpisodeCTA />
+          </div>
         </div>
       </main>
     </PageLayout>

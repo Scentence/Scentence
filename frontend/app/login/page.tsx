@@ -66,7 +66,7 @@ export default function LoginPage() {
 
   return (
     <PageLayout disableContentPadding className="min-h-screen bg-[#FDFBF8] text-black font-sans flex flex-col">
-      <main className="flex-1 flex flex-col items-center pt-[72px] pb-6 md:pt-[100px] md:pb-20 animate-fade-in-up">
+      <main className="flex-1 flex flex-col items-center pt-[56px] sm:pt-[64px] md:pt-[72px] pb-6 md:pb-20 animate-fade-in-up">
         {/* Full-width Marquee Section - Top of Page */}
         <div className="w-full overflow-hidden border-b border-gray-100 py-3 md:py-6 bg-white/50 select-none mb-6 md:mb-12">
           <motion.div
