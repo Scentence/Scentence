@@ -66,7 +66,7 @@ export default function LoginPage() {
 
   return (
     <PageLayout disableContentPadding className="min-h-screen bg-[#FDFBF8] text-black font-sans flex flex-col">
-      <main className="flex-1 flex flex-col items-center pt-[72px] pb-6 md:pt-[100px] md:pb-20 animate-fade-in-up">
+      <main className="flex-1 flex flex-col items-center pt-[56px] sm:pt-[64px] md:pt-[72px] pb-6 md:pb-20 animate-fade-in-up">
         {/* Full-width Marquee Section - Top of Page */}
         <div className="w-full overflow-hidden border-b border-gray-100 py-3 md:py-6 bg-white/50 select-none mb-6 md:mb-12">
           <motion.div
@@ -91,7 +91,7 @@ export default function LoginPage() {
 
         <div className="w-full max-w-xl px-4">
           <div className="mb-6 md:mb-12 text-center animate-fade-in">
-            <p className="text-xs md:text-sm text-gray-400 font-light tracking-[0.2em]">
+            <p className="text-xs md:text-sm text-gray-600 font-medium tracking-[0.2em]">
               당신의 취향, 그 이상의 발견
             </p>
           </div>
@@ -102,7 +102,7 @@ export default function LoginPage() {
             <div className="space-y-3 md:space-y-8">
               {/* ID Input */}
               <div className="space-y-2 group">
-                <label htmlFor="loginId" className="block text-xs font-bold text-gray-400 uppercase tracking-wider group-focus-within:text-black transition-colors">
+                <label htmlFor="loginId" className="block text-xs font-bold text-gray-600 uppercase tracking-wider group-focus-within:text-black transition-colors">
                   ID (Email)
                 </label>
                 <input
@@ -112,14 +112,14 @@ export default function LoginPage() {
                   placeholder="아이디(이메일)를 입력하세요"
                   value={loginId}
                   onChange={(event) => setLoginId(event.target.value)}
-                  className="w-full border-b border-gray-200 py-2 md:py-3 text-base focus:border-black focus:outline-none transition-colors bg-transparent placeholder-gray-300"
+                  className="w-full border-b border-gray-200 py-2 md:py-3 text-base focus:border-black focus:outline-none transition-colors bg-transparent placeholder-gray-400"
                 />
               </div>
 
               {/* Password Input */}
               <div className="space-y-2 group">
                 <div className="flex justify-between items-center">
-                  <label htmlFor="password" className="block text-xs font-bold text-gray-400 uppercase tracking-wider group-focus-within:text-black transition-colors">
+                  <label htmlFor="password" className="block text-xs font-bold text-gray-600 uppercase tracking-wider group-focus-within:text-black transition-colors">
                     Password
                   </label>
                 </div>
@@ -130,7 +130,7 @@ export default function LoginPage() {
                   placeholder="비밀번호를 입력하세요"
                   value={password}
                   onChange={(event) => setPassword(event.target.value)}
-                  className="w-full border-b border-gray-200 py-2 md:py-3 text-base focus:border-black focus:outline-none transition-colors bg-transparent placeholder-gray-300"
+                  className="w-full border-b border-gray-200 py-2 md:py-3 text-base focus:border-black focus:outline-none transition-colors bg-transparent placeholder-gray-400"
                 />
               </div>
             </div>
@@ -164,12 +164,12 @@ export default function LoginPage() {
               <button
                 type="button"
                 onClick={handleKakaoPopup}
-                className="w-full bg-[#FEE500] text-[#3c1e1e] py-3 md:py-4 rounded-full font-bold flex items-center justify-center gap-2.5 hover:bg-[#ffe812] transition-colors active:scale-[0.99] shadow-sm"
+                className="w-full bg-[#FEE500] text-[#3c1e1e] py-3 md:py-4 rounded-full font-bold text-lg flex items-center justify-center gap-2.5 hover:bg-[#ffe812] transition-colors active:scale-[0.99] shadow-md"
               >
                 <svg viewBox="0 0 24 24" fill="currentColor" className="w-5 h-5">
                   <path d="M12 3C5.373 3 0 7.373 0 12.768c0 3.657 2.456 6.829 6.138 8.49L4.2 24l5.414-3.606c.767.098 1.556.15 2.386.15 6.627 0 12-4.373 12-9.768C24 7.373 18.627 3 12 3z" />
                 </svg>
-                <span className="text-sm">카카오 로그인</span>
+                <span>카카오 로그인</span>
               </button>
             </div>
 

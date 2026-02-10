@@ -1,5 +1,6 @@
 import React, { useState } from "react";
 import { FilterOptions, LabelsData } from "../types";
+import { Sparkles } from "lucide-react";
 import { ACCORD_ICONS, ACCORD_LABELS, BRAND_LABELS, SEASON_LABELS, OCCASION_LABELS, GENDER_TARGET_LABELS } from "../../config";
 
 interface Props {
@@ -19,8 +20,6 @@ interface Props {
   logActivity: (data: { accord_selected?: string; filter_changed?: string; selected_accords_override?: string[] }) => void;
   showMyPerfumesOnly: boolean;
   myPerfumeFilters: FilterOptions | null;
-  onResetAccords: () => void;
-  onResetDetailFilters: () => void;
 }
 
 export default function NMapFilters({
@@ -40,8 +39,6 @@ export default function NMapFilters({
   logActivity,
   showMyPerfumesOnly,
   myPerfumeFilters,
-  onResetAccords,
-  onResetDetailFilters,
 }: Props) {
   const [isAccordFilterOpen, setIsAccordFilterOpen] = useState(true);
   const [isDetailFilterOpen, setIsDetailFilterOpen] = useState(false);
@@ -73,84 +70,59 @@ export default function NMapFilters({
     <>
       {/* 1단계: 분위기 필터 */}
       <section className="space-y-4">
-        <div className="flex flex-col gap-1">
-          <div className="flex items-center gap-2 flex-nowrap">
-            <h2 className="text-[15px] sm:text-lg font-semibold cursor-pointer select-none whitespace-nowrap" onClick={() => setIsAccordFilterOpen(!isAccordFilterOpen)}>어떤 분위기를 원하세요?</h2>
-            <button
-              onClick={() => setIsAccordFilterOpen(!isAccordFilterOpen)}
-              className={`w-6 h-6 sm:w-7 sm:h-7 flex-shrink-0 flex items-center justify-center rounded-full bg-[#2E2B28] text-white transition-all duration-200 hover:bg-[#4D463A] shadow-sm ${isAccordFilterOpen ? "rotate-180" : ""}`}
-              aria-label="토글"
-            >
-              <svg width="10" height="6" viewBox="0 0 10 6" fill="none" xmlns="http://www.w3.org/2000/svg">
-                <path d="M1 1L5 5L9 1" stroke="white" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
-              </svg>
-            </button>
-            {selectedAccords.length > 0 && (
-              <div className="flex items-center gap-2 flex-nowrap shrink-0">
-                <span className="text-[#E6DDCF]">|</span>
-                <button
-                  onClick={onResetAccords}
-                  className="text-[10px] sm:text-[11px] font-semibold text-red-500 hover:text-red-700 transition-all px-2 py-1 rounded-md hover:bg-red-50 whitespace-nowrap"
-                >
-                  선택 초기화
-                </button>
-              </div>
-            )}
+        <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+          <div>
+            <h2 className="text-[15px] sm:text-lg font-semibold">어떤 분위기를 원하세요?</h2>
+            <p className="text-xs text-[#7A6B57]">관심 있는 분위기를 선택해 원하는 향수를 찾아보세요.</p>
           </div>
-          <p className="text-xs text-[#7A6B57]">관심 있는 분위기를 선택해 원하는 향수를 찾아보세요.</p>
+          <button
+            onClick={() => setIsAccordFilterOpen(!isAccordFilterOpen)}
+            className="h-8 px-3 rounded-full border border-[#E2D7C5] bg-white text-[11px] font-semibold whitespace-nowrap sm:h-9 sm:px-4 sm:text-xs"
+          >
+            {isAccordFilterOpen ? "▲ 접기" : "▼ 펼치기"}
+          </button>
         </div>
         {isAccordFilterOpen && (
           <div className="grid grid-cols-4 sm:grid-cols-5 md:grid-cols-7 lg:grid-cols-10 gap-3">
-            {effectiveFilterOptions.accords.map(acc => (
-              <button key={acc} onClick={() => {
-                const isAdding = !selectedAccords.includes(acc);
-                const newAccords = isAdding ? [...selectedAccords, acc] : selectedAccords.filter(a => a !== acc);
-                setSelectedAccords(newAccords);
-                setSelectedPerfumeId(null);
-                // 어코드 추가/제거 시 즉시 DB 업데이트 (업데이트된 배열 직접 전달)
-                logActivity({
-                  accord_selected: isAdding ? acc : undefined,
-                  selected_accords_override: newAccords
-                });
-              }}
-                className={`relative aspect-square rounded-2xl border-2 transition-all ${selectedAccords.includes(acc) ? "border-[#C8A24D] bg-[#C8A24D]/10" : "border-[#E2D7C5] bg-white"}`}>
-                <div className="absolute inset-0 flex flex-col items-center justify-center p-1 sm:p-2">
-                  <span className="text-2xl sm:text-3xl md:text-4xl mb-1 sm:mb-2">{ACCORD_ICONS[acc] || "✨"}</span>
-                  <span className="text-[10px] xs:text-[11px] sm:text-xs md:text-sm font-semibold text-center leading-tight">{fmtAccord(acc)}</span>
-                </div>
-              </button>
-            ))}
+            {effectiveFilterOptions.accords.map(acc => {
+              const Icon = ACCORD_ICONS[acc] ?? Sparkles;
+              return (
+                <button key={acc} onClick={() => {
+                  const isAdding = !selectedAccords.includes(acc);
+                  const newAccords = isAdding ? [...selectedAccords, acc] : selectedAccords.filter(a => a !== acc);
+                  setSelectedAccords(newAccords);
+                  setSelectedPerfumeId(null);
+                  // 어코드 추가/제거 시 즉시 DB 업데이트 (업데이트된 배열 직접 전달)
+                  logActivity({
+                    accord_selected: isAdding ? acc : undefined,
+                    selected_accords_override: newAccords
+                  });
+                }}
+                  className={`relative aspect-square rounded-2xl border-2 transition-all ${selectedAccords.includes(acc) ? "border-[#C8A24D] bg-[#C8A24D]/10" : "border-[#E2D7C5] bg-white"}`}>
+                  <div className="absolute inset-0 flex flex-col items-center justify-center p-1 sm:p-2">
+                    <Icon className="w-7 h-7 sm:w-8 sm:h-8 md:w-9 md:h-9 text-[#7A6B57] mb-1 sm:mb-2" strokeWidth={1.75} />
+                    <span className="text-[10px] sm:text-xs md:text-sm font-semibold text-center leading-tight">{fmtAccord(acc)}</span>
+                  </div>
+                </button>
+              );
+            })}
           </div>
         )}
       </section>
 
       {/* 2단계: 세부 필터 */}
       <section className="space-y-4">
-        <div className="flex flex-col gap-1">
-          <div className="flex items-center gap-2 flex-nowrap">
-            <h2 className="text-[15px] sm:text-lg font-semibold cursor-pointer select-none whitespace-nowrap" onClick={() => setIsDetailFilterOpen(!isDetailFilterOpen)}>더 꼼꼼하게 찾아보고 싶다면</h2>
-            <button
-              onClick={() => setIsDetailFilterOpen(!isDetailFilterOpen)}
-              className={`w-6 h-6 sm:w-7 sm:h-7 flex-shrink-0 flex items-center justify-center rounded-full bg-[#2E2B28] text-white transition-all duration-200 hover:bg-[#4D463A] shadow-sm ${isDetailFilterOpen ? "rotate-180" : ""}`}
-              aria-label="토글"
-            >
-              <svg width="10" height="6" viewBox="0 0 10 6" fill="none" xmlns="http://www.w3.org/2000/svg">
-                <path d="M1 1L5 5L9 1" stroke="white" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
-              </svg>
-            </button>
-            {(selectedBrands.length > 0 || selectedSeasons.length > 0 || selectedOccasions.length > 0 || selectedGenders.length > 0) && (
-              <div className="flex items-center gap-2 flex-nowrap shrink-0">
-                <span className="text-[#E6DDCF]">|</span>
-                <button
-                  onClick={onResetDetailFilters}
-                  className="text-[10px] sm:text-[11px] font-semibold text-red-500 hover:text-red-700 transition-all px-2 py-1 rounded-md hover:bg-red-50 whitespace-nowrap"
-                >
-                  선택 초기화
-                </button>
-              </div>
-            )}
+        <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+          <div>
+            <h2 className="text-[15px] sm:text-lg font-semibold">더 꼼꼼하게 찾아보고 싶다면</h2>
+            <p className="text-xs text-[#7A6B57]">브랜드와 계절, 특별한 순간을 더해 나만의 취향을 더 선명하게 찾아보세요.</p>
           </div>
-          <p className="text-xs text-[#7A6B57]">브랜드와 계절, 특별한 순간을 더해 나만의 취향을 더 선명하게 찾아보세요.</p>
+          <button
+            onClick={() => setIsDetailFilterOpen(!isDetailFilterOpen)}
+            className="h-8 px-3 rounded-full border border-[#E2D7C5] bg-white text-[11px] font-semibold whitespace-nowrap sm:h-9 sm:px-4 sm:text-xs"
+          >
+            {isDetailFilterOpen ? "▲ 접기" : "▼ 펼치기"}
+          </button>
         </div>
         {isDetailFilterOpen && (
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">

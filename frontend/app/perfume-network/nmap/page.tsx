@@ -33,8 +33,8 @@ export default function NMapPage() {
   }, [session]);
 
   return (
-    <PageLayout subTitle="PERFUME NETWORK" disableContentPadding={true}>
-      <main className="">
+    <PageLayout subTitle="PERFUME MAP" disableContentPadding>
+      <main className="pt-[97px] sm:pt-[120px] pb-12">
         <NMapView sessionUserId={sessionUserId} />
       </main>
     </PageLayout>

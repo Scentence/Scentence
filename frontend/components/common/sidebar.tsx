@@ -82,11 +82,11 @@ export default function Sidebar({ isOpen, onClose, context }: SidebarProps) {
     // [HYPER-REALISTIC LIQUID GLASS BLOCK]
     // 1. Specular Highlights: Multiple inset shadows for the sharp rim and surface sheen.
     // 2. Volumetric Depth: Bottom inset shadow to simulate the glass meniscus.
-    // 3. Clarity: Opacity increased to 0.15. Blur handled via Motion Variants (Zero Delay).
-    const liquidGlassBlock = "transform-gpu bg-gradient-to-br from-white/20 to-transparent border border-white/40 shadow-[inset_0_1px_1px_rgba(255,255,255,0.9),inset_0_15px_30px_rgba(255,255,255,0.15),inset_0_-2px_10px_rgba(0,0,0,0.05),0_20px_40px_-10px_rgba(0,0,0,0.2)] overflow-hidden rounded-[36px] will-change-transform";
+    // 3. Clarity: Opacity increased to 0.8 at start for better legibility on dark backgrounds. Blur handled via class + parent.
+    const liquidGlassBlock = "transform-gpu bg-gradient-to-br from-white/80 to-white/40 border border-white/40 shadow-[inset_0_1px_1px_rgba(255,255,255,0.9),inset_0_15px_30px_rgba(255,255,255,0.15),inset_0_-2px_10px_rgba(0,0,0,0.05),0_20px_40px_-10px_rgba(0,0,0,0.2)] overflow-hidden rounded-[36px] will-change-transform backdrop-blur-md";
 
     // [OBSIDIAN LIQUID GLASS BLOCK]
-    const obsidianGlassBlock = "transform-gpu bg-gradient-to-br from-black/80 to-black/40 border border-white/10 shadow-[inset_0_1px_1px_rgba(255,255,255,0.3),inset_0_10px_20px_rgba(255,255,255,0.05),inset_0_-2px_10px_rgba(0,0,0,0.5),0_20px_40px_-5px_rgba(0,0,0,0.4)] overflow-hidden rounded-[32px] will-change-transform";
+    const obsidianGlassBlock = "transform-gpu bg-gradient-to-br from-black/80 to-black/40 border border-white/10 shadow-[inset_0_1px_1px_rgba(255,255,255,0.3),inset_0_10px_20px_rgba(255,255,255,0.05),inset_0_-2px_10px_rgba(0,0,0,0.5),0_20px_40px_-5px_rgba(0,0,0,0.4)] overflow-hidden rounded-[32px] will-change-transform backdrop-blur-md";
 
     return (
         <AnimatePresence>

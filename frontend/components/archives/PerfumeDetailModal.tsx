@@ -31,26 +31,39 @@ export default function PerfumeDetailModal({ perfume, onClose, onUpdateStatus, o
     };
 
     return (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4 animate-fade-in" onClick={onClose}>
+        <div
+            className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-3 sm:p-4 animate-fade-in"
+            onPointerDown={onClose}
+        >
             <div
-                className="bg-white w-full max-w-3xl rounded-3xl overflow-hidden shadow-2xl relative flex flex-col md:flex-row min-h-[400px]"
+                className="bg-white w-[min(92vw,760px)] md:w-full md:max-w-3xl rounded-2xl md:rounded-3xl overflow-hidden shadow-2xl relative flex flex-col md:flex-row max-h-[82vh] md:max-h-[88vh]"
+                onPointerDown={(e) => e.stopPropagation()}
                 onClick={(e) => e.stopPropagation()}
             >
                 <button
-                    onClick={onClose}
+                    type="button"
+                    onPointerDown={(e) => {
+                        e.stopPropagation();
+                        onClose();
+                    }}
+                    onClick={(e) => {
+                        e.stopPropagation();
+                        onClose();
+                    }}
                     className="absolute top-4 right-4 z-10 w-8 h-8 flex items-center justify-center rounded-full bg-gray-100 text-gray-500 hover:bg-gray-200 transition"
+                    aria-label="닫기"
                 >
                     &times;
                 </button>
 
                 {/* Left: Image Section */}
-                <div className={`w-full md:w-1/2 aspect-square bg-[#Fdfcf8] flex items-center justify-center p-10 relative transition-all ${isDeleting ? 'brightness-50 grayscale' : ''}`}>
+                <div className={`w-full md:w-1/2 h-[190px] md:aspect-square md:h-auto bg-[#Fdfcf8] flex items-center justify-center p-6 md:p-10 relative transition-all ${isDeleting ? 'brightness-50 grayscale' : ''}`}>
                     <div className="absolute w-[80%] h-[80%] rounded-full bg-[#f5f1e6] blur-3xl opacity-60"></div>
                     {perfume.image_url ? (
                         <img
                             src={perfume.image_url}
                             alt={perfume.name}
-                            className="max-w-full max-h-full object-contain relative z-10 drop-shadow-xl scale-[1.2] -translate-y-4"
+                            className="max-w-full max-h-full object-contain relative z-10 drop-shadow-xl scale-[1.08] md:scale-[1.2] md:-translate-y-4"
                         />
                     ) : (
                         <span className="text-gray-300 font-medium">No Image</span>
@@ -58,17 +71,17 @@ export default function PerfumeDetailModal({ perfume, onClose, onUpdateStatus, o
                 </div>
 
                 {/* Right: Info Section */}
-                <div className="w-full md:w-1/2 p-10 flex flex-col justify-center relative">
+                <div className="w-full md:w-1/2 p-5 md:p-10 flex flex-col justify-center relative overflow-y-auto">
 
                     {!isDeleting ? (
                         <>
-                            <div className="mb-8">
+                            <div className="mb-5 md:mb-8">
                                 <p className="text-[#C5A55D] text-xs font-bold tracking-widest uppercase mb-2">{perfume.brand}</p>
-                                <h2 className="text-3xl font-bold text-[#222] leading-tight mb-4">{perfume.name}</h2>
+                                <h2 className="text-2xl md:text-3xl font-bold text-[#222] leading-tight mb-3 md:mb-4">{perfume.name}</h2>
                                 <div className="h-1 w-12 bg-[#C5A55D]/30 rounded-full"></div>
                             </div>
 
-                            <div className="space-y-6">
+                            <div className="space-y-4 md:space-y-6">
                                 <div className="space-y-3">
                                     <label className="text-gray-400 text-xs font-bold uppercase tracking-wider">
                                         {perfume.status === 'HAD' ? "My Rating (경험 평가)" : "Current Status"}

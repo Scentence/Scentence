@@ -20,11 +20,23 @@ from routers import auth
 from agent.schemas import ChatRequest
 from agent.graph import app_graph
 from agent.utils import parse_recommended_count, normalize_recommended_count
+# [26.02.09 변경 이력 - 프론트 우클릭 히스토리 삭제 대응]
+# [이전 코드]
+# from agent.database import (
+#     save_chat_message,
+#     get_chat_history,
+#     get_user_chat_list,
+#     get_recommended_history,
+# )
+# [변경 이유]
+# - 프론트(Chat Sidebar)에서 우클릭으로 대화방 삭제 기능을 추가함.
+# - 삭제 API에서 thread를 soft-delete 처리하기 위해 DB 함수 import가 필요함.
 from agent.database import (
     save_chat_message,
     get_chat_history,
     get_user_chat_list,
     get_recommended_history,
+    soft_delete_chat_room,
 )
 from routers import users, perfumes, archive, auth # <--- ksu 추가
 
@@ -385,6 +397,20 @@ async def get_rooms(member_id: int, identity = Depends(get_identity)):
 async def get_history(thread_id: str):
     messages = get_chat_history(thread_id)
     return {"messages": messages}
+
+
+# [26.02.09 변경 이력 - 채팅방 삭제 API 추가]
+# [이전 코드]
+# - /chat/rooms/{member_id} (조회) 및 /chat/history/{thread_id} (조회)만 존재
+# - 채팅방 삭제 라우트가 없어 프론트에서 히스토리 삭제를 처리할 수 없었음
+# [변경 이유]
+# - 프론트에서 "우클릭 삭제" 동작을 지원하기 위해 삭제 엔드포인트 추가
+# - get_identity + require_member_match로 본인 소유 방만 삭제 가능하도록 보안 유지
+@app.delete("/chat/rooms/{member_id}/{thread_id}")
+async def delete_room(member_id: int, thread_id: str, identity=Depends(get_identity)):
+    require_member_match(member_id, identity)
+    deleted = soft_delete_chat_room(member_id, thread_id)
+    return {"ok": True, "deleted": deleted}
 
 
 if __name__ == "__main__":

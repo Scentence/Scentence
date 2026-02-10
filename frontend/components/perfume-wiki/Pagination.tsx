@@ -23,7 +23,7 @@ export default function Pagination({
   const pages = Array.from({ length: totalPages }, (_, idx) => idx + 1);
 
   return (
-    <nav className="flex items-center justify-center gap-2">
+    <nav className="flex items-center justify-center gap-1.5 sm:gap-2">
       {pages.map((page) => {
         const isActive = page === currentPage;
         const href =
@@ -34,7 +34,7 @@ export default function Pagination({
             key={page}
             href={href}
             aria-current={isActive ? "page" : undefined}
-            className={`w-9 h-9 rounded-full flex items-center justify-center text-sm font-semibold transition ${
+            className={`w-8 h-8 sm:w-9 sm:h-9 rounded-full flex items-center justify-center text-xs sm:text-sm font-semibold transition ${
               isActive
                 ? "bg-[#C8A24D] text-white shadow-[0_6px_16px_rgba(200,162,77,0.35)]"
                 : "bg-white border border-[#EFEFEF] text-[#777] hover:border-[#C8A24D] hover:text-[#1F1F1F]"

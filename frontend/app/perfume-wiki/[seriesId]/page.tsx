@@ -2,11 +2,12 @@
  * 시리즈 상세 페이지
  * 선택한 시리즈의 에피소드 목록을 페이지네이션과 함께 표시
  */
-import Link from "next/link";
 import { notFound } from "next/navigation";
 import SeriesHeader from "@/components/perfume-wiki/SeriesHeader";
 import EpisodeListItem from "@/components/perfume-wiki/EpisodeListItem";
 import Pagination from "@/components/perfume-wiki/Pagination";
+import WikiShell from "@/components/perfume-wiki/WikiShell";
+import WikiBackButton from "@/components/perfume-wiki/WikiBackButton";
 import PageLayout from "@/components/common/PageLayout";
 import perfumeWikiData from "../_data/perfumeWiki.json";
 import type { PerfumeWikiData, Series } from "../types";
@@ -56,35 +57,40 @@ export default async function SeriesPage({ params, searchParams }: SeriesPagePro
   const episodes = series.episodes.slice(startIndex, startIndex + PAGE_SIZE);
 
   return (
-    <PageLayout subTitle="Perfume Wiki">
+    <PageLayout subTitle="Perfume Wiki" disableContentPadding>
+      <WikiShell>
+        <div className="flex justify-end mb-4 sm:mb-8">
+          <WikiBackButton href="/perfume-wiki" label="목록" />
+        </div>
 
-      <main className="pt-[120px] pb-24 px-6 md:px-10 max-w-5xl mx-auto space-y-12">
-        <SeriesHeader series={series} />
+        <div className="max-w-5xl mx-auto space-y-8 sm:space-y-10 md:space-y-12">
+          <SeriesHeader series={series} />
 
-        <section className="space-y-6">
-          <div className="flex items-center justify-between">
-            <h2 className="text-xl font-bold text-[#1F1F1F]">
-              에피소드 리스트
-            </h2>
-            <span className="text-sm text-[#999] font-medium">{`총 ${series.episodes.length}개`}</span>
-          </div>
-          <div>
-            {episodes.map((episode) => (
-              <EpisodeListItem
-                key={episode.id}
-                episode={episode}
-                seriesId={series.id}
-              />
-            ))}
-          </div>
-        </section>
+          <section className="space-y-4 sm:space-y-6">
+            <div className="flex items-center justify-between gap-3">
+              <h2 className="text-lg sm:text-xl font-bold text-[#1F1F1F] break-keep">
+                에피소드 리스트
+              </h2>
+              <span className="text-xs sm:text-sm text-[#999] font-medium shrink-0">{`총 ${series.episodes.length}개`}</span>
+            </div>
+            <div>
+              {episodes.map((episode) => (
+                <EpisodeListItem
+                  key={episode.id}
+                  episode={episode}
+                  seriesId={series.id}
+                />
+              ))}
+            </div>
+          </section>
 
-        <Pagination
-          basePath={`/perfume-wiki/${series.id}`}
-          currentPage={currentPage}
-          totalPages={totalPages}
-        />
-      </main>
+          <Pagination
+            basePath={`/perfume-wiki/${series.id}`}
+            currentPage={currentPage}
+            totalPages={totalPages}
+          />
+        </div>
+      </WikiShell>
     </PageLayout>
   );
 }

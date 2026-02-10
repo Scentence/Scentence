@@ -21,18 +21,27 @@ const SaveButton = ({ id, name }: { id: string; name: string }) => {
     const perfumeId = parseInt(id);
     const [isSaved, setIsSaved] = useState(false);
     const [loading, setLoading] = useState(false);
+    const [toast, setToast] = useState<{ message: string; show: boolean }>({ message: "", show: false });
 
     // Check if perfume is already saved on mount
     useEffect(() => {
         setIsSaved(checkSaved(perfumeId));
     }, [perfumeId, checkSaved]);
 
+    // Auto-dismiss toast after 3s
+    useEffect(() => {
+        if (toast.show) {
+            const timer = setTimeout(() => setToast({ message: "", show: false }), 3000);
+            return () => clearTimeout(timer);
+        }
+    }, [toast.show]);
+
     const handleSave = async () => {
         // localAuth 제거: 세션 ID만 사용
         const memberId = session?.user?.id ? parseInt(session.user.id, 10) : 0;
 
         if (memberId === 0) {
-            alert("로그인이 필요한 서비스입니다.");
+            setToast({ message: "로그인이 필요한 서비스입니다.", show: true });
             return;
         }
 
@@ -52,41 +61,51 @@ const SaveButton = ({ id, name }: { id: string; name: string }) => {
             if (!res.ok) throw new Error(data.detail || "저장 실패");
 
             if (data.status === "already_exists") {
-                alert("이미 내 향수에 저장되어 있어요! 😉");
+                setToast({ message: `이미 내 향수에 저장되어 있어요! 😉`, show: true });
                 setIsSaved(true);
                 addSavedPerfume(perfumeId);
             } else {
-                alert(`'${name}'이(가) 내 향수로 저장되었습니다! 💖`);
+                setToast({ message: `'${name}'이(가) 내 향수로 저장되었습니다! 💖`, show: true });
                 setIsSaved(true);
                 addSavedPerfume(perfumeId);
             }
         } catch (e: any) {
             console.error(e);
-            alert(`저장 중 오류가 발생했습니다: ${e.message}`);
+            setToast({ message: `저장 중 오류가 발생했습니다: ${e.message}`, show: true });
         } finally {
             setLoading(false);
         }
     };
 
     return (
-        <button
-            onClick={handleSave}
-            disabled={isSaved || loading}
-            className={`mt-3 mb-1 flex items-center gap-2 px-4 py-2 rounded-xl text-xs font-bold transition-all shadow-sm
+        <div className="relative">
+            <button
+                onClick={handleSave}
+                disabled={isSaved || loading}
+                className={`mt-2 md:mt-3 mb-1 flex items-center gap-1.5 md:gap-2 px-3 md:px-4 py-1.5 md:py-2 rounded-lg md:rounded-xl text-[0.7rem] md:text-xs font-bold transition-all shadow-sm
                 ${isSaved
-                    ? "bg-gray-100 text-gray-400 cursor-default border border-gray-200"
-                    : "bg-white text-pink-600 hover:bg-pink-50 border border-pink-200 hover:border-pink-300"
-                }`}
-        >
-            {loading ? <span>⏳ 저장 중...</span> : isSaved ? <>✅ 저장됨</> : (
-                <>
-                    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" className="w-4 h-4">
-                        <path d="M11.645 20.91l-.007-.003-.022-.012a15.247 15.247 0 01-.383-.218 25.18 25.18 0 01-4.244-3.17C4.688 15.36 2.25 12.174 2.25 8.25 2.25 5.322 4.714 3 7.688 3A5.5 5.5 0 0112 5.052 5.5 5.5 0 0116.313 3c2.973 0 5.437 2.322 5.437 5.25 0 3.925-2.438 7.111-4.739 9.256a25.175 25.175 0 01-4.244 3.17 15.247 15.247 0 01-.383.219l-.022.012-.007.004-.003.001a.752.752 0 01-.704 0l-.003-.001z" />
-                    </svg>
-                    내 향수로 저장
-                </>
-            )}
-        </button>
+                        ? "bg-gray-100 text-gray-400 cursor-default border border-gray-200"
+                        : "bg-white text-[#FF8C8C] hover:bg-[#FFF5F5] border border-[#FF8C8C]/30 hover:border-[#FF8C8C]/50"
+                    }`}
+            >
+                {loading ? <span>⏳ 저장 중...</span> : isSaved ? <>✅ 저장됨</> : (
+                    <>
+                        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" className="w-4 h-4">
+                            <path d="M11.645 20.91l-.007-.003-.022-.012a15.247 15.247 0 01-.383-.218 25.18 25.18 0 01-4.244-3.17C4.688 15.36 2.25 12.174 2.25 8.25 2.25 5.322 4.714 3 7.688 3A5.5 5.5 0 0112 5.052 5.5 5.5 0 0116.313 3c2.973 0 5.437 2.322 5.437 5.25 0 3.925-2.438 7.111-4.739 9.256a25.175 25.175 0 01-4.244 3.17 15.247 15.247 0 01-.383.219l-.022.012-.007.004-.003.001a.752.752 0 01-.704 0l-.003-.001z" />
+                        </svg>
+                        내 향수로 저장
+                    </>
+                )}
+            </button>
+
+            {/* Custom Toast Notification - Popover above button */}
+            <div className={`absolute bottom-full left-1/2 transform -translate-x-1/2 mb-2 z-50 transition-all duration-300 max-w-[90vw] ${toast.show ? 'opacity-100 translate-y-0' : 'opacity-0 translate-y-2 pointer-events-none'
+                }`}>
+                <div className="bg-white/95 backdrop-blur-md border border-gray-200 rounded-2xl shadow-lg px-4 md:px-6 py-2 md:py-3 text-xs md:text-sm text-gray-800 font-medium text-center">
+                    {toast.message}
+                </div>
+            </div>
+        </div>
     );
 };
 
@@ -149,10 +168,10 @@ const parseMessageContent = (text: string) => {
                     // [기존 유지] 기타 스타일
                     hr: ({ node, ...props }: any) => <hr {...props} className="my-8 border-[#E5E4DE]" />,
                     em: ({ node, ...props }: any) => (
-                        // 2번 색상 (Pastel Purple: #C4A0E6)
-                        <em {...props} className="not-italic text-[#C4A0E6] font-bold mr-1" />
+                        // 모노톤: 검정 + 기울임 유지
+                        <em {...props} className="text-slate-800 font-semibold mr-1" />
                     ),
-                    strong: ({ node, ...props }: any) => <strong {...props} className="text-[#FF8C8C] font-extrabold" />, // 1번 색상 (Salmon Pink)
+                    strong: ({ node, ...props }: any) => <strong {...props} className="text-slate-900 font-bold" />, // 모노톤: 검정 + 굵게
                     p: ({ node, ...props }: any) => <p {...props} className="mb-3 last:mb-0 leading-relaxed text-slate-700" />,
 
                     // [기존 유지] 리스트
@@ -196,11 +215,7 @@ const parseMessageContent = (text: string) => {
 };
 
 // ✅ 3. 최종 조립 (기존 유지)
-const MessageItem = ({ message, onScroll }: { message: Message; onScroll?: () => void }) => {
-    // 새 메시지 렌더링/스트리밍 갱신 시 스크롤 콜백 호출
-    useEffect(() => {
-        onScroll?.();
-    }, [message.text, message.isStreaming, onScroll]);
+const MessageItem = ({ message }: { message: Message }) => {
     if (message.role === "assistant" && !message.text) return null;
 
     return (
@@ -214,7 +229,7 @@ const MessageItem = ({ message, onScroll }: { message: Message; onScroll?: () =>
                 - md:max-w-[80%]: 데스크탑에서는 너무 길어지지 않게 80% 정도로 제한 (가독성 최적화)
             */}
             <div className={`max-w-[90%] md:max-w-[80%] rounded-2xl px-5 py-4 text-sm leading-relaxed shadow-sm ${message.role === "user"
-                ? "bg-[#E5E4DE] text-[#393939]"
+                ? "bg-[#F5F3EF]/80 backdrop-blur-sm text-[#393939] border border-[#E5E4DE]/60"
                 : "bg-white text-[#393939] border border-[#E5E4DE]"
                 }`}>
                 <div className="mb-1 font-semibold uppercase tracking-[0.2em] text-[0.6rem] text-[#8E8E8E]">

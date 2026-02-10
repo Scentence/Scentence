@@ -145,6 +145,14 @@ const getApiBase = () => {
 
 const apiBase = getApiBase();
 
+const QUERY_PLACEHOLDERS = [
+  "CK One 쓰고 있는데, 더 상쾌하게 만들고 싶어요",
+  "Miss Dior 있는데 너무 달아서 좀 차분하게 바꾸고 싶어요",
+  "Bleu de Chanel 쓰는 중인데, 더 부드러운 분위기로 가고 싶어요",
+  "YSL Libre가 있는데, 데일리로 가볍게 쓰기위한 조합은?",
+  "Santal 33 좋아하는데, 여름에도 어울리게 바꾸고 싶어요",
+];
+
 // ==================== 유틸리티 함수 ====================
 
 /**
@@ -393,7 +401,7 @@ export default function LayeringPage() {
     {
       id: `welcome-${Date.now()}`,
       type: "assistant" as const,
-      content: "안녕하세요! 레이어링 추천을 도와드릴게요. 어떤 향수를 가지고 계신가요? 어떤 느낌의 향을 원하시나요?",
+      content: "안녕하세요! 향수 이름과 원하는 느낌만 적어주세요. 레이어링 조합을 찾아드릴게요.",
       timestamp: new Date(),
     },
   ]);
@@ -402,6 +410,7 @@ export default function LayeringPage() {
 
   /** 사용자가 입력한 자연어 질문 텍스트 */
   const [queryText, setQueryText] = useState("");
+  const [placeholderIndex, setPlaceholderIndex] = useState(0);
 
   /** 채팅 메시지 기록 */
   const [chatMessages, setChatMessages] = useState<ChatMessage[]>(createWelcomeMessages());
@@ -433,9 +442,6 @@ export default function LayeringPage() {
   const [archiveFeedbackStatus, setArchiveFeedbackStatus] = useState<string | null>(null);
   const [archiveFeedbackSaving, setArchiveFeedbackSaving] = useState(false);
   const [archiveFeedbackLocked, setArchiveFeedbackLocked] = useState(false);
-
-  // 향수 검색 모달
-  const [searchModalOpen, setSearchModalOpen] = useState(false);
 
   // [State] PerfumeInfoModal (단일 추천 결과)*/
   const [memberId, setMemberId] = useState(0);
@@ -496,6 +502,14 @@ export default function LayeringPage() {
   useEffect(() => {
     setMemberId(getMemberId(session?.user?.id));
   }, [session?.user?.id]);
+
+  useEffect(() => {
+    const intervalId = window.setInterval(() => {
+      setPlaceholderIndex((prev) => (prev + 1) % QUERY_PLACEHOLDERS.length);
+    }, 5000);
+
+    return () => window.clearInterval(intervalId);
+  }, []);
 
   /**
    * 자연어 질문 분석 및 레이어링 추천 요청
@@ -997,24 +1011,19 @@ export default function LayeringPage() {
   };
 
   return (
-    <PageLayout subTitle="LAYERING LAB" className="min-h-screen bg-[#FDFBF8] text-[#2B2B2B] font-sans">
-      <div className="max-w-5xl mx-auto px-4 sm:px-6 pt-[76px] pb-12">
+    <PageLayout subTitle="LAYERING LAB" className="min-h-screen bg-[#FDFBF8] text-[#2B2B2B] font-sans" disableContentPadding>
+      <div className="max-w-7xl mx-auto px-3 sm:px-6 mt-4 sm:mt-5 md:mt-6 pt-[144px] sm:pt-[156px] md:pt-[168px] pb-12">
         {/* ==================== 페이지 헤더 (본문 타이틀) ==================== */}
         <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between mb-8">
           <div className="space-y-3">
-            {/* 영문 서브 타이틀 */}
-            <p className="text-xs uppercase tracking-[0.3em] text-[#7A6B57] font-medium">
-              Layering Visualization
-            </p>
-
             {/* 메인 타이틀 */}
-            <h1 className="text-2xl sm:text-3xl font-semibold text-[#2E2B28]">
+            <h1 className="text-2xl sm:text-3xl font-semibold leading-[1.2] text-[#2E2B28] break-keep">
               레이어링 어코드 원판
             </h1>
 
             {/* 설명 텍스트 */}
-            <p className="text-xs sm:text-sm text-[#5C5448] leading-relaxed">
-              자연어 질문으로 향수 레이어링을 추천받고,<br />
+            <p className="text-xs sm:text-sm text-[#5C5448] leading-relaxed break-keep">
+              자연어 질문으로 향수 레이어링을 추천받고, <br className="hidden sm:block" />
               21개 어코드의 강도를 원형 그래픽으로 확인하세요.
             </p>
           </div>
@@ -1340,26 +1349,27 @@ export default function LayeringPage() {
           </div>
 
           {/* ==================== 채팅 영역 ==================== */}
-          <div className="min-h-[560px] sm:min-h-[640px] lg:min-h-[700px] h-full rounded-3xl bg-white/80 border border-[#E2D7C5] shadow-sm flex flex-col overflow-hidden">
+          <div className="min-h-[74dvh] sm:min-h-[640px] lg:min-h-[700px] h-full rounded-3xl bg-white/80 border border-[#E2D7C5] shadow-sm flex flex-col overflow-hidden">
             {/* 채팅 헤더 */}
-            <div className="bg-gradient-to-r from-[#F8F4EC] to-[#F0EAE0] px-4 sm:px-6 py-4 border-b border-[#E2D7C5]">
-              <div className="flex items-start justify-between gap-4">
-                <div>
-                  <h2 className="text-sm font-semibold text-[#7A6B57]">레이어링 어시스턴트</h2>
-                  <p className="text-xs text-[#8A7F73] mt-1">원하는 향수 레이어링을 설명해주세요</p>
+            <div className="bg-gradient-to-r from-[#F8F4EC] to-[#F0EAE0] px-4 sm:px-6 py-3 sm:py-4 border-b border-[#E2D7C5]">
+              <div className="flex items-start justify-between gap-2">
+                <div className="min-w-0 pr-2">
+                  <h2 className="text-sm font-semibold text-[#7A6B57] leading-tight">레이어링 어시스턴트</h2>
+                  <p className="text-[11px] sm:text-xs text-[#8A7F73] mt-0.5 sm:mt-1 break-keep leading-[1.35]">원하는 향수 레이어링을 설명해주세요</p>
                 </div>
                 <button
                   type="button"
                   onClick={resetChat}
-                  className="text-[11px] font-semibold text-[#7A6B57] border border-[#E2D7C5] rounded-full px-3 py-1.5 bg-white/80 hover:bg-white transition"
+                  className="shrink-0 whitespace-nowrap text-[10px] sm:text-[11px] font-semibold text-[#7A6B57] border border-[#E2D7C5] rounded-full px-2.5 py-1 sm:px-3 sm:py-1.5 leading-none bg-white/80 hover:bg-white transition"
                 >
-                  대화 초기화
+                  <span className="sm:hidden">초기화</span>
+                  <span className="hidden sm:inline">대화 초기화</span>
                 </button>
               </div>
             </div>
 
             {/* 채팅 메시지 영역 - 스크롤 가능 */}
-            <div className="flex-1 overflow-y-auto px-4 sm:px-6 py-4 space-y-4">
+            <div className="flex-1 min-h-[44dvh] sm:min-h-0 overflow-y-auto px-4 sm:px-6 py-4 space-y-4">
               {chatMessages.map((message) => (
                 <div
                   key={message.id}
@@ -1373,7 +1383,7 @@ export default function LayeringPage() {
                         : "bg-[#F8F4EC] text-[#2E2B28] border border-[#E6DDCF] rounded-bl-sm"
                       }`}
                   >
-                    <p className="text-sm leading-relaxed whitespace-pre-wrap break-words">
+                    <p className="text-sm leading-relaxed whitespace-pre-wrap break-keep">
                       {message.content}
                     </p>
                     {message.similarPerfumes && message.similarPerfumes.length > 0 && (
@@ -1472,12 +1482,31 @@ export default function LayeringPage() {
             )}
 
             {/* 입력창 영역 - 하단 고정 */}
-            <div className="px-4 sm:px-6 py-4 bg-white border-t border-[#E2D7C5]">
+            <div className="px-4 sm:px-6 py-4 bg-white">
               <div className="flex flex-col gap-2">
-                <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
-                  <div className="flex gap-2">
+                <div className="relative rounded-2xl border border-[#E1D7C8] bg-white transition-all">
+                  <textarea
+                    ref={textareaRef}
+                    value={queryText}
+                    onChange={(event) => setQueryText(event.target.value)}
+                    onKeyDown={(event) => {
+                      // Enter 키로 전송 (Shift+Enter는 줄바꿈)
+                      if (event.key === "Enter" && !event.shiftKey) {
+                        event.preventDefault();
+                        handleAnalyze();
+                      }
+                    }}
+                    spellCheck={false}
+                    className="w-full h-[96px] sm:h-[82px] rounded-2xl border-0 bg-transparent px-4 pt-3 pb-10 pr-12 sm:pr-14 text-[13px] sm:text-sm placeholder:text-[13px] sm:placeholder:text-sm resize-none overflow-y-auto [scrollbar-width:none] [&::-webkit-scrollbar]:hidden outline-none focus:outline-none focus:ring-0 transition-all"
+                    placeholder={QUERY_PLACEHOLDERS[placeholderIndex]}
+                    disabled={loading}
+                    aria-label="레이어링 질문 입력"
+                  />
+
+                  <div className="absolute left-2.5 bottom-1 sm:bottom-1.5 flex items-center gap-1.5 sm:gap-2">
                     {/* [추가] 내 향수 선택 팝오버 */}
                     <LayeringPerfumePicker
+                      compact
                       memberId={memberId}
                       onSelect={(name) => {
                         const newText = queryText + (queryText ? " " : "") + name;
@@ -1492,48 +1521,31 @@ export default function LayeringPage() {
                       }}
                     />
 
-                    <button
-                      type="button"
-                      onClick={() => setSearchModalOpen(true)}
-                      className="w-12 h-12 sm:w-[72px] sm:h-[72px] flex items-center justify-center rounded-xl text-gray-400 hover:text-[#C5A55D] hover:bg-[#F5F2EA] transition-all"
-                      title="향수 검색"
-                      aria-label="향수 검색"
-                    >
-                      <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" className="w-6 h-6 sm:w-7 sm:h-7">
-                        <path strokeLinecap="round" strokeLinejoin="round" d="M21 21l-4.35-4.35m1.1-4.4a7.5 7.5 0 11-15 0 7.5 7.5 0 0115 0z" />
-                      </svg>
-                    </button>
+                    <LayeringPerfumeSearchModal
+                      compact
+                      onSelect={(name) => {
+                        const newText = queryText + (queryText ? " " : "") + name;
+                        setQueryText(newText);
+                        setTimeout(() => {
+                          if (textareaRef.current) {
+                            textareaRef.current.focus();
+                            textareaRef.current.setSelectionRange(newText.length, newText.length);
+                          }
+                        }, 0);
+                      }}
+                    />
                   </div>
 
-                  <div className="flex flex-1 gap-2">
-                    <textarea
-                      ref={textareaRef}
-                      value={queryText}
-                      onChange={(event) => setQueryText(event.target.value)}
-                      onKeyDown={(event) => {
-                        // Enter 키로 전송 (Shift+Enter는 줄바꿈)
-                        if (event.key === "Enter" && !event.shiftKey) {
-                          event.preventDefault();
-                          handleAnalyze();
-                        }
-                      }}
-                      spellCheck={false}
-                      className="flex-1 rounded-xl border border-[#E1D7C8] bg-white px-4 py-3 text-sm resize-none focus:outline-none focus:ring-2 focus:ring-[#7A6B57]/30 focus:border-[#7A6B57] transition-all h-12 sm:h-[72px]"
-                      placeholder="예: CK One이 있는데 더 시트러스하고 시원한 느낌이 나게 하려면?"
-                      disabled={loading}
-                      aria-label="레이어링 질문 입력"
-                    />
-                    <button
-                      onClick={handleAnalyze}
-                      className="rounded-xl bg-[#2E2B28] px-3 text-sm font-semibold text-white transition-all hover:bg-[#1E1C1A] disabled:opacity-50 disabled:cursor-not-allowed h-12 w-12 sm:h-[72px] sm:w-[72px] flex items-center justify-center flex-shrink-0"
-                      disabled={loading || !queryText.trim()}
-                      aria-label="메시지 전송"
-                    >
-                      <svg className="w-5 h-5 sm:w-6 sm:h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 11.5L21 3l-6.8 18-3.6-7.2L3 11.5z" />
-                      </svg>
-                    </button>
-                  </div>
+                  <button
+                    onClick={handleAnalyze}
+                    className="absolute right-2.5 bottom-1 sm:bottom-1.5 rounded-md bg-[#2E2B28] text-white transition-all hover:bg-[#1E1C1A] disabled:opacity-50 disabled:cursor-not-allowed h-5 w-5 sm:h-[22px] sm:w-[22px] flex items-center justify-center"
+                    disabled={loading || !queryText.trim()}
+                    aria-label="메시지 전송"
+                  >
+                    <svg className="w-2.5 h-2.5 sm:w-[11px] sm:h-[11px]" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 11.5L21 3l-6.8 18-3.6-7.2L3 11.5z" />
+                    </svg>
+                  </button>
                 </div>
                 <p className="text-[10px] text-[#8A7F73]">
                   Enter로 전송, Shift+Enter로 줄바꿈
@@ -1554,20 +1566,6 @@ export default function LayeringPage() {
         archiveFeedbackLocked={archiveFeedbackLocked}
         onArchiveFeedback={handleArchiveFeedback}
         onClose={() => setInfoModalOpen(false)}
-      />
-      <LayeringPerfumeSearchModal
-        open={searchModalOpen}
-        onClose={() => setSearchModalOpen(false)}
-        onSelect={(name) => {
-          const newText = queryText + (queryText ? " " : "") + name;
-          setQueryText(newText);
-          setTimeout(() => {
-            if (textareaRef.current) {
-              textareaRef.current.focus();
-              textareaRef.current.setSelectionRange(newText.length, newText.length);
-            }
-          }, 0);
-        }}
       />
     </PageLayout>
   );

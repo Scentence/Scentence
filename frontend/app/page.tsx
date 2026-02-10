@@ -48,6 +48,7 @@ export default function LandingPage() {
         showGreeting={true}
         isTransparent={true}
         theme="light"
+        className="!shadow-none"
       />
 
       <main className="w-full">
@@ -123,7 +124,7 @@ function HeroSection() {
 
   return (
     <section className="relative h-[100dvh] md:min-h-screen w-full flex items-center justify-center bg-[#FDFBF8] md:pt-0 md:pb-0 overflow-hidden snap-start snap-always">
-      <div className="container mx-auto px-6 grid md:grid-cols-2 gap-8 md:gap-24 items-center h-full">
+      <div className="container mx-auto px-10 grid md:grid-cols-2 gap-8 md:gap-24 items-center h-full">
 
         {/* LEFT: Text Content */}
         <div className="relative z-10 flex flex-col items-start text-left space-y-3 md:space-y-8 order-2 md:order-1 mb-10 md:mb-0">
@@ -228,7 +229,7 @@ function BrandStorySection() {
 
   return (
     <section ref={ref} className="relative h-[100dvh] md:min-h-[80vh] flex items-center justify-center bg-[#FDFBF8] py-0 md:py-24 overflow-hidden snap-start snap-always">
-      <div className="container mx-auto px-6 grid md:grid-cols-2 gap-4 md:gap-24 items-center">
+      <div className="container mx-auto px-10 grid md:grid-cols-2 gap-4 md:gap-24 items-center">
 
         {/* Visual: Abstract AI with Stickers */}
         <div className="relative order-1 md:order-1 flex justify-center mt-0 md:mt-0">
@@ -301,7 +302,7 @@ function LayeringSection() {
 
   return (
     <section ref={ref} className="relative h-[100dvh] md:min-h-[80vh] flex items-center justify-center bg-[#FDFBF8] py-0 md:py-24 overflow-hidden border-t border-gray-100 snap-start snap-always">
-      <div className="container mx-auto px-6 grid md:grid-cols-2 gap-4 md:gap-24 items-center">
+      <div className="container mx-auto px-10 grid md:grid-cols-2 gap-4 md:gap-24 items-center">
 
         {/* Visual */}
         <div className="relative order-1 md:order-1 flex justify-center mt-0 md:mt-0">
@@ -370,7 +371,7 @@ function ArchiveGalaxySection() {
   return (
     <section className="relative h-[100dvh] md:min-h-[90vh] bg-[#FDFBF8] flex items-center justify-center py-0 md:py-20 snap-start snap-always">
       {/* Dark Mode Card Container */}
-      <div className="container mx-auto px-6 h-full flex items-center">
+      <div className="container mx-auto px-10 h-full flex items-center">
         <div className="w-full bg-[#1a1a1a] rounded-[2rem] md:rounded-[3rem] p-8 md:p-20 relative overflow-hidden text-white shadow-2xl flex flex-col md:block items-center justify-center min-h-[60vh] md:min-h-0">
           {/* Background */}
           <div className="absolute inset-0 z-0 opacity-60">
@@ -435,7 +436,7 @@ function NetworkSection() {
   const router = useRouter();
   return (
     <section className="relative h-[100dvh] md:min-h-[80vh] bg-[#FDFBF8] py-0 md:py-24 flex items-center snap-start snap-always">
-      <div className="container mx-auto px-6 grid md:grid-cols-2 gap-8 md:gap-24 items-center h-full">
+      <div className="container mx-auto px-10 grid md:grid-cols-2 gap-8 md:gap-24 items-center h-full">
         {/* Text */}
         <div className="order-1 md:order-1 space-y-4 md:space-y-6 flex flex-col items-center md:items-start text-center md:text-left">
           <div className="w-4 h-4 rounded-full bg-[#A8E6CF] shadow-[0_0_15px_rgba(168,230,207,0.5)]" />
@@ -484,7 +485,7 @@ function WikiSection() {
   const router = useRouter();
   return (
     <section className="relative h-[100dvh] md:min-h-[60vh] bg-[#FDFBF8] py-0 md:py-24 flex items-center border-t border-gray-100 snap-start snap-always">
-      <div className="container mx-auto px-6 flex flex-col items-center text-center space-y-8">
+      <div className="container mx-auto px-10 flex flex-col items-center text-center space-y-8">
         <motion.div
           initial={{ scale: 0.9, opacity: 0 }}
           whileInView={{ scale: 1, opacity: 1 }}

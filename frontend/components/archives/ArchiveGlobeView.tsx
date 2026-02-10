@@ -14,21 +14,25 @@ interface MyPerfume {
     brand: string;
     brand_kr?: string;
     image_url: string | null;
+    status?: string;
+    register_status?: string;
 }
 
 interface GlobeViewProps {
     collection?: MyPerfume[];
     isKorean?: boolean;
+    onFocusPerfumeChange?: (perfume: MyPerfume | null) => void;
 }
 
 const GLOBE_RADIUS = 12;
+const DEFAULT_CAMERA_Z = 42;
 const CARD_WIDTH = 1.6;
 const CARD_HEIGHT = 2.2;
 const CARD_THICKNESS = 0.05;
 
 // [TWEAK] Hover/Focus Scale Factors
 const HOVER_SCALE = 1.15;
-const FOCUS_SCALE = 1.5;
+const FOCUS_SCALE = 1.12;
 const IMAGE_HOVER_SCALE = 1.1; // 이미지 호버 스케일
 
 const MOCK_IMAGES = [
@@ -56,28 +60,77 @@ function getPositionOnSphere(i: number, N: number, radius: number) {
 // 선택이 해제되면 다시 중앙을 바라보게 합니다.
 function FocusManager({ focusedPosition, controlsRef }: { focusedPosition: THREE.Vector3 | null, controlsRef: any }) {
     const { camera } = useThree();
+    const animationStateRef = useRef<{
+        active: boolean;
+        startTime: number;
+        startPos: THREE.Vector3;
+        endPos: THREE.Vector3;
+    }>({
+        active: false,
+        startTime: 0,
+        startPos: new THREE.Vector3(),
+        endPos: new THREE.Vector3(),
+    });
+    const lastFocusKeyRef = useRef<string>("");
+
+    useEffect(() => {
+        if (!focusedPosition) {
+            animationStateRef.current.active = false;
+            lastFocusKeyRef.current = "";
+            return;
+        }
+
+        const nextKey = `${focusedPosition.x.toFixed(3)}|${focusedPosition.y.toFixed(3)}|${focusedPosition.z.toFixed(3)}`;
+        if (lastFocusKeyRef.current === nextKey) {
+            return;
+        }
+        lastFocusKeyRef.current = nextKey;
+
+        const from = camera.position.clone();
+        const vec = new THREE.Vector3().subVectors(from, focusedPosition);
+        const currentDistance = vec.length();
+        if (currentDistance <= 0.001) return;
+
+        const desiredDistance = Math.max(14, Math.min(currentDistance * 0.76, 21));
+        const dir = vec.normalize();
+        const to = focusedPosition.clone().add(dir.multiplyScalar(desiredDistance));
+
+        animationStateRef.current = {
+            active: true,
+            startTime: performance.now(),
+            startPos: from,
+            endPos: to,
+        };
+    }, [focusedPosition, camera]);
 
     useFrame((state, delta) => {
         if (!controlsRef.current) return;
         const controls = controlsRef.current;
 
         if (focusedPosition) {
-            // [SWOOSH] 타겟으로 부드럽게 이동
-            // lerp(목표지점, 속도): 현재 위치에서 목표 지점으로 점진적 이동
-            controls.target.lerp(focusedPosition, delta * 4); // Target 이동 속도
+            // 타겟만 지속 추적 (포커스 유지)
+            controls.target.lerp(focusedPosition, delta * 6);
 
-            // [ZOOM] 카메라가 타겟 '앞'으로 이동하여 클로즈업
-            // 카메라 위치 = 타겟 위치 + (타겟 방향 벡터 * 거리 8)
-            const direction = new THREE.Vector3().subVectors(camera.position, focusedPosition).normalize();
-            const targetCamPos = focusedPosition.clone().add(direction.multiplyScalar(8));
-
-            // Camera 이동 Speed Up (Swoosh 느낌 강화)
-            camera.position.lerp(targetCamPos, delta * 4);
+            // 카메라는 한 번만 부드럽게 이동하고, 이후에는 사용자 줌/회전 제어권 유지
+            if (animationStateRef.current.active) {
+                const elapsed = performance.now() - animationStateRef.current.startTime;
+                const t = Math.min(1, elapsed / 420);
+                const eased = 1 - Math.pow(1 - t, 3); // easeOutCubic
+                camera.position.lerpVectors(
+                    animationStateRef.current.startPos,
+                    animationStateRef.current.endPos,
+                    eased
+                );
+                if (t >= 1) {
+                    animationStateRef.current.active = false;
+                }
+            }
 
         } else {
             // Focus 해제 시: 단순히 Center(0,0,0)을 보게 함
             controls.target.lerp(new THREE.Vector3(0, 0, 0), delta * 2);
-            // 카메라는 사용자가 둔 위치 그대로 유지 (Auto-Reset 삭제)
+            animationStateRef.current.active = false;
+            lastFocusKeyRef.current = "";
         }
         controls.update();
     });
@@ -148,86 +201,48 @@ function PerfumeCard({
 
                     {/* [VISUALS] 스케일 애니메이션 적용 대상 */}
                     <group ref={visualRef}>
-                        <AnimatedCardContent isDimmed={isDimmed} isFocused={isFocused}>
-
-                            {/* [FIX] GOLD RIM (액자 프레임) 
-                                카드보다 약간 크게 뒤에 배치하여 테두리처럼 보이게 함
-                            */}
-                            <mesh position={[0, 0, -0.01]}>
-                                <boxGeometry args={[CARD_WIDTH + 0.12, CARD_HEIGHT + 0.12, CARD_THICKNESS - 0.02]} />
-                                <meshStandardMaterial
-                                    color="#FFD700"      // 리얼 골드
-                                    metalness={0.6}      // 우주에서도 보이게 메탈 조금 낮춤
-                                    roughness={0.2}
-                                    emissive="#000000"   // 발광 제거
-                                    emissiveIntensity={0}
-                                />
-                            </mesh>
-
-                            {/* MAIN DARK BODY (카드 본체) */}
-                            <mesh castShadow receiveShadow position={[0, 0, 0.01]}>
-                                <boxGeometry args={[CARD_WIDTH, CARD_HEIGHT, CARD_THICKNESS]} />
-                                <meshStandardMaterial
-                                    color="#1a1a1a"
-                                    roughness={0.7}
-                                    metalness={0.1}
-                                    transparent={true}
-                                    opacity={isDimmed ? 0.2 : 1}
-                                />
-                            </mesh>
-
-                            {/* IMAGE PANEL */}
-                            <mesh position={[0, 0.2, CARD_THICKNESS / 2 + 0.03]}>
-                                <planeGeometry args={[CARD_WIDTH - 0.1, CARD_HEIGHT - 0.8]} />
-                                <meshBasicMaterial
-                                    color="#000"
-                                    transparent={true}
-                                    opacity={isDimmed ? 0.2 : 1}
-                                />
-                            </mesh>
-
+                        <AnimatedCardContent>
                             {/* HTML OVERLAY */}
-                            {!isDimmed && (
-                                <Html
-                                    transform
-                                    occlude="blending"
-                                    position={[0, 0, CARD_THICKNESS / 2 + 0.04]}
-                                    style={{
-                                        width: '150px',
-                                        height: '210px',
-                                        pointerEvents: 'none',
-                                        userSelect: 'none',
-                                        display: 'flex',
-                                        flexDirection: 'column',
-                                        alignItems: 'center',
-                                        transition: 'opacity 0.2s',
-                                    }}
-                                >
-                                    <div className="w-full h-full flex flex-col p-2 font-sans antialiased text-left select-none">
-                                        <div className="w-full h-[130px] rounded-sm overflow-hidden mb-3 shadow-inner relative bg-transparent">
-                                            {displayImage && (
-                                                <img
-                                                    src={displayImage}
-                                                    alt={displayName}
-                                                    className="w-full h-full object-contain transition-transform duration-300 ease-out"
-                                                    style={{
-                                                        transform: (hovered || isFocused) ? `scale(${IMAGE_HOVER_SCALE})` : 'scale(1)',
-                                                        backgroundColor: 'transparent'
-                                                    }}
-                                                />
-                                            )}
-                                        </div>
-                                        <div className="flex-1 w-full flex flex-col justify-start px-1">
-                                            <span className="text-[9px] text-gray-400 font-bold uppercase tracking-widest mb-1 truncate block" style={{ color: (hovered || isFocused) ? '#FFD700' : '#9CA3AF' }}>
-                                                {displayBrand}
-                                            </span>
-                                            <span className="text-[11px] text-white font-medium leading-snug line-clamp-2 break-keep block">
-                                                {displayName}
-                                            </span>
-                                        </div>
+                            <Html
+                                transform
+                                position={[0, 0, CARD_THICKNESS / 2 + 0.04]}
+                                style={{
+                                    width: '150px',
+                                    height: '210px',
+                                    pointerEvents: 'none',
+                                    userSelect: 'none',
+                                    display: 'flex',
+                                    flexDirection: 'column',
+                                    alignItems: 'center',
+                                    transition: 'opacity 0.2s',
+                                    opacity: isDimmed ? 0.68 : 1,
+                                    filter: isDimmed ? 'saturate(0.78) brightness(0.9)' : 'none',
+                                }}
+                            >
+                                <div className="w-full h-full flex flex-col p-2 font-sans antialiased text-left select-none">
+                                    <div className="w-full h-[130px] rounded-sm overflow-hidden mb-3 shadow-inner relative bg-transparent">
+                                        {displayImage && (
+                                            <img
+                                                src={displayImage}
+                                                alt={displayName}
+                                                className="w-full h-full object-contain transition-transform duration-300 ease-out"
+                                                style={{
+                                                    transform: (hovered || isFocused) ? `scale(${IMAGE_HOVER_SCALE})` : 'scale(1)',
+                                                    backgroundColor: 'transparent'
+                                                }}
+                                            />
+                                        )}
                                     </div>
-                                </Html>
-                            )}
+                                    <div className="flex-1 w-full flex flex-col justify-start px-1">
+                                        <span className="text-[9px] text-gray-400 font-bold uppercase tracking-widest mb-1 truncate block" style={{ color: (hovered || isFocused) ? '#FFD700' : '#9CA3AF' }}>
+                                            {displayBrand}
+                                        </span>
+                                        <span className="text-[11px] text-white font-medium leading-snug line-clamp-2 break-keep block">
+                                            {displayName}
+                                        </span>
+                                    </div>
+                                </div>
+                            </Html>
                         </AnimatedCardContent>
                     </group>
                 </group>
@@ -237,12 +252,12 @@ function PerfumeCard({
 }
 
 // 카드의 내용물을 감싸는 래퍼 (Dim 처리 시 뒤로 물러나는 애니메이션 담당)
-function AnimatedCardContent({ isDimmed, isFocused, children }: { isDimmed: boolean, isFocused: boolean, children: React.ReactNode }) {
+function AnimatedCardContent({ children }: { children: React.ReactNode }) {
     const groupRef = useRef<THREE.Group>(null);
     useFrame((state, delta) => {
         if (groupRef.current) {
-            // Dimmed -> Move Back (z: -15) 화면 뒤로 멀어짐
-            const targetZ = isDimmed ? -15 : 0;
+            // 카드가 과하게 멀어지면 이미지가 사라져 보일 수 있어, z 이동은 비활성화
+            const targetZ = 0;
             groupRef.current.position.z = THREE.MathUtils.lerp(groupRef.current.position.z, targetZ, delta * 3);
         }
     });
@@ -260,14 +275,14 @@ function Background({ onReset }: { onReset: () => void }) {
 }
 
 // [MAIN COMPONENT] 3D 갤럭시 뷰 메인
-export default function ArchiveGlobeView({ collection = [], isKorean = true }: GlobeViewProps) {
+export default function ArchiveGlobeView({ collection = [], isKorean = true, onFocusPerfumeChange }: GlobeViewProps) {
     const [focusedId, setFocusedId] = useState<number | null>(null);
     const controlsRef = useRef<any>(null);
 
     // 컬렉션 데이터가 없을 경우 보여줄 더미 데이터 생성
-    const displayConfig = useMemo(() => {
+    const displayConfig = useMemo<MyPerfume[]>(() => {
         if (collection.length > 0) return collection;
-        return Array.from({ length: 30 }).map((_, i) => ({
+        return Array.from({ length: 30 }).map((_, i): MyPerfume => ({
             my_perfume_id: i,
             name: `Perfume No.${i + 1}`,
             name_en: `Perfume No.${i + 1}`,
@@ -275,6 +290,8 @@ export default function ArchiveGlobeView({ collection = [], isKorean = true }: G
             brand: "SCENTENCE",
             brand_kr: "센텐스",
             image_url: null,
+            register_status: "HAVE",
+            status: "HAVE",
         }));
     }, [collection]);
 
@@ -286,26 +303,61 @@ export default function ArchiveGlobeView({ collection = [], isKorean = true }: G
         return getPositionOnSphere(idx, displayConfig.length, GLOBE_RADIUS);
     }, [focusedId, displayConfig]);
 
+    const focusedPerfume = useMemo(() => {
+        if (focusedId === null) return null;
+        return displayConfig.find(item => item.my_perfume_id === focusedId) || null;
+    }, [focusedId, displayConfig]);
+
+    const focusedImage = useMemo(() => {
+        if (!focusedPerfume) return null;
+        if (focusedPerfume.image_url) return focusedPerfume.image_url;
+        const idx = displayConfig.findIndex(item => item.my_perfume_id === focusedPerfume.my_perfume_id);
+        if (idx === -1) return null;
+        return MOCK_IMAGES[idx % MOCK_IMAGES.length];
+    }, [focusedPerfume, displayConfig]);
+
+    useEffect(() => {
+        onFocusPerfumeChange?.(focusedPerfume);
+    }, [focusedPerfume, onFocusPerfumeChange]);
+
+    const statusRaw = focusedPerfume?.register_status || focusedPerfume?.status || "HAVE";
+    const statusLabel = isKorean
+        ? (statusRaw === "HAVE" ? "보유" : statusRaw === "RECOMMENDED" || statusRaw === "WISH" || statusRaw === "WANT" ? "위시" : "기록")
+        : (statusRaw === "HAVE" ? "HAVE" : statusRaw === "RECOMMENDED" || statusRaw === "WISH" || statusRaw === "WANT" ? "WISH" : "HAD");
+    const statusClass =
+        statusRaw === "HAVE"
+            ? "bg-indigo-500/20 text-indigo-200 border-indigo-300/40"
+            : statusRaw === "RECOMMENDED" || statusRaw === "WISH" || statusRaw === "WANT"
+                ? "bg-rose-500/20 text-rose-200 border-rose-300/40"
+                : "bg-amber-500/20 text-amber-200 border-amber-300/40";
+
+    const focusedDisplayName = focusedPerfume
+        ? (isKorean ? (focusedPerfume.name_kr || focusedPerfume.name) : (focusedPerfume.name_en || focusedPerfume.name))
+        : "";
+    const focusedDisplayBrand = focusedPerfume
+        ? (isKorean ? (focusedPerfume.brand_kr || focusedPerfume.brand) : focusedPerfume.brand)
+        : "";
+
     return (
-        <div className="w-full h-[700px] rounded-[2rem] overflow-hidden border border-gray-900 shadow-2xl relative bg-black select-none">
+        <div className="w-full aspect-square rounded-[2rem] overflow-hidden border border-gray-900 shadow-2xl relative bg-black select-none">
 
             <div className="absolute inset-0 bg-[radial-gradient(ellipse_at_center,_var(--tw-gradient-stops))] from-slate-900/30 via-black to-black pointer-events-none" />
 
             {/* Camera Setup: Far Clip 1000 for visibility */}
-            <Canvas shadows camera={{ position: [0, 0, 38], fov: 38, near: 0.1, far: 1000 }} dpr={[1, 2]}>
+            <Canvas shadows camera={{ position: [0, 0, DEFAULT_CAMERA_Z], fov: 38, near: 0.1, far: 1000 }} dpr={[1, 2]}>
 
                 {/* [Visuals: Deep Universe Fog] - 깊이감 생성 */}
                 <fog attach="fog" args={['#050505', 20, 100]} />
 
                 {/* [Visuals: Layer 1 - Wide Distant Stars] - 배경에 깔리는 수많은 작은 별들 */}
-                <Stars radius={300} depth={100} count={50000} factor={4} saturation={0} fade speed={1} />
+                <Stars radius={300} depth={100} count={24000} factor={4} saturation={0} fade speed={0} />
 
                 {/* [Visuals: Layer 2 - Bright Nearby Stars] - 반짝이는 큰 별들 */}
-                <Stars radius={100} depth={50} count={5000} factor={10} saturation={1} fade speed={2} />
+                <Stars radius={100} depth={50} count={2200} factor={10} saturation={1} fade speed={0} />
 
                 {/* [Visuals: Foreground Space Dust] - 금빛 우주 먼지 (밀도 증가) */}
-                <Sparkles count={500} scale={40} size={2} speed={0.4} opacity={0.5} color="#ffd700" noise={1} />
-                <Sparkles count={300} scale={30} size={1} speed={0.8} opacity={0.3} color="#ffffff" noise={0.5} />
+                <Sparkles count={180} scale={40} size={2} speed={0} opacity={0.32} color="#ffd700" noise={0} />
+                <Sparkles count={120} scale={30} size={1} speed={0} opacity={0.2} color="#ffffff" noise={0} />
 
                 <ambientLight intensity={0.5} />
                 <spotLight position={[10, 10, 20]} angle={0.5} penumbra={1} intensity={2} color="#ffffff" />
@@ -352,6 +404,41 @@ export default function ArchiveGlobeView({ collection = [], isKorean = true }: G
                     CLICK TO FOCUS • SCROLL TO ZOOM
                 </span>
             </div>
+
+            {focusedPerfume && (
+                <div className="absolute left-1/2 -translate-x-1/2 bottom-4 w-[calc(100%-1.5rem)] max-w-md z-20">
+                    <div className="rounded-2xl border border-white/20 bg-black/60 backdrop-blur-xl shadow-[0_18px_42px_rgba(0,0,0,0.58)] px-3.5 py-3">
+                        <div className="flex items-center gap-3">
+                            <div className="w-14 h-14 rounded-xl bg-white/5 border border-white/10 overflow-hidden shrink-0 flex items-center justify-center">
+                                {focusedImage ? (
+                                    <img
+                                        src={focusedImage}
+                                        alt={focusedDisplayName}
+                                        className="w-full h-full object-contain"
+                                    />
+                                ) : (
+                                    <span className="text-[10px] text-white/40 font-bold">NO IMG</span>
+                                )}
+                            </div>
+                            <div className="min-w-0 flex-1">
+                                <p className="text-[10px] uppercase tracking-[0.14em] text-white/65 font-bold truncate">{focusedDisplayBrand}</p>
+                                <p className="text-sm sm:text-base text-white font-extrabold leading-tight break-keep">{focusedDisplayName}</p>
+                                <span className={`inline-flex mt-1 rounded-full border px-2 py-0.5 text-[10px] font-black tracking-wider ${statusClass}`}>
+                                    {statusLabel}
+                                </span>
+                            </div>
+                            <button
+                                type="button"
+                                onClick={() => setFocusedId(null)}
+                                className="shrink-0 w-7 h-7 rounded-full border border-white/25 text-white/80 hover:text-white hover:border-white/40 flex items-center justify-center"
+                                aria-label={isKorean ? "포커스 닫기" : "Close focus"}
+                            >
+                                ×
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            )}
         </div>
     );
 }

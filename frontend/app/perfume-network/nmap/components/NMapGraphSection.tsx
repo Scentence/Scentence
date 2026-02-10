@@ -6,10 +6,11 @@ import { ACCORD_DESCRIPTIONS, ACCORD_LABELS, BRAND_LABELS, getAccordColor, hexTo
 interface Props {
   fullPayload: NetworkPayload | null;
   labelsData: LabelsData | null;
+  isKorean: boolean;
+  setIsKorean: (v: boolean | ((prev: boolean) => boolean)) => void;
   selectedPerfumeId: string | null;
   setSelectedPerfumeId: (id: string | null) => void;
-  selectedAccordName: string | null;
-  setSelectedAccordName: (name: string | null) => void;
+  highlightedSimilarPerfumeId: string | null;
   displayLimit: number;
   setDisplayLimit: (limit: number) => void;
   minSimilarity: number;
@@ -31,10 +32,11 @@ interface Props {
 export default function NMapGraphSection({
   fullPayload,
   labelsData,
+  isKorean,
+  setIsKorean,
   selectedPerfumeId,
   setSelectedPerfumeId,
-  selectedAccordName,
-  setSelectedAccordName,
+  highlightedSimilarPerfumeId,
   displayLimit,
   setDisplayLimit,
   minSimilarity,
@@ -54,6 +56,7 @@ export default function NMapGraphSection({
 }: Props) {
   const [scriptReady, setScriptReady] = useState(false);
   const [freezeMotion, setFreezeMotion] = useState(false);
+  const [mobileTab, setMobileTab] = useState<"menu" | "map">("map");
   const [hoveredSimilarPerfumeId, setHoveredSimilarPerfumeId] = useState<string | null>(null);
 
   // [Network Graph Refs]
@@ -73,24 +76,121 @@ export default function NMapGraphSection({
     }
   }, []);
 
+  useEffect(() => {
+    if (mobileTab !== "map" || !networkRef.current) return;
+    const timer = setTimeout(() => {
+      networkRef.current?.redraw?.();
+      networkRef.current?.fit?.({ animation: { duration: 250 } });
+    }, 80);
+    return () => clearTimeout(timer);
+  }, [mobileTab]);
+
   const fmtAccord = (v: string) => {
+    if (!isKorean) return v;
     const trimmed = v.trim();
     if (trimmed === "Fougère" || trimmed === "Foug\\u00e8re" || trimmed.includes("Foug")) return "푸제르";
     return labelsData?.accords[trimmed] || ACCORD_LABELS[trimmed] || v;
   };
-  const fmtBrand = (v: string) => labelsData?.brands[v.trim()] || BRAND_LABELS[v.trim()] || v;
+  const fmtBrand = (v: string) => {
+    if (!isKorean) return v;
+    return labelsData?.brands[v.trim()] || BRAND_LABELS[v.trim()] || v;
+  };
+  const fmtPerfumeName = (node: NetworkNode) =>
+    isKorean ? (labelsData?.perfume_names?.[node.id] || node.label) : node.label;
 
   const getStatusBadge = (status?: string | null) => {
     if (!status) return null;
     const normalized = status.trim().toUpperCase();
-    const map: Record<string, { label: string; className: string }> = {
-      HAVE: { label: "보유", className: "bg-[#E8F0FF] text-[#3B5CC9]" },
-      WANT: { label: "위시", className: "bg-[#FFE8EE] text-[#C24B6B]" },
-      HAD: { label: "과거", className: "bg-[#F2F2F2] text-[#7A6B57]" },
-      RECOMMENDED: { label: "추천", className: "bg-[#E8F6EC] text-[#2F7D4C]" },
+    const map: Record<string, { label: string; className: string; pillBg: string; pillText: string }> = {
+      HAVE: { label: isKorean ? "보유" : "Have", className: "bg-[#E8F0FF] text-[#3B5CC9]", pillBg: "#E8F0FF", pillText: "#3B5CC9" },
+      WANT: { label: isKorean ? "위시" : "Wish", className: "bg-[#FFE8EE] text-[#C24B6B]", pillBg: "#FFE8EE", pillText: "#C24B6B" },
+      HAD: { label: isKorean ? "과거" : "Past", className: "bg-[#F2F2F2] text-[#7A6B57]", pillBg: "#F2F2F2", pillText: "#7A6B57" },
+      RECOMMENDED: { label: isKorean ? "추천" : "Recommended", className: "bg-[#E8F6EC] text-[#2F7D4C]", pillBg: "#E8F6EC", pillText: "#2F7D4C" },
     };
     const matched = map[normalized];
-    return matched || { label: normalized, className: "bg-[#F8F4EC] text-[#8A7C68]" };
+    return matched || { label: normalized, className: "bg-[#F8F4EC] text-[#8A7C68]", pillBg: "#F8F4EC", pillText: "#8A7C68" };
+  };
+
+  const buildPerfumeTooltipTitle = (node: NetworkNode) => {
+    const perfumeName = fmtPerfumeName(node);
+    const brandName = fmtBrand(node.brand || "") || (isKorean ? "브랜드 정보 없음" : "Unknown brand");
+    const statusBadge = getStatusBadge(node.register_status);
+
+    const card = document.createElement("div");
+    card.className = "nmap-tooltip-card";
+
+    const head = document.createElement("div");
+    head.className = "nmap-tooltip-head";
+
+    const thumb = document.createElement("div");
+    thumb.className = "nmap-tooltip-thumb";
+
+    if (node.image) {
+      const img = document.createElement("img");
+      img.className = "nmap-tooltip-image";
+      img.src = node.image;
+      img.alt = perfumeName;
+      thumb.appendChild(img);
+    } else {
+      const fallback = document.createElement("div");
+      fallback.className = "nmap-tooltip-image-fallback";
+      fallback.textContent = "✨";
+      thumb.appendChild(fallback);
+    }
+
+    const meta = document.createElement("div");
+    meta.className = "nmap-tooltip-meta";
+
+    const name = document.createElement("p");
+    name.className = "nmap-tooltip-name";
+    name.textContent = perfumeName;
+
+    const brand = document.createElement("p");
+    brand.className = "nmap-tooltip-brand";
+    brand.textContent = brandName;
+
+    meta.appendChild(name);
+    meta.appendChild(brand);
+
+    head.appendChild(thumb);
+    head.appendChild(meta);
+
+    if (statusBadge) {
+      const badge = document.createElement("span");
+      badge.className = "nmap-tooltip-status";
+      badge.textContent = statusBadge.label;
+      badge.style.background = statusBadge.pillBg;
+      badge.style.color = statusBadge.pillText;
+      head.appendChild(badge);
+    }
+
+    card.appendChild(head);
+    return card;
+  };
+
+  const buildAccordTooltipTitle = (node: NetworkNode) => {
+    const accordName = fmtAccord(node.label);
+    const rawAccordDesc = ACCORD_DESCRIPTIONS[node.label] || (isKorean ? "향기 노트 정보" : "Accord information");
+    const accordDesc = rawAccordDesc
+      .split(",")
+      .map((part) => part.trim())
+      .filter(Boolean)
+      .join(",\n");
+
+    const card = document.createElement("div");
+    card.className = "nmap-tooltip-card nmap-tooltip-card--accord";
+
+    const name = document.createElement("p");
+    name.className = "nmap-tooltip-name";
+    name.textContent = accordName;
+
+    const desc = document.createElement("p");
+    desc.className = "nmap-tooltip-desc";
+    desc.textContent = accordDesc;
+
+    card.appendChild(name);
+    card.appendChild(desc);
+    return card;
   };
 
   const filteredPayload = useMemo(() => {
@@ -173,34 +273,33 @@ export default function NMapGraphSection({
         const isSel = n.id === selectedPerfumeId;
         const isSim = top5SimilarIds.has(n.id);
         const isHov = n.id === hoveredSimilarPerfumeId;
-        const isBlur = !!selectedPerfumeId && !isSel && !isSim && !isHov;
+        const isMarked = n.id === highlightedSimilarPerfumeId;
+        const isBlur = !!selectedPerfumeId && !isSel && !isSim && !isHov && !isMarked;
         const border = getAccordColor(n.primary_accord);
-        const statusBadge = getStatusBadge(n.register_status);
+        const perfumeName = fmtPerfumeName(n);
         return {
-          id: n.id, label: isHov || isSel ? n.label : "", title: `${n.label}\n${fmtBrand(n.brand || "")}${statusBadge ? `\n내 향수 상태: ${statusBadge.label}` : ""}`,
-          shape: "circularImage", image: n.image, size: isSel ? 80 : (isSim || isHov ? 65 : (isBlur ? 35 : 50)),
-          borderWidth: isSel ? 12 : (isHov ? 10 : (isBlur ? 3 : 8)),
-          color: { border: isHov ? "#FFD700" : (isSel ? border : hexToRgba(border, isBlur ? 0.08 : 1)), background: isBlur ? "rgba(255, 251, 243, 0.15)" : "#FFFBF3" },
-          opacity: isBlur ? 0.08 : 1, font: { size: isSel ? 18 : 16, bold: true, background: "white", color: isSel ? "#C8A24D" : "#2E2B28" },
+          id: n.id, label: isHov || isSel || isMarked ? perfumeName : "", title: buildPerfumeTooltipTitle(n),
+          shape: "circularImage", image: n.image, size: isSel ? 60 : (isMarked ? 51 : (isSim || isHov ? 47 : (isBlur ? 28 : 38))),
+          borderWidth: isSel ? 5.5 : (isMarked ? 4 : (isHov ? 5 : (isBlur ? 1 : 3.5))),
+          color: { border: isMarked ? "#2F7D4C" : (isHov ? "#FFD700" : (isSel ? border : hexToRgba(border, isBlur ? 0.08 : 1))), background: isBlur ? "rgba(255, 251, 243, 0.15)" : "#FFFBF3" },
+          opacity: isBlur ? 0.08 : 1, font: { size: isSel ? 17 : 15, bold: true, background: "white", color: isSel ? "#C8A24D" : (isMarked ? "#2F7D4C" : "#2E2B28") },
           fixed: isSel ? { x: true, y: true } : false, x: isSel ? 0 : undefined, y: isSel ? 0 : undefined,
         };
       }
       const isHigh = !selectedPerfumeId || displayPayload.edges.some(e => e.type === "HAS_ACCORD" && e.to === n.id && (e.from === selectedPerfumeId || top5SimilarIds.has(e.from)));
       const isBlurAccord = selectedPerfumeId && !isHigh;
       return {
-        id: n.id, label: isBlurAccord ? "" : fmtAccord(n.label), title: `${fmtAccord(n.label)}\n${ACCORD_DESCRIPTIONS[n.label] || ""}`,
-        shape: "dot", size: isHigh ? 50 : (isBlurAccord ? 25 : 35),
+        id: n.id, label: isBlurAccord ? "" : fmtAccord(n.label), title: buildAccordTooltipTitle(n),
+        shape: "dot", size: isHigh ? 35 : (isBlurAccord ? 16 : 27),
         color: { background: hexToRgba(getAccordColor(n.label), isHigh ? 0.7 : (isBlurAccord ? 0.03 : 0.1)) },
-        font: { size: isHigh ? 16 : 14, bold: isHigh }, opacity: isBlurAccord ? 0.15 : 1, mass: 5
+        font: { size: isHigh ? 15 : 13, bold: isHigh }, opacity: isBlurAccord ? 0.15 : 1, mass: 6
       };
     });
 
     const edges = displayPayload.edges.map(e => {
-      const edgeId = `${e.from}-${e.to}-${e.type}`;
-      if (e.type === "SIMILAR_TO") return { id: edgeId, from: e.from, to: e.to, hidden: true };
+      if (e.type === "SIMILAR_TO") return { from: e.from, to: e.to, hidden: true };
       const isFromSelected = selectedPerfumeId && (e.from === selectedPerfumeId || top5SimilarIds.has(e.from));
       return {
-        id: edgeId,
         from: e.from, to: e.to, value: e.weight, hidden: selectedPerfumeId && !isFromSelected,
         color: { color: "#9C8D7A", opacity: isFromSelected ? 0.3 : 0.08 }, width: isFromSelected ? 1.2 : 0.4, dashes: true, smooth: { type: "continuous" }
       };
@@ -211,7 +310,7 @@ export default function NMapGraphSection({
       edgesDataRef.current = new vis.DataSet(edges);
       networkRef.current = new vis.Network(containerRef.current, { nodes: nodesDataRef.current, edges: edgesDataRef.current }, {
         interaction: { hover: true, navigationButtons: true, tooltipDelay: 200 },
-        physics: { enabled: !freezeMotion, solver: "forceAtlas2Based", forceAtlas2Based: { gravitationalConstant: -200, centralGravity: 0.01, springLength: 240, springConstant: 0.04, damping: 0.4, avoidOverlap: 2.5 }, stabilization: false }
+        physics: { enabled: !freezeMotion, solver: "forceAtlas2Based", forceAtlas2Based: { gravitationalConstant: -140, centralGravity: 0.01, springLength: 255, springConstant: 0.04, damping: 0.9, avoidOverlap: 3.2 }, stabilization: { enabled: true, iterations: 200 } }
       });
       networkRef.current.on("click", (p: any) => {
         const nodeId = p.nodes[0];
@@ -221,74 +320,204 @@ export default function NMapGraphSection({
           const perfumeIdNum = nodeId.match(/\d+/)?.[0];
           if (perfumeIdNum) logActivity({ perfume_id: Number(perfumeIdNum) });
         } else if (nodeId && nodeId.startsWith("accord_")) {
-          // 어코드 노드 클릭 시 상세 모달 표시
+          // 어코드 노드 클릭 시
           const accordName = nodeId.replace("accord_", "");
-          setSelectedAccordName(accordName);
-          setSelectedPerfumeId(null);
           logActivity({ accord_selected: accordName });
-        } else {
-          setSelectedPerfumeId(null);
-          setSelectedAccordName(null);
-        }
+        } else setSelectedPerfumeId(null);
       });
-
-      // 초기 로드 시 화면에 맞게 줌 조정 (Stabilization이 꺼져 있으므로 약간의 지연 후 실행)
-      setTimeout(() => {
-        if (networkRef.current) {
-          networkRef.current.fit({
-            animation: { duration: 1000, easingFunction: 'easeInOutQuad' }
-          });
-        }
-      }, 500);
     } else {
       nodesDataRef.current.update(nodes);
-      const toRemoveNodes = (nodesDataRef.current.getIds() as string[]).filter(id => !nodes.some(n => n.id === id));
-      if (toRemoveNodes.length > 0) nodesDataRef.current.remove(toRemoveNodes);
-
-      edgesDataRef.current.update(edges);
-      const toRemoveEdges = (edgesDataRef.current.getIds() as string[]).filter(id => !edges.some(e => e.id === id));
-      if (toRemoveEdges.length > 0) edgesDataRef.current.remove(toRemoveEdges);
-
+      const toRemove = (nodesDataRef.current.getIds() as string[]).filter(id => !nodes.some(n => n.id === id));
+      if (toRemove.length > 0) nodesDataRef.current.remove(toRemove);
+      edgesDataRef.current.clear(); edgesDataRef.current.add(edges);
       if (selectedPerfumeId) try { networkRef.current.moveNode(selectedPerfumeId, 0, 0); } catch (e) { }
-      networkRef.current.setOptions({ physics: { enabled: !freezeMotion, stabilization: false } });
-
-      // 데이터 업데이트 후에도 화면에 맞춤 (선택된 향수가 없을 때만)
-      if (!selectedPerfumeId) {
-        networkRef.current.fit({ animation: { duration: 500, easingFunction: 'easeInOutQuad' } });
-      }
-
-      if (!freezeMotion) {
-        networkRef.current.startSimulation();
-      }
+      networkRef.current.setOptions({ physics: { enabled: !freezeMotion } });
     }
-  }, [scriptReady, displayPayload, selectedPerfumeId, freezeMotion, hoveredSimilarPerfumeId]);
+  }, [scriptReady, displayPayload, selectedPerfumeId, highlightedSimilarPerfumeId, freezeMotion, hoveredSimilarPerfumeId, isKorean]);
 
   return (
     <div className="space-y-3">
       <Script src="https://unpkg.com/vis-network/standalone/umd/vis-network.min.js" strategy="afterInteractive" onLoad={() => setScriptReady(true)} />
-      <div className="rounded-2xl border border-[#E6DDCF] bg-white/80 p-5 space-y-5">
+      <div className="md:hidden flex items-center justify-between gap-2">
+        <div className="inline-flex h-8 w-full max-w-[260px] rounded-full border border-[#E2D7C5] bg-white shadow-sm">
+          <button
+            type="button"
+            onClick={() => setMobileTab("menu")}
+            className={`flex-1 h-full rounded-full text-[13px] font-semibold transition-colors ${mobileTab === "menu" ? "bg-[#C8A24D] text-white" : "text-[#7A6B57]"}`}
+          >
+            {isKorean ? "메뉴" : "Menu"}
+          </button>
+          <button
+            type="button"
+            onClick={() => setMobileTab("map")}
+            className={`flex-1 h-full rounded-full text-[13px] font-semibold transition-colors ${mobileTab === "map" ? "bg-[#C8A24D] text-white" : "text-[#7A6B57]"}`}
+          >
+            {isKorean ? "지도" : "Map"}
+          </button>
+        </div>
+        <div className="inline-flex h-8 rounded-full border border-[#E2D7C5] bg-white shadow-sm shrink-0">
+          <button
+            type="button"
+            onClick={() => setIsKorean(true)}
+            aria-label="Switch to Korean"
+            className={`h-full px-3 rounded-full text-[11px] font-semibold transition-colors ${isKorean ? "bg-[#C8A24D] text-white" : "text-[#7A6B57]"}`}
+          >
+            한국어
+          </button>
+          <button
+            type="button"
+            onClick={() => setIsKorean(false)}
+            aria-label="Switch to English"
+            className={`h-full px-3 rounded-full text-[11px] font-semibold transition-colors ${!isKorean ? "bg-[#C8A24D] text-white" : "text-[#7A6B57]"}`}
+          >
+            ENG
+          </button>
+        </div>
+      </div>
+
+      <div className={`${mobileTab === "menu" ? "block" : "hidden"} md:block rounded-2xl border border-[#E6DDCF] bg-white/80 p-5 space-y-5`}>
         <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
           <div className="space-y-2">
-            <div className="flex justify-between items-center"><label className="text-[13px] font-bold">1. 표시할 향수 개수</label><span className="text-sm font-bold text-[#C8A24D]">{displayLimit}개</span></div>
+            <div className="flex justify-between items-center"><label className="text-[13px] font-bold">{isKorean ? "1. 표시할 향수 개수" : "1. Perfume Count"}</label><span className="text-sm font-bold text-[#C8A24D]">{isKorean ? `${displayLimit}개` : displayLimit}</span></div>
             <input type="range" min="1" max="100" value={displayLimit} onChange={e => setDisplayLimit(Number(e.target.value))} className="w-full h-1.5 accent-[#C8A24D]" />
           </div>
           <div className="space-y-2">
-            <div className="flex justify-between items-center"><label className="text-[13px] font-bold">2. 분위기 닮은 정도</label><span className="text-sm font-bold text-[#C8A24D]">{minSimilarity.toFixed(2)}</span></div>
+            <div className="flex justify-between items-center"><label className="text-[13px] font-bold">{isKorean ? "2. 분위기 닮은 정도" : "2. Similarity Level"}</label><span className="text-sm font-bold text-[#C8A24D]">{minSimilarity.toFixed(2)}</span></div>
             <input type="range" min="0" max="1" step="0.05" value={minSimilarity} onChange={e => setMinSimilarity(Number(e.target.value))} className="w-full h-1.5 accent-[#C8A24D]" />
           </div>
         </div>
         <div className="flex flex-col sm:flex-row justify-between items-center gap-4 pt-4 border-t border-[#E6DDCF]">
-          <span className="text-xs text-[#7A6B57]">{filteredPayload?.nodes.filter(n => n.type === "perfume").length || 0}개 향수 발견 • {displayLimit}개 표시 중</span>
+          <span className="text-xs text-[#7A6B57]">
+            {isKorean
+              ? `${filteredPayload?.nodes.filter(n => n.type === "perfume").length || 0}개 향수 발견 • ${displayLimit}개 표시 중`
+              : `${filteredPayload?.nodes.filter(n => n.type === "perfume").length || 0} perfumes found • showing ${displayLimit}`}
+          </span>
           <div className="flex flex-col sm:flex-row gap-2 w-full sm:w-auto justify-center sm:justify-end">
-            <button onClick={() => networkRef.current?.fit()} className="h-9 px-4 rounded-full border border-[#E2D7C5] bg-white text-xs font-semibold whitespace-nowrap">화면 맞춤</button>
-            <button onClick={() => setFreezeMotion(!freezeMotion)} className="h-9 px-4 rounded-full border border-[#E2D7C5] bg-white text-xs font-semibold whitespace-nowrap">{freezeMotion ? "움직임 재개" : "움직임 멈춤"}</button>
-            <button onClick={() => { if (!memberId) setShowLoginPrompt(true); else setShowMyPerfumesOnly(!showMyPerfumesOnly); }} className={`h-9 px-4 rounded-full text-xs font-semibold border transition whitespace-nowrap ${showMyPerfumesOnly ? "bg-[#C8A24D] text-white border-[#C8A24D]" : "bg-white text-[#7A6B57] border-[#E2D7C5] hover:bg-[#F8F4EC]"}`}>{showMyPerfumesOnly ? "전체 향수 보기" : "내 향수 보기"}</button>
+            <button onClick={() => networkRef.current?.fit()} className="h-9 px-4 rounded-full border border-[#E2D7C5] bg-white text-xs font-semibold whitespace-nowrap">{isKorean ? "화면 맞춤" : "Fit View"}</button>
+            <button onClick={() => setFreezeMotion(!freezeMotion)} className="h-9 px-4 rounded-full border border-[#E2D7C5] bg-white text-xs font-semibold whitespace-nowrap">{freezeMotion ? (isKorean ? "움직임 재개" : "Resume Motion") : (isKorean ? "움직임 멈춤" : "Pause Motion")}</button>
+            <button onClick={() => { if (!memberId) setShowLoginPrompt(true); else setShowMyPerfumesOnly(!showMyPerfumesOnly); }} className={`h-9 px-4 rounded-full text-xs font-semibold border transition whitespace-nowrap ${showMyPerfumesOnly ? "bg-[#C8A24D] text-white border-[#C8A24D]" : "bg-white text-[#7A6B57] border-[#E2D7C5] hover:bg-[#F8F4EC]"}`}>{showMyPerfumesOnly ? (isKorean ? "전체 향수 보기" : "All Perfumes") : (isKorean ? "내 향수 보기" : "My Perfumes")}</button>
+            <div className="hidden md:inline-flex h-9 rounded-full border border-[#E2D7C5] bg-white shadow-sm shrink-0">
+              <button
+                type="button"
+                onClick={() => setIsKorean(true)}
+                aria-label="Switch to Korean"
+                className={`h-full px-3 rounded-full text-xs font-semibold transition-colors ${isKorean ? "bg-[#C8A24D] text-white" : "text-[#7A6B57]"}`}
+              >
+                한국어
+              </button>
+              <button
+                type="button"
+                onClick={() => setIsKorean(false)}
+                aria-label="Switch to English"
+                className={`h-full px-3 rounded-full text-xs font-semibold transition-colors ${!isKorean ? "bg-[#C8A24D] text-white" : "text-[#7A6B57]"}`}
+              >
+                ENG
+              </button>
+            </div>
           </div>
         </div>
       </div>
-      <div className="h-[70vh] rounded-3xl border border-[#E2D7C5] bg-white/90 p-4 relative overflow-hidden">
+      <div className={`${mobileTab === "map" ? "block" : "hidden"} md:block h-[70vh] rounded-3xl border border-[#E2D7C5] bg-white/90 p-4 relative overflow-hidden`}>
         <div ref={containerRef} className="h-full w-full" />
       </div>
+
+      <style jsx global>{`
+        .vis-tooltip {
+          padding: 0 !important;
+          border: 0 !important;
+          background: transparent !important;
+          box-shadow: none !important;
+          max-width: 280px !important;
+        }
+
+        .vis-tooltip .nmap-tooltip-card {
+          min-width: 220px;
+          max-width: 280px;
+          border-radius: 14px;
+          border: 1px solid #e2d7c5;
+          background: linear-gradient(140deg, rgba(255, 251, 243, 0.98) 0%, rgba(248, 244, 236, 0.98) 100%);
+          box-shadow: 0 12px 28px rgba(28, 21, 13, 0.18), 0 2px 8px rgba(200, 162, 77, 0.18);
+          padding: 10px 12px;
+          backdrop-filter: blur(4px);
+          -webkit-backdrop-filter: blur(4px);
+        }
+
+        .vis-tooltip .nmap-tooltip-card--accord {
+          min-width: 180px;
+        }
+
+        .vis-tooltip .nmap-tooltip-head {
+          display: flex;
+          align-items: center;
+          gap: 10px;
+        }
+
+        .vis-tooltip .nmap-tooltip-thumb {
+          width: 42px;
+          height: 42px;
+          border-radius: 10px;
+          border: 1px solid #e2d7c5;
+          background: #ffffff;
+          overflow: hidden;
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          flex-shrink: 0;
+        }
+
+        .vis-tooltip .nmap-tooltip-image {
+          width: 100%;
+          height: 100%;
+          object-fit: contain;
+          padding: 2px;
+        }
+
+        .vis-tooltip .nmap-tooltip-image-fallback {
+          font-size: 18px;
+          line-height: 1;
+        }
+
+        .vis-tooltip .nmap-tooltip-meta {
+          min-width: 0;
+          flex: 1;
+        }
+
+        .vis-tooltip .nmap-tooltip-name {
+          margin: 0;
+          color: #2e2b28;
+          font-size: 13px;
+          font-weight: 800;
+          line-height: 1.25;
+          word-break: keep-all;
+        }
+
+        .vis-tooltip .nmap-tooltip-brand {
+          margin: 2px 0 0;
+          color: #7a6b57;
+          font-size: 11px;
+          font-weight: 600;
+          line-height: 1.2;
+        }
+
+        .vis-tooltip .nmap-tooltip-status {
+          border-radius: 9999px;
+          padding: 4px 8px;
+          font-size: 10px;
+          font-weight: 800;
+          line-height: 1;
+          white-space: nowrap;
+          flex-shrink: 0;
+        }
+
+        .vis-tooltip .nmap-tooltip-desc {
+          margin: 5px 0 0;
+          color: #5c5448;
+          font-size: 11px;
+          font-weight: 500;
+          line-height: 1.35;
+          white-space: pre-line;
+        }
+      `}</style>
     </div>
   );
 }

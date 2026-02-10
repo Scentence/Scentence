@@ -39,7 +39,6 @@ export function usePerfumeNetwork(sessionUserId?: string | number) {
   const [selectedOccasions, setSelectedOccasions] = useState<string[]>([]);
   const [selectedGenders, setSelectedGenders] = useState<string[]>([]);
   const [selectedPerfumeId, setSelectedPerfumeId] = useState<string | null>(null);
-  const [selectedAccordName, setSelectedAccordName] = useState<string | null>(null);
 
   const [memberId, setMemberId] = useState<string | null>(null);
   const [memberIdReady, setMemberIdReady] = useState(false);
@@ -50,6 +49,7 @@ export function usePerfumeNetwork(sessionUserId?: string | number) {
   const [scentSessionId, setScentSessionId] = useState<string | null>(null);
   const [showCardTrigger, setShowCardTrigger] = useState(false);
   const [triggerMessage, setTriggerMessage] = useState("");
+  const isCardTriggerDismissedRef = useRef(false);
   const [isGeneratingCard, setIsGeneratingCard] = useState(false);
   const [showCardModal, setShowCardModal] = useState(false);
   const [generatedCard, setGeneratedCard] = useState<any>(null);
@@ -58,7 +58,6 @@ export function usePerfumeNetwork(sessionUserId?: string | number) {
   const [error, setError] = useState<string | null>(null);
   const [isSavingCard, setIsSavingCard] = useState(false);
   const [saveSuccess, setSaveSuccess] = useState(false);
-  const [hasTriggerDismissed, setHasTriggerDismissed] = useState(false);
 
   // 1. 로그인 정보 로드 (localAuth 제거: 세션 ID만 사용)
   useEffect(() => {
@@ -157,9 +156,12 @@ export function usePerfumeNetwork(sessionUserId?: string | number) {
         const result = await response.json();
         console.log("[Activity Log] Server Response:", result);
         setCardTriggerReady(result.card_trigger_ready);
-        if (result.card_trigger_ready && !showCardTrigger && !hasTriggerDismissed) {
-          setShowCardTrigger(true);
-          setTriggerMessage(result.trigger_message || "탐색 데이터가 충분해요! 나의 향 MBTI를 확인해볼까요?");
+        if (result.card_trigger_ready && !isCardTriggerDismissedRef.current) {
+          setShowCardTrigger(prev => {
+            if (prev || isCardTriggerDismissedRef.current) return prev;
+            setTriggerMessage(result.trigger_message || "탐색 데이터가 충분해요! 나의 향 MBTI를 확인해볼까요?");
+            return true;
+          });
         }
       }
     } catch (e) {
@@ -170,6 +172,8 @@ export function usePerfumeNetwork(sessionUserId?: string | number) {
   // 4. 카드 생성 처리 (향 MBTI 확인)
   const handleGenerateCard = async () => {
     if (!scentSessionId) return;
+    // "나중에"로 닫았던 배너는 기능 버튼을 누르는 순간 다시 활성화 가능 상태로 전환
+    isCardTriggerDismissedRef.current = false;
     setShowCardTrigger(false);
     setIsGeneratingCard(true);
     setError(null);
@@ -277,24 +281,6 @@ export function usePerfumeNetwork(sessionUserId?: string | number) {
     }
   };
 
-  const dismissTrigger = () => {
-    setShowCardTrigger(false);
-    setHasTriggerDismissed(true);
-  };
-
-  // [추가] 필터(어코드, 브랜드 등) 변경 시 배너 다시 뜨기 상태 초기화 (다시 찾기)
-  useEffect(() => {
-    setHasTriggerDismissed(false);
-  }, [
-    selectedAccords,
-    selectedBrands,
-    selectedSeasons,
-    selectedOccasions,
-    selectedGenders,
-    minSimilarity,
-    topAccords
-  ]);
-
   // [개선] 6. 라벨 및 필터 옵션 로드 (필터는 정적 파일 사용)
   useEffect(() => {
     const fetchLabels = async () => {
@@ -390,6 +376,11 @@ export function usePerfumeNetwork(sessionUserId?: string | number) {
     setSelectedGenders(myPerfumeFilters.genders);
   }, [showMyPerfumesOnly, myPerfumeFilters]);
 
+  const handleDismissCardTrigger = () => {
+    isCardTriggerDismissedRef.current = true;
+    setShowCardTrigger(false);
+  };
+
   return {
     fullPayload,
     labelsData,
@@ -403,12 +394,12 @@ export function usePerfumeNetwork(sessionUserId?: string | number) {
     selectedOccasions, setSelectedOccasions,
     selectedGenders, setSelectedGenders,
     selectedPerfumeId, setSelectedPerfumeId,
-    selectedAccordName, setSelectedAccordName,
     memberId,
     displayLimit, setDisplayLimit,
     showMyPerfumesOnly, setShowMyPerfumesOnly,
     scentSessionId,
     showCardTrigger, setShowCardTrigger,
+    handleDismissCardTrigger,
     triggerMessage,
     isGeneratingCard,
     showCardModal, setShowCardModal,
@@ -422,7 +413,6 @@ export function usePerfumeNetwork(sessionUserId?: string | number) {
     isSavingCard,
     saveSuccess,
     setSaveSuccess,
-    dismissTrigger,
     myPerfumeIds,
     myPerfumeFilters,
     interactionCount,

@@ -13,7 +13,7 @@ export default function NCardGenerator() {
 
   // 로딩 중일 때 표시
   if (loading) return <div>Loading scent cards...</div>;
-
+  
   // 에러 발생 시 표시
   if (error) return <div>Error: {error} <button onClick={() => refresh()}>Retry</button></div>;
 
@@ -22,7 +22,7 @@ export default function NCardGenerator() {
       <h2>Scent Cards</h2>
       {/* 리스트 갱신 버튼 */}
       <button onClick={() => refresh()} style={{ marginBottom: '20px' }}>Refresh List</button>
-
+      
       {/* 카드 리스트 렌더링 */}
       <div style={{ display: 'flex', flexWrap: 'wrap' }}>
         {cards.length > 0 ? (

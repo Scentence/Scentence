@@ -518,6 +518,44 @@ def get_user_chat_list(member_id: int) -> List[Dict[str, Any]]:
         release_recom_db_connection(conn)
 
 
+# [26.02.09 변경 이력 - 채팅방 soft-delete 함수 추가]
+# [이전 코드]
+# - 아래와 같은 "조회 전용" 흐름만 존재했고, 삭제 함수는 없었음.
+#   "SELECT THREAD_ID as thread_id, TITLE as title, LAST_CHAT_DT as last_chat_dt
+#    FROM TB_CHAT_THREAD_T
+#    WHERE MEMBER_ID = %s AND IS_DELETED = 'N'
+#    ORDER BY LAST_CHAT_DT DESC LIMIT 30"
+# [변경 이유]
+# - 프론트(Chat Sidebar)에서 우클릭 삭제를 지원하려면 thread의 삭제 처리 함수가 필요함.
+# - 물리 삭제 대신 IS_DELETED='Y' soft-delete를 사용해 데이터 복구/감사 여지를 보존함.
+def soft_delete_chat_room(member_id: int, thread_id: str) -> bool:
+    """채팅방을 soft-delete 처리합니다."""
+    if not member_id or not thread_id:
+        return False
+
+    conn = get_recom_db_connection()
+    cur = conn.cursor()
+    try:
+        cur.execute(
+            """
+            UPDATE TB_CHAT_THREAD_T
+            SET IS_DELETED = 'Y'
+            WHERE MEMBER_ID = %s
+              AND THREAD_ID = %s
+              AND IS_DELETED = 'N'
+            """,
+            (member_id, thread_id),
+        )
+        conn.commit()
+        return cur.rowcount > 0
+    except Exception:
+        conn.rollback()
+        raise
+    finally:
+        cur.close()
+        release_recom_db_connection(conn)
+
+
 def lookup_note_by_string(keyword: str) -> List[str]:
     """사용자 입력 텍스트와 일치하거나 유사한 노트를 DB에서 찾습니다."""
     conn = get_db_connection()

@@ -56,9 +56,9 @@ services:
     depends_on:
       - backend
     # [추가 2] 개발 모드로 강제 실행 (Dockerfile 설정 무시)
-    # command: npm run dev -- --turbopack
+    command: npm run dev -- --turbopack
     # [추가 3] build 모드로 실행 (배포전 검수용)
-    command: sh -c "npm run build && npm start"
+    # command: sh -c "npm run build && npm start"
     # [3] Scentmap 서비스 - 대폭 수정
   scentmap:
     build:
