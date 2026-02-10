@@ -1,7 +1,6 @@
-/* page.tsx (3-State Tabs: All / HAVE / HAD / WISH) */
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useMemo } from "react";
 import { useSession } from "next-auth/react"; // 카카오 로그인 세션
 import Link from "next/link";
 import ArchiveSidebar from "@/components/archives/ArchiveSidebar";
@@ -21,18 +20,58 @@ interface MyPerfume {
     my_perfume_id: number;
     perfume_id: number;
     name: string;
-    name_en?: string; // 추가
-    name_kr?: string; // 추가
+    name_en?: string;
+    name_kr?: string;
     brand: string;
-    brand_kr?: string; // 추가
+    brand_kr?: string;
     image_url: string | null;
-    register_status: string; // HAVE, HAD, RECOMMENDED
+    register_status: string;
     preference?: string;
-    // 프론트 UI용 status 매핑
     status: string;
 }
 
 type TabType = 'ALL' | 'HAVE' | 'HAD' | 'WISH';
+
+const createSeededRandom = (seed: number) => {
+    let state = seed >>> 0;
+    return () => {
+        state = (state * 1664525 + 1013904223) >>> 0;
+        return state / 4294967296;
+    };
+};
+
+const getStarColor = (r: number, alpha: number) => {
+    if (r < 0.08) return `rgba(170, 198, 255, ${alpha})`; // 차가운 블루 별
+    if (r < 0.14) return `rgba(255, 226, 185, ${alpha})`; // 따뜻한 별
+    return `rgba(255, 255, 255, ${alpha})`; // 기본 화이트 별
+};
+
+const buildStarLayer = ({
+    rng,
+    count,
+    minSize,
+    maxSize,
+    minOpacity,
+    maxOpacity,
+}: {
+    rng: () => number;
+    count: number;
+    minSize: number;
+    maxSize: number;
+    minOpacity: number;
+    maxOpacity: number;
+}) => {
+    return Array.from({ length: count }, () => {
+        const x = (rng() * 100).toFixed(2);
+        const y = (rng() * 100).toFixed(2);
+        const size = minSize + rng() * (maxSize - minSize);
+        const alpha = minOpacity + rng() * (maxOpacity - minOpacity);
+        const color = getStarColor(rng(), Number(alpha.toFixed(3)));
+        const inner = `${size.toFixed(2)}px`;
+        const outer = `${(size + 0.85).toFixed(2)}px`;
+        return `radial-gradient(circle at ${x}% ${y}%, ${color} 0px, ${color} ${inner}, transparent ${outer})`;
+    }).join(", ");
+};
 
 export default function ArchivesPage() {
     const { data: session } = useSession(); // 카카오 로그인 세션
@@ -41,12 +80,15 @@ export default function ArchivesPage() {
     const [activeTab, setActiveTab] = useState<TabType>('ALL');
     const [isSidebarOpen, setIsSidebarOpen] = useState(false);
     const [isSearchOpen, setIsSearchOpen] = useState(false);
+    const [isAddModalOpen, setIsAddModalOpen] = useState(false);
     const [isKorean, setIsKorean] = useState(true);
     const [isHistoryOpen, setIsHistoryOpen] = useState(false);
     const [memberId, setMemberId] = useState<number>(0);
     const [viewMode, setViewMode] = useState<'GRID' | 'GLOBE'>('GRID');
     const [isMounted, setIsMounted] = useState(false);
     const [searchQuery, setSearchQuery] = useState("");
+    const [isMobileSearchExpanded, setIsMobileSearchExpanded] = useState(false); // 모바일 검색 확장 상태
+
     const isGalaxy = viewMode === 'GLOBE';
     const t = isKorean
         ? {
@@ -55,7 +97,7 @@ export default function ArchivesPage() {
             total: "총합",
             have: "보유",
             wish: "위시",
-            searchPlaceholder: "향수를 검색해보세요...",
+            searchPlaceholder: "보유향수 검색",
             history: "히스토리",
             addScent: "향수 추가",
             noScents: "검색 결과가 없어요",
@@ -80,12 +122,52 @@ export default function ArchivesPage() {
     const modeLabelTextClass = "tracking-[-0.015em]";
     const archiveSubtitleFixed = "나만의 향수 보관함";
 
+    const galaxyStarfieldStyle = useMemo(() => {
+        const rng = createSeededRandom(20260210);
+        const layer1 = buildStarLayer({
+            rng,
+            count: 90,
+            minSize: 0.45,
+            maxSize: 0.95,
+            minOpacity: 0.28,
+            maxOpacity: 0.66,
+        });
+        const layer2 = buildStarLayer({
+            rng,
+            count: 46,
+            minSize: 0.85,
+            maxSize: 1.55,
+            minOpacity: 0.45,
+            maxOpacity: 0.86,
+        });
+        const layer3 = buildStarLayer({
+            rng,
+            count: 18,
+            minSize: 1.4,
+            maxSize: 2.3,
+            minOpacity: 0.62,
+            maxOpacity: 0.98,
+        });
+
+        return {
+            backgroundImage: [layer1, layer2, layer3].join(", "),
+        };
+    }, []);
+
     useEffect(() => {
         setIsMounted(true);
     }, []);
 
-    // localAuth 제거: 아카이브는 세션 id만 사용
-
+    // 화면 크기 변경 시 모바일 검색 확장 상태 초기화
+    useEffect(() => {
+        const handleResize = () => {
+            if (window.innerWidth >= 768) {
+                setIsMobileSearchExpanded(false);
+            }
+        };
+        window.addEventListener('resize', handleResize);
+        return () => window.removeEventListener('resize', handleResize);
+    }, []);
 
     const fetchPerfumes = async () => {
         if (memberId === 0) return;
@@ -96,11 +178,11 @@ export default function ArchivesPage() {
                 const mapped = data.map((item: any) => ({
                     my_perfume_id: item.perfume_id,
                     perfume_id: item.perfume_id,
-                    name: item.perfume_name, // Fallback for legacy components
+                    name: item.perfume_name,
                     name_en: item.name_en || item.perfume_name,
                     name_kr: item.name_kr || item.perfume_name,
                     brand: item.brand || "Unknown",
-                    brand_kr: item.brand_kr || item.brand, // 추가
+                    brand_kr: item.brand_kr || item.brand,
                     image_url: item.image_url || null,
                     register_status: item.register_status,
                     register_dt: item.register_dt,
@@ -115,18 +197,14 @@ export default function ArchivesPage() {
     };
 
     useEffect(() => {
-        // localAuth 제거: 세션에서만 memberId 설정
         if (session?.user?.id) {
             setMemberId(Number(session.user.id));
         }
     }, [session]);
 
-
-
     const displayName = session?.user?.name || session?.user?.email?.split('@')[0] || "Guest";
     const isLoggedIn = Boolean(session);
 
-    // 2. memberId가 설정되면 데이터 로드
     useEffect(() => {
         if (memberId > 0) {
             fetchPerfumes();
@@ -149,7 +227,6 @@ export default function ArchivesPage() {
                 body: JSON.stringify(payload)
             });
             fetchPerfumes();
-            // setIsSearchOpen(false); <-모달 자동닫기
         } catch (e) { console.error("Add failed", e); }
     };
 
@@ -204,16 +281,13 @@ export default function ArchivesPage() {
         } catch (e) { console.error("Update preference failed", e); }
     };
 
-    // 통계 계산
     const stats = {
         have: collection.filter(p => p.register_status === 'HAVE').length,
         had: collection.filter(p => p.register_status === 'HAD').length,
         wish: collection.filter(p => p.register_status === 'RECOMMENDED').length
     };
 
-    // 필터링된 목록
     const filteredCollection = collection.filter(item => {
-        // 1. 탭 필터링
         let matchesTab = true;
         if (activeTab === 'ALL') matchesTab = item.register_status !== 'HAD';
         else if (activeTab === 'HAVE') matchesTab = item.register_status === 'HAVE';
@@ -222,7 +296,6 @@ export default function ArchivesPage() {
 
         if (!matchesTab) return false;
 
-        // 2. 검색 필터링
         if (searchQuery.trim()) {
             const query = searchQuery.toLowerCase();
             const nameMatch =
@@ -238,7 +311,7 @@ export default function ArchivesPage() {
         return true;
     });
 
-    if (!isMounted) return null; // [추가] 마운트 전에는 구조를 렌더링하지 않아 서버-클라이언트 불일치 방지
+    if (!isMounted) return null;
 
     return (
         <SavedPerfumesProvider memberId={memberId}>
@@ -253,11 +326,7 @@ export default function ArchivesPage() {
                         <div className="absolute inset-0 bg-[#02030A]" />
                         <div
                             className="absolute inset-0 opacity-95"
-                            style={{
-                                backgroundImage:
-                                    "radial-gradient(circle at 14% 22%, rgba(255,255,255,0.98) 1px, transparent 1.4px), radial-gradient(circle at 78% 62%, rgba(255,255,255,0.78) 1px, transparent 1.5px), radial-gradient(circle at 36% 82%, rgba(255,255,255,0.62) 0.8px, transparent 1.15px), radial-gradient(circle at 62% 18%, rgba(140,180,255,0.35) 0.9px, transparent 1.4px)",
-                                backgroundSize: "170px 170px, 240px 240px, 300px 300px, 420px 420px",
-                            }}
+                            style={galaxyStarfieldStyle}
                         />
                         <div className="absolute inset-0 bg-[radial-gradient(ellipse_at_top,rgba(255,255,255,0.12),transparent_45%),radial-gradient(ellipse_at_bottom,rgba(84,105,255,0.16),transparent_52%)]" />
                         <div className="absolute inset-0 bg-gradient-to-b from-black/25 via-transparent to-black/45" />
@@ -285,40 +354,82 @@ export default function ArchivesPage() {
                 )}
 
                 {/* Main Content */}
-                <main className="relative z-10 pt-[92px] sm:pt-[98px] md:pt-[108px] lg:pt-[114px] pb-32 px-3 sm:px-6 max-w-7xl mx-auto min-h-screen">
-
-                    {/* Header: Title & Description */}
-                    <div className="mb-3 md:mb-4 text-center md:text-left">
-                        <motion.h1
-                            initial={{ opacity: 0, x: -20 }}
-                            animate={{ opacity: 1, x: 0 }}
-                            className={`flex items-baseline justify-center md:justify-start gap-1 md:gap-1.5 text-[2.04rem] sm:text-[2.78rem] md:text-[3.48rem] lg:text-6xl font-black tracking-tighter leading-[0.94] md:leading-[0.9] uppercase whitespace-nowrap mb-2 ${isGalaxy ? 'text-white' : 'text-black'}`}
-                        >
-                            <span className="inline-block align-baseline">MY</span>
-                            <motion.button
-                                type="button"
-                                onClick={() => setViewMode((prev) => (prev === 'GRID' ? 'GLOBE' : 'GRID'))}
-                                whileHover={{ scale: 1.01 }}
-                                whileTap={{ scale: 0.98 }}
-                                className="group inline-flex items-baseline gap-1 md:gap-1.5 align-baseline leading-[0.9] transition-all duration-200"
-                                title={isGalaxy ? t.switchToGallery : t.switchToGalaxy}
-                                aria-label={isGalaxy ? t.switchToGallery : t.switchToGalaxy}
-                            >
-                                <span
-                                    className={`relative inline-flex ${modeLabelSlotClass} justify-start ${modeLabelTextClass} ${isGalaxy ? 'text-white/95' : 'text-black/95'}`}
+                <main className="relative z-10 pt-[70px] sm:pt-[98px] md:pt-[108px] lg:pt-[114px] pb-32 px-3 sm:px-6 max-w-7xl mx-auto min-h-screen">
+                    {/* Header: Title & Description & Controls */}
+                    <div className="mb-6 md:mb-8">
+                        <div className="flex flex-col md:flex-row md:items-end justify-between gap-4 mb-2">
+                            <div className="flex items-center gap-4">
+                                <motion.button
+                                    type="button"
+                                    initial="initial"
+                                    whileHover="hover"
+                                    onClick={() => setViewMode((prev) => (prev === 'GRID' ? 'GLOBE' : 'GRID'))}
+                                    /* [가이드] 타이틀 배치 조정:
+                                       - items-baseline: 글자 밑선 기준 정렬 (추천). items-center, items-start 등으로 변경 가능.
+                                       - gap-2 md:gap-3: MY와 GALAXY 사이 간격.
+                                    */
+                                    className="group flex items-baseline gap-2 md:gap-3 text-2xl sm:text-[2.78rem] md:text-[3.48rem] lg:text-6xl font-black tracking-tighter leading-[0.94] md:leading-[0.9] uppercase whitespace-nowrap cursor-pointer z-10"
+                                    title={modeLabel === 'GALAXY' ? t.switchToGallery : t.switchToGalaxy}
                                 >
-                                    {modeLabel}
-                                    <span
-                                        className={`pointer-events-none absolute left-0 -bottom-0.5 h-[2px] w-[96%] rounded-full transition-opacity duration-200 ${
-                                            isGalaxy ? 'bg-white/45' : 'bg-black/30'
-                                        } opacity-70 group-hover:opacity-100`}
-                                    />
-                                </span>
-                                <span className={`inline-flex shrink-0 items-center justify-center w-4 h-4 md:w-5 md:h-5 mb-[0.04em] transition-colors ${
-                                    isGalaxy ? 'text-white/70 group-hover:text-white' : 'text-black/55 group-hover:text-black'
-                                }`}>
+                                    <span className={`transition-colors duration-300 ${isGalaxy ? 'text-white' : 'text-black'}`}>MY</span>
+
+                                    {/* Responsive Container using Invisible Spacer Text */}
+                                    <span className="relative inline-block text-left">
+                                        {/* Invisible Spacer to set natural width/height matching the font metrics exactly */}
+                                        <span className="opacity-0 select-none" aria-hidden="true">GALLERY</span>
+
+                                        <AnimatePresence mode="wait" initial={false}>
+                                            <motion.span
+                                                key={modeLabel}
+                                                /* [가이드] 텍스트 높이 조정: bottom-[0em] 값을 조절하세요 (예: bottom-1, bottom-[-0.1em]) */
+                                                initial={{ y: 5, opacity: 0 }}
+                                                animate={{ y: 0, opacity: 1 }}
+                                                exit={{ y: -5, opacity: 0 }}
+                                                transition={{ duration: 0.25, ease: "easeOut" }}
+                                                className={`absolute left-0 bottom-[0em] origin-bottom ${isGalaxy ? 'text-white' : 'text-black'}`}
+                                            >
+                                                {modeLabel}
+                                            </motion.span>
+                                        </AnimatePresence>
+
+                                        {/* [가이드] 밑줄 위치 조정: -bottom-[0.2em] 값을 조절하세요 (숫자가 커질수록 더 아래로 내려감) */}
+                                        <span className={`absolute left-0 -bottom-[3px] w-full h-[3px] md:h-[4px] rounded-full transition-colors duration-300 ${isGalaxy ? 'bg-white/40 group-hover:bg-white/80' : 'bg-black/20 group-hover:bg-black/60'}`} />
+                                    </span>
+
+                                    {/* Rotating Icon - Grouped with Title */}
+                                    <motion.span
+                                        variants={{
+                                            hover: { rotate: 180, scale: 1.1 },
+                                            initial: { rotate: 0, scale: 1 }
+                                        }}
+                                        transition={{ duration: 0.4 }}
+                                        className={`ml-1 md:ml-2 self-center p-1 rounded-full ${isGalaxy ? 'text-white/70 group-hover:text-white' : 'text-black/50 group-hover:text-black'}`}
+                                    >
+                                        <svg
+                                            className="w-5 h-5 md:w-6 md:h-6"
+                                            viewBox="0 0 24 24"
+                                            fill="none"
+                                            stroke="currentColor"
+                                            strokeWidth="2"
+                                            strokeLinecap="round"
+                                            strokeLinejoin="round"
+                                        >
+                                            <path d="M3 12a9 9 0 0 1 15.5-6.4" />
+                                            <path d="M18.5 2.5v4h-4" />
+                                            <path d="M21 12a9 9 0 0 1-15.5 6.4" />
+                                            <path d="M5.5 21.5v-4h4" />
+                                        </svg>
+                                    </motion.span>
+                                </motion.button>
+
+                                {/* Language Toggle (Moved from Menu) */}
+                                <button
+                                    onClick={() => setIsKorean((prev) => !prev)}
+                                    className={`ml-1 md:ml-2 p-2 rounded-full transition-colors duration-300 ${isGalaxy ? 'text-white/50 hover:text-white hover:bg-white/10' : 'text-black/30 hover:text-black hover:bg-black/5'}`}
+                                    title={isKorean ? "Switch to English" : "한국어로 전환"}
+                                >
                                     <svg
-                                        className="w-3 h-3 md:w-4 md:h-4 transition-transform duration-300 group-hover:rotate-180"
+                                        className="w-5 h-5 md:w-6 md:h-6"
                                         viewBox="0 0 24 24"
                                         fill="none"
                                         stroke="currentColor"
@@ -326,14 +437,17 @@ export default function ArchivesPage() {
                                         strokeLinecap="round"
                                         strokeLinejoin="round"
                                     >
-                                        <path d="M3 12a9 9 0 0 1 15.5-6.4" />
-                                        <path d="M18.5 2.5v4h-4" />
-                                        <path d="M21 12a9 9 0 0 1-15.5 6.4" />
-                                        <path d="M5.5 21.5v-4h4" />
+                                        <circle cx="12" cy="12" r="10" />
+                                        <line x1="2" y1="12" x2="22" y2="12" />
+                                        <path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z" />
                                     </svg>
-                                </span>
-                            </motion.button>
-                        </motion.h1>
+                                </button>
+                            </div>
+
+                            {/* Controls: Removed (Language Toggle moved up) */}
+                        </div>
+
+
                         <motion.p
                             initial={{ opacity: 0 }}
                             animate={{ opacity: 1 }}
@@ -344,120 +458,233 @@ export default function ArchivesPage() {
                         </motion.p>
                     </div>
 
-                    {/* Stats & Toolbar Container */}
-                    <div className="flex flex-col gap-3 md:gap-3.5 mb-4 md:mb-6">
-                        {/* 1. Integrated Stats Bar */}
+                    {/* Stats & Toolbar Row */}
+                    <div className="flex flex-col md:flex-row items-center md:items-start justify-between gap-3 mb-8 md:mb-12">
+
+                        {/* 1. Group 1: Stats + Search Icon (Lang Removed) */}
                         <motion.div
+                            layout // [추가] 검색창 열릴 때 부드럽게 너비 확장
+                            transition={{ duration: 0.3, ease: "easeOut" }} // [추가] 레이아웃 변경 애니메이션 설정
                             initial={{ opacity: 0, y: 20 }}
                             animate={{ opacity: 1, y: 0 }}
-                            className={`order-2 flex flex-wrap items-center justify-center md:justify-start gap-2.5 md:gap-3 px-3 py-1.5 rounded-[28px] ${
-                                isGalaxy
-                                    ? 'bg-black/45 border border-white/22 backdrop-blur-xl shadow-[inset_0_1px_0_rgba(255,255,255,0.2),0_18px_40px_rgba(0,0,0,0.5)]'
-                                    : 'bg-white/40 border border-white/60 backdrop-blur-md shadow-sm'
-                            }`}
-                        >
-                            <StatItem
-                                label={t.total}
-                                count={stats.have + stats.wish}
-                                isActive={activeTab === 'ALL'}
-                                onClick={() => setActiveTab('ALL')}
-                                isGalaxy={isGalaxy}
-                            />
-                            <div className={`w-px h-6 hidden sm:block ${isGalaxy ? 'bg-white/28' : 'bg-gray-200/50'}`} />
-                            <StatItem
-                                label={t.have}
-                                count={stats.have}
-                                activeColor={isGalaxy ? 'text-sky-300' : 'text-indigo-500'}
-                                isActive={activeTab === 'HAVE'}
-                                onClick={() => setActiveTab('HAVE')}
-                                isGalaxy={isGalaxy}
-                            />
-                            <div className={`w-px h-6 hidden sm:block ${isGalaxy ? 'bg-white/28' : 'bg-gray-200/50'}`} />
-                            <StatItem
-                                label={t.wish}
-                                count={stats.wish}
-                                activeColor={isGalaxy ? 'text-rose-300' : 'text-rose-400'}
-                                isActive={activeTab === 'WISH'}
-                                onClick={() => setActiveTab('WISH')}
-                                isGalaxy={isGalaxy}
-                            />
-
-                            {/* Language Toggle (Stats/Search 사이) */}
-                            <button
-                                onClick={() => setIsKorean(!isKorean)}
-                                className={`group relative shrink-0 md:mx-1 inline-flex items-center justify-center h-10 w-10 transition-all ${
-                                    isGalaxy
-                                        ? 'text-white/90 hover:text-white'
-                                        : 'text-black/65 hover:text-black'
+                            // [수정] 높이 60px로 증가 for visual balance
+                            className={`relative w-full md:w-auto md:h-[60px] flex flex-wrap md:flex-nowrap items-center justify-between md:justify-start gap-1 md:gap-3 px-1.5 md:px-3 py-1.5 rounded-[20px] md:rounded-[30px] ${isGalaxy
+                                ? 'bg-black/45 border border-white/22 backdrop-blur-xl shadow-[inset_0_1px_0_rgba(255,255,255,0.2),0_18px_40px_rgba(0,0,0,0.5)]'
+                                : 'bg-white/40 border border-white/60 backdrop-blur-md shadow-sm'
                                 }`}
-                                aria-label={isKorean ? "영어로 전환" : "Switch to Korean"}
-                                title={isKorean ? "한국어 사용 중" : "ENG mode"}
+                        >
+                            {/* [Mobile] Stats divided evenly */}
+                            <div className="flex-1 flex items-center justify-center md:flex-none h-full">
+                                <StatItem
+                                    label={t.total}
+                                    count={stats.have + stats.wish}
+                                    activeColor={isGalaxy ? 'text-white' : 'text-black'}
+                                    isActive={activeTab === 'ALL'}
+                                    onClick={() => setActiveTab('ALL')}
+                                    isGalaxy={isGalaxy}
+                                />
+                            </div>
+                            <div className={`w-px h-6 hidden sm:block ${isGalaxy ? 'bg-white/28' : 'bg-gray-200/50'}`} />
+
+                            <div className="flex-1 flex items-center justify-center md:flex-none h-full">
+                                <StatItem
+                                    label={t.have}
+                                    count={stats.have}
+                                    activeColor={isGalaxy ? 'text-sky-300' : 'text-indigo-500'}
+                                    isActive={activeTab === 'HAVE'}
+                                    onClick={() => setActiveTab('HAVE')}
+                                    isGalaxy={isGalaxy}
+                                />
+                            </div>
+                            <div className={`w-px h-6 hidden sm:block ${isGalaxy ? 'bg-white/28' : 'bg-gray-200/50'}`} />
+
+                            <div className="flex-1 flex items-center justify-center md:flex-none h-full">
+                                <StatItem
+                                    label={t.wish}
+                                    count={stats.wish}
+                                    activeColor={isGalaxy ? 'text-rose-300' : 'text-rose-400'}
+                                    isActive={activeTab === 'WISH'}
+                                    onClick={() => setActiveTab('WISH')}
+                                    isGalaxy={isGalaxy}
+                                />
+                            </div>
+
+                            {/* [Desktop Only] Divider */}
+                            <div className={`w-px h-6 hidden md:block ${isGalaxy ? 'bg-white/28' : 'bg-gray-200/50'}`} />
+
+                            {/* [Desktop] Expandable Search */}
+                            <div className="hidden md:flex items-center ml-1">
+                                <div className="flex items-center">
+                                    {/* 1. Search Icon (Always Visible) */}
+                                    <button
+                                        onClick={() => setIsSearchOpen(prev => !prev)}
+                                        className={`p-2 rounded-full transition-colors ${isGalaxy ? 'text-white/60 hover:text-white hover:bg-white/10' : 'text-black/50 hover:text-black hover:bg-black/5'}`}
+                                        title="Search"
+                                    >
+                                        <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"></path></svg>
+                                    </button>
+
+                                    {/* 2. Expanding Input Container (Expands to Right) */}
+                                    <motion.div
+                                        initial={false}
+                                        animate={{ width: isSearchOpen ? 200 : 0, opacity: isSearchOpen ? 1 : 0 }}
+                                        transition={{ duration: 0.3, ease: "easeOut" }}
+                                        className="overflow-hidden h-full flex items-center"
+                                    >
+                                        <div className="relative w-[200px] h-full flex items-center pl-2">
+                                            <input
+                                                type="text"
+                                                value={searchQuery}
+                                                onChange={(e) => setSearchQuery(e.target.value)}
+                                                placeholder={t.searchPlaceholder}
+                                                // Removed autoFocus to prevent jarring jump, or keep if desired
+                                                // onBlur={() => !searchQuery && setIsSearchOpen(false)} // Optional: close on blur if empty
+                                                className={`w-full h-9 rounded-xl pl-3 pr-8 text-xs font-bold leading-none bg-transparent outline-none ${isGalaxy
+                                                    ? 'text-white placeholder:text-white/40'
+                                                    : 'text-black placeholder:text-black/40'
+                                                    }`}
+                                            />
+                                            {/* Close/Clear Button */}
+                                            <button
+                                                onClick={() => {
+                                                    setSearchQuery("");
+                                                    setIsSearchOpen(false);
+                                                }}
+                                                className={`absolute right-1 top-1/2 -translate-y-1/2 p-1 rounded-full ${isGalaxy ? 'text-white/40 hover:text-white' : 'text-black/40 hover:text-black'}`}
+                                            >
+                                                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2.5" d="M6 18L18 6M6 6l12 12"></path></svg>
+                                            </button>
+                                        </div>
+                                    </motion.div>
+                                </div>
+                            </div>
+
+                            {/* [Mobile Only] Search Trigger Icon */}
+                            <button
+                                onClick={() => setIsMobileSearchExpanded(true)}
+                                className={`
+                                    md:hidden flex items-center justify-center w-10 h-10
+                                    ${isMobileSearchExpanded ? 'hidden' : 'block'}
+                                    ${isGalaxy ? 'text-white/70' : 'text-black/60'}
+                                `}
                             >
-                                <svg
-                                    className="w-8 h-8"
-                                    viewBox="0 0 24 24"
-                                    fill="none"
-                                    stroke="currentColor"
-                                    strokeWidth="1.85"
-                                    strokeLinecap="round"
-                                    strokeLinejoin="round"
-                                >
-                                    <circle cx="12" cy="12" r="9" />
-                                    <path d="M3 12h18" />
-                                    <path d="M12 3a14 14 0 0 1 0 18" />
-                                    <path d="M12 3a14 14 0 0 0 0 18" />
-                                </svg>
-                                <span
-                                    className={`pointer-events-none absolute left-1/2 -translate-x-1/2 -top-10 whitespace-nowrap rounded-full px-3 py-1 text-[10px] font-black tracking-[0.06em] transition-all duration-150 opacity-0 translate-y-1 group-hover:opacity-100 group-hover:translate-y-0 ${
-                                        isGalaxy
-                                            ? 'bg-black/80 text-white border border-white/30 shadow-[0_8px_20px_rgba(0,0,0,0.45)]'
-                                            : 'bg-white text-black border border-black/10 shadow-md'
-                                    }`}
-                                >
-                                    한국어 | ENG
-                                </span>
+                                <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2.5" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"></path></svg>
                             </button>
 
-                            {/* Quick Search */}
-                            <div className="flex-1 min-w-[220px] w-full md:w-auto md:ml-2 relative group">
-                                <div className={`absolute left-4 top-1/2 -translate-y-1/2 transition-colors ${
-                                    isGalaxy ? 'text-white/45 group-focus-within:text-white' : 'text-gray-300 group-focus-within:text-black'
-                                }`}>
-                                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2.5" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"></path></svg>
-                                </div>
-                                <input
-                                    type="text"
-                                    value={searchQuery}
-                                    onChange={(e) => setSearchQuery(e.target.value)}
-                                    placeholder={t.searchPlaceholder}
-                                    className={`w-full h-10 rounded-2xl pl-12 pr-4 text-[11px] font-black uppercase tracking-widest outline-none transition-all ${
-                                        isGalaxy
-                                            ? 'bg-black/38 border border-white/24 text-white placeholder:text-white/56 focus:border-white/72 focus:bg-black/28 shadow-[inset_0_1px_0_rgba(255,255,255,0.18)]'
-                                            : 'bg-white/50 border border-transparent text-black placeholder:text-gray-300 focus:border-black/10 focus:bg-white shadow-inner'
-                                    }`}
-                                />
-                                {searchQuery && (
-                                    <button
-                                        onClick={() => setSearchQuery("")}
-                                        className={`absolute right-4 top-1/2 -translate-y-1/2 ${isGalaxy ? 'text-white/60 hover:text-white' : 'text-gray-300 hover:text-black'}`}
+                            {/* [Mobile Only] Expanded Search Overlay */}
+                            <AnimatePresence>
+                                {isMobileSearchExpanded && (
+                                    <motion.div
+                                        initial={{ opacity: 0, scale: 0.95 }}
+                                        animate={{ opacity: 1, scale: 1 }}
+                                        exit={{ opacity: 0, scale: 0.95 }}
+                                        transition={{ duration: 0.2, ease: "easeOut" }}
+                                        // [수정] 부모와 동일한 rounded-[20px], -inset-[1px]로 부모 테두리 덮기
+                                        className={`absolute -inset-[1px] z-50 flex items-center px-2 rounded-[20px] ${isGalaxy
+                                            ? 'bg-[#18181b] text-white border border-white/22'
+                                            : 'bg-white text-black border border-white/60 shadow-sm'
+                                            }`}
                                     >
-                                        <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="3" d="M6 18L18 6M6 6l12 12"></path></svg>
-                                    </button>
+                                        <button
+                                            onClick={(e) => {
+                                                e.stopPropagation();
+                                                setIsMobileSearchExpanded(false);
+                                                setSearchQuery("");
+                                            }}
+                                            className={`p-2 mr-1 rounded-full ${isGalaxy ? 'hover:bg-white/10 text-white/70' : 'hover:bg-black/5 text-black/60'}`}
+                                        >
+                                            <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2.5" d="M15 19l-7-7 7-7"></path></svg>
+                                        </button>
+                                        <div className="flex-1 relative">
+                                            <div className={`absolute left-3 top-1/2 -translate-y-1/2 ${isGalaxy ? 'text-white/40' : 'text-black/40'}`}>
+                                                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2.5" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"></path></svg>
+                                            </div>
+                                            <input
+                                                type="text"
+                                                value={searchQuery}
+                                                onChange={(e) => setSearchQuery(e.target.value)}
+                                                placeholder={t.searchPlaceholder}
+                                                autoFocus
+                                                className={`w-full h-9 rounded-xl pl-9 pr-8 text-xs font-bold bg-transparent outline-none ${isGalaxy ? 'text-white placeholder:text-white/40' : 'text-black placeholder:text-black/40'
+                                                    }`}
+                                            />
+                                            {searchQuery && (
+                                                <button
+                                                    onClick={() => setSearchQuery("")}
+                                                    className={`absolute right-2 top-1/2 -translate-y-1/2 p-1 ${isGalaxy ? 'text-white/50' : 'text-black/50'}`}
+                                                >
+                                                    <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="3" d="M6 18L18 6M6 6l12 12"></path></svg>
+                                                </button>
+                                            )}
+                                        </div>
+                                    </motion.div>
                                 )}
-                            </div>
+                            </AnimatePresence>
                         </motion.div>
 
-                        {/* 2. Action Toolbar */}
-                        <div className="order-1 -mt-2 md:-mt-3 flex items-center gap-3 w-full md:w-auto justify-between md:justify-end">
-                            <div className="flex items-center gap-3 w-full md:w-auto">
+                        {/* 2. Group 2 & 3: History & Add (Separate Buttons) */}
+                        <div className="hidden md:flex items-center gap-3 h-[60px]">
+                            {/* Group 2: History Button (Standalone) */}
+                            <div className="relative h-full">
+                                <motion.button
+                                    whileHover={{ scale: 1.02 }}
+                                    whileTap={{ scale: 0.98 }}
+                                    onClick={() => setIsHistoryOpen(!isHistoryOpen)}
+                                    // [수정] 높이 60px 적용
+                                    className={`flex items-center gap-3 px-6 h-full rounded-[30px] transition-all duration-300 ${isGalaxy
+                                        ? `${isHistoryOpen ? 'bg-white/20 ring-1 ring-white/50' : 'bg-black/45 hover:bg-black/60'} text-white/90 border border-white/22 backdrop-blur-xl shadow-[inset_0_1px_0_rgba(255,255,255,0.2),0_18px_40px_rgba(0,0,0,0.5)]`
+                                        : `${isHistoryOpen ? 'bg-black/5 ring-1 ring-black/10' : 'bg-white/40 hover:bg-white/60'} text-black/70 border border-white/60 backdrop-blur-md shadow-sm`
+                                        }`}
+                                    title={t.history}
+                                >
+                                    <svg className={`w-5 h-5 ${isGalaxy ? 'text-white/70' : 'text-black/50'}`} fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"></path></svg>
+                                    <div className="flex flex-col items-start leading-none gap-0.5">
+                                        <span className={`text-[9px] font-black uppercase tracking-widest ${isGalaxy ? 'text-white/50' : 'text-black/40'}`}>History</span>
+                                        <span className="text-sm font-black">{stats.had}</span>
+                                    </div>
+                                </motion.button>
+                                <AnimatePresence>
+                                    {isHistoryOpen && (
+                                        <HistoryModal
+                                            historyItems={collection.filter(p => p.register_status === 'HAD')}
+                                            onClose={() => setIsHistoryOpen(false)}
+                                            onSelect={(p) => setSelectedPerfume(p as MyPerfume)}
+                                            isKorean={isKorean}
+                                        />
+                                    )}
+                                </AnimatePresence>
+                            </div>
+
+                            {/* Group 3: Add Button (Standalone) */}
+                            <motion.button
+                                whileHover={{ scale: 1.05 }}
+                                whileTap={{ scale: 0.95 }}
+                                onClick={() => setIsSearchOpen(true)}
+                                // [수정] 높이 60px 적용, 스타일 더욱 강렬하게
+                                className={`flex items-center justify-center gap-2 px-8 h-full rounded-[30px] text-xs font-black uppercase tracking-wider relative overflow-hidden group ${isGalaxy
+                                    ? 'bg-gradient-to-r from-indigo-500 to-purple-600 text-white shadow-lg shadow-indigo-500/30 border border-white/10'
+                                    : 'bg-black text-white hover:bg-gray-800 shadow-md border border-transparent'
+                                    }`}
+                            >
+                                {/* Glow Effect for Galaxy */}
+                                {isGalaxy && (
+                                    <div className="absolute inset-0 bg-white/20 translate-y-full group-hover:translate-y-0 transition-transform duration-300 blur-md rounded-[30px]" />
+                                )}
+                                <span className="relative z-10">Add</span>
+                                <svg className="w-3.5 h-3.5 relative z-10" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="3" d="M12 6v6m0 0v6m0-6h6m-6 0H6"></path></svg>
+                            </motion.button>
+                        </div>
+
+                        {/* 3. Action Toolbar (Mobile Only - remains separate row below stats) */}
+                        <div className="order-1 -mt-2 md:hidden flex items-center gap-3 w-full justify-between">
+                            <div className="flex items-center gap-3 w-full">
                                 <div className="relative">
                                     <button
                                         onClick={() => setIsHistoryOpen(!isHistoryOpen)}
-                                        className={`flex items-center gap-2 px-5 py-3 rounded-full transition-all ${
-                                            isGalaxy
-                                                ? `${isHistoryOpen ? 'ring-2 ring-white/85' : ''} border border-white/45 bg-black/58 backdrop-blur-md hover:bg-black/44 shadow-[0_8px_20px_rgba(0,0,0,0.45)]`
-                                                : `${isHistoryOpen ? 'ring-2 ring-black bg-white shadow-md' : 'shadow-sm'} border border-gray-100 bg-white/50 backdrop-blur-sm hover:border-gray-200`
-                                        }`}
+                                        className={`flex items-center gap-2 px-5 py-3 rounded-full transition-all ${isGalaxy
+                                            ? `${isHistoryOpen ? 'ring-2 ring-white/85' : ''} border border-white/45 bg-black/58 backdrop-blur-md hover:bg-black/44 shadow-[0_8px_20px_rgba(0,0,0,0.45)]`
+                                            : `${isHistoryOpen ? 'ring-2 ring-black bg-white shadow-md' : 'shadow-sm'} border border-gray-100 bg-white/50 backdrop-blur-sm hover:border-gray-200`
+                                            }`}
                                     >
                                         <svg className={`w-4 h-4 ${isGalaxy ? 'text-white/92' : 'text-gray-400'}`} fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"></path></svg>
                                         <span className={`text-[10px] font-black uppercase tracking-widest ${isGalaxy ? 'text-white' : 'text-gray-500'}`}>{t.history}</span>
@@ -477,15 +704,14 @@ export default function ArchivesPage() {
                                 <motion.button
                                     whileHover={{ scale: 1.02 }}
                                     whileTap={{ scale: 0.98 }}
-                                    onClick={() => setIsSearchOpen(true)}
-                                    className={`flex-1 md:flex-none flex items-center justify-center gap-2 md:gap-3 px-6 py-2.5 md:px-8 md:py-3 rounded-full text-[9px] md:text-[10px] font-black uppercase tracking-[0.1em] md:tracking-[0.2em] ${
-                                        isGalaxy
-                                            ? 'bg-[#606EFF]/90 border border-[#CFD4FF]/80 text-white backdrop-blur-md hover:bg-[#7380FF]/95 shadow-[0_10px_28px_rgba(78,96,255,0.55)]'
-                                            : 'bg-black text-white shadow-lg shadow-black/10'
-                                    }`}
+                                    onClick={() => setIsAddModalOpen(true)}
+                                    className={`flex-1 flex items-center justify-center gap-2 px-6 py-2.5 rounded-full text-[9px] font-black uppercase tracking-[0.1em] ${isGalaxy
+                                        ? 'bg-[#606EFF]/90 border border-[#CFD4FF]/80 text-white backdrop-blur-md hover:bg-[#7380FF]/95 shadow-[0_10px_28px_rgba(78,96,255,0.55)]'
+                                        : 'bg-black text-white shadow-lg shadow-black/10'
+                                        }`}
                                 >
                                     <span>{t.addScent}</span>
-                                    <svg className="w-3 h-3 md:w-4 md:h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="3" d="M12 6v6m0 0v6m0-6h6m-6 0H6"></path></svg>
+                                    <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="3" d="M12 6v6m0 0v6m0-6h6m-6 0H6"></path></svg>
                                 </motion.button>
                             </div>
                         </div>
@@ -511,12 +737,11 @@ export default function ArchivesPage() {
                                 exit={{ opacity: 0, y: -20 }}
                             >
                                 {filteredCollection.length === 0 ? (
-                                    <div className={`flex flex-col items-center justify-center py-32 rounded-[40px] border backdrop-blur-sm ${
-                                        isGalaxy ? 'bg-black/35 border-white/20' : 'bg-white/30 border-white/50'
-                                    }`}>
+                                    <div className={`flex flex-col items-center justify-center py-32 rounded-[40px] border backdrop-blur-sm ${isGalaxy ? 'bg-black/35 border-white/20' : 'bg-white/30 border-white/50'
+                                        }`}>
                                         <p className={`font-bold uppercase tracking-widest mb-6 ${isGalaxy ? 'text-white/70' : 'text-gray-400'}`}>{t.noScents}</p>
                                         <button
-                                            onClick={() => setIsSearchOpen(true)}
+                                            onClick={() => setIsAddModalOpen(true)}
                                             className={`font-black text-xs uppercase tracking-widest hover:underline decoration-2 underline-offset-8 ${isGalaxy ? 'text-white' : 'text-black'}`}
                                         >
                                             {t.addFirst}
@@ -539,25 +764,10 @@ export default function ArchivesPage() {
                     </AnimatePresence>
                 </main>
 
-                <Link href="/perfume-network/nmap" className="fixed bottom-6 right-6 md:bottom-8 md:right-8 z-40 group">
-                    <motion.div
-                        whileHover={{ scale: 1.05 }}
-                        whileTap={{ scale: 0.95 }}
-                        className={`flex items-center gap-2 md:gap-3 px-4 py-2.5 md:px-8 md:py-4 rounded-full font-black text-[8px] md:text-xs uppercase tracking-widest ${
-                            isGalaxy
-                                ? 'bg-white/12 backdrop-blur-md border border-white/34 text-white shadow-2xl shadow-black/35'
-                                : 'bg-white/80 backdrop-blur-md border border-white/50 text-black shadow-2xl shadow-black/5'
-                        }`}
-                    >
-                        <div className={`w-1.5 h-1.5 md:w-2 md:h-2 rounded-full animate-pulse ${isGalaxy ? 'bg-white' : 'bg-black'}`} />
-                        <span>{t.scentMap}</span>
-                    </motion.div>
-                </Link>
-
-                {isSearchOpen && (
+                {isAddModalOpen && (
                     <PerfumeSearchModal
                         memberId={String(memberId)}
-                        onClose={() => setIsSearchOpen(false)}
+                        onClose={() => setIsAddModalOpen(false)}
                         onAdd={handleAdd}
                         isKorean={isKorean}
                         onToggleLanguage={() => setIsKorean(!isKorean)}
@@ -575,7 +785,7 @@ export default function ArchivesPage() {
                     />
                 )}
             </PageLayout>
-        </SavedPerfumesProvider>
+        </SavedPerfumesProvider >
     );
 }
 
@@ -594,29 +804,28 @@ function StatItem({
     onClick: () => void;
     isGalaxy?: boolean;
 }) {
+    // [수정] 배경 없는 텍스트 전용 버튼 디자인
     return (
         <button
             onClick={onClick}
+            // [수정] 배경/그림자/테두리 스타일 제거
+            // 오직 Active 아닐 때 투명도(opacity) 차이만으로 구분
             className={`
-                flex flex-col items-center min-w-[72px] md:min-w-[92px] px-3.5 md:px-4 py-1.5 md:py-2 rounded-[20px] transition-all duration-300
-                ${isActive
-                    ? (isGalaxy ? 'bg-white/20 shadow-sm ring-1 ring-white/35' : 'bg-white shadow-sm ring-1 ring-black/5')
-                    : (isGalaxy ? 'hover:bg-white/16' : 'hover:bg-white/40')
+                flex flex-col items-center justify-center w-full md:w-auto md:min-w-[96px] h-full px-2 md:px-4 py-1 rounded-[25px] transition-all duration-300
+                ${!isActive
+                    ? (isGalaxy ? 'hover:opacity-100 opacity-40' : 'hover:opacity-100 opacity-40')
+                    : 'opacity-100' // active는 투명도 100%
                 }
             `}
         >
-            <span className={`text-[9px] md:text-[10px] font-black uppercase tracking-widest mb-0.5 transition-colors ${
-                isActive
-                    ? (isGalaxy ? 'text-white' : 'text-black')
-                    : (isGalaxy ? 'text-white/65' : 'text-gray-400')
-            }`}>
+            <span className={`text-[9px] md:text-[9.5px] font-black uppercase tracking-widest mb-[1px] transition-colors ${isGalaxy ? 'text-white' : 'text-black'
+                }`}>
                 {label}
             </span>
-            <span className={`text-[1.8rem] md:text-[1.95rem] leading-none font-black transition-all ${
-                isActive
-                    ? activeColor
-                    : (isGalaxy ? 'text-white/70' : 'text-gray-300')
-            }`}>
+            <span className={`text-[1.8rem] md:text-[1.85rem] leading-[0.9] font-black transition-all ${isActive
+                ? activeColor // Active일 때 색상 (Pink, Sky 등)
+                : (isGalaxy ? 'text-white' : 'text-gray-400') // Inactive일 때 기본 색상 (부모 opacity 영향을 받아 흐려짐)
+                }`}>
                 {count}
             </span>
         </button>

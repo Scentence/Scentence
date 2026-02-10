@@ -8,7 +8,6 @@
  *    예시: "content": [{ "subtitle": "섹션 제목", "paragraphs": ["단락1", "단락2"] }]
  * 3. 관련 키워드 수정: perfumeWiki.json 파일에서 해당 에피소드에 tags 배열 추가/수정
  */
-import Link from "next/link";
 import { notFound } from "next/navigation";
 import EpisodeHero from "@/components/perfume-wiki/EpisodeHero";
 import EpisodeContentSection from "@/components/perfume-wiki/EpisodeContentSection";
@@ -17,6 +16,8 @@ import SeriesRelatedCard from "@/components/perfume-wiki/SeriesRelatedCard";
 import TagList from "@/components/perfume-wiki/TagList";
 import LikeButton from "@/components/perfume-wiki/LikeButton";
 import ShareButton from "@/components/perfume-wiki/ShareButton";
+import WikiShell from "@/components/perfume-wiki/WikiShell";
+import WikiBackButton from "@/components/perfume-wiki/WikiBackButton";
 import PageLayout from "@/components/common/PageLayout";
 import perfumeWikiData from "../../_data/perfumeWiki.json";
 import type { PerfumeWikiData, Series, Episode, ContentSection } from "../../types";
@@ -95,10 +96,14 @@ export default async function EpisodePage({ params }: EpisodePageProps) {
 
   return (
     <PageLayout subTitle="Perfume Wiki" disableContentPadding>
-      <main className="pt-[80px] pb-32 px-3 sm:px-6 max-w-7xl mx-auto">
+      <WikiShell className="pb-20 sm:pb-28 md:pb-32">
         <div className="max-w-4xl mx-auto">
+          <div className="flex justify-end mb-4 sm:mb-8">
+            <WikiBackButton href={`/perfume-wiki/${seriesId}`} label="시리즈" />
+          </div>
+
           {/* Hero Section */}
-          <div className="mb-16">
+          <div className="mb-10 sm:mb-14 md:mb-16">
             <EpisodeHero
               episode={episode}
               seriesTitle={series.title}
@@ -108,33 +113,33 @@ export default async function EpisodePage({ params }: EpisodePageProps) {
           </div>
 
           {/* Like & Share Buttons */}
-          <div className="mb-16">
-            <div className="flex items-center gap-3 justify-center md:justify-start">
+          <div className="mb-10 sm:mb-14 md:mb-16">
+            <div className="flex items-center flex-wrap gap-2.5 sm:gap-3 justify-center md:justify-start">
               <LikeButton />
               <ShareButton />
             </div>
           </div>
 
           {/* Content Section */}
-          <div className="mb-20">
+          <div className="mb-12 sm:mb-16 md:mb-20">
             <EpisodeContentSection content={content} />
           </div>
 
           {/* Divider */}
-          <div className="mb-16">
+          <div className="mb-10 sm:mb-14 md:mb-16">
             <div className="h-px bg-gradient-to-r from-transparent via-[#E0E0E0] to-transparent" />
           </div>
 
           {/* Tags Section */}
-          <div className="mb-20">
-            <div className="space-y-5">
-              <h3 className="text-sm font-bold text-[#555]">관련 키워드</h3>
+          <div className="mb-12 sm:mb-16 md:mb-20">
+            <div className="space-y-4 sm:space-y-5">
+              <h3 className="text-xs sm:text-sm font-bold text-[#555]">관련 키워드</h3>
               <TagList tags={tags} />
             </div>
           </div>
 
           {/* Series Related Section */}
-          <div className="mb-20">
+          <div className="mb-12 sm:mb-16 md:mb-20">
             <SeriesRelatedCard series={series} currentEpisodeId={episode.id} />
           </div>
 
@@ -143,7 +148,7 @@ export default async function EpisodePage({ params }: EpisodePageProps) {
             <EpisodeCTA />
           </div>
         </div>
-      </main>
+      </WikiShell>
     </PageLayout>
   );
 }

@@ -13,6 +13,35 @@ import PageLayout from "@/components/common/PageLayout";
 
 const API_URL = "/api/chat";
 
+type ProfileResponse = {
+    nickname?: string | null;
+    name?: string | null;
+    kakao_nickname?: string | null;
+    email?: string | null;
+};
+
+const toSafeName = (value?: string | null): string => {
+    const trimmed = value?.trim();
+    return trimmed && trimmed.length > 0 ? trimmed : "";
+};
+
+const resolvePreferredDisplayName = (params: {
+    legacyNickname?: string | null;
+    name?: string | null;
+    kakaoNickname?: string | null;
+    email?: string | null;
+}) => {
+    const emailLocalPart = params.email?.split("@")[0];
+
+    return (
+        toSafeName(params.legacyNickname) ||
+        toSafeName(params.name) ||
+        toSafeName(params.kakaoNickname) ||
+        toSafeName(emailLocalPart) ||
+        "Guest"
+    );
+};
+
 export default function ChatPage() {
     const { data: session } = useSession(); // 카카오 로그인 세션
     const router = useRouter();
@@ -26,6 +55,7 @@ export default function ChatPage() {
     const [isMounted, setIsMounted] = useState(false);
     const [threadId, setThreadId] = useState("");
     const [memberId, setMemberId] = useState<number | null>(null);
+    const [displayName, setDisplayName] = useState("Guest");
     const messagesEndRef = useRef<HTMLDivElement>(null);
     const inputRef = useRef<HTMLTextAreaElement>(null);
 
@@ -66,7 +96,40 @@ export default function ChatPage() {
         setMemberId(parseInt(currentId, 10));
     }, [session]);
 
-    const displayName = session?.user?.name || session?.user?.email?.split('@')[0] || "Guest";
+    useEffect(() => {
+        const currentId = session?.user?.id;
+        const fallbackName = resolvePreferredDisplayName({
+            kakaoNickname: session?.user?.name,
+            email: session?.user?.email,
+        });
+
+        if (!currentId) {
+            setDisplayName(fallbackName);
+            return;
+        }
+
+        const controller = new AbortController();
+
+        fetch(`/api/users/profile/${currentId}`, {
+            cache: "no-store",
+            signal: controller.signal,
+        })
+            .then((res) => (res.ok ? res.json() : null))
+            .then((data: ProfileResponse | null) => {
+                const preferredName = resolvePreferredDisplayName({
+                    legacyNickname: data?.nickname,
+                    name: data?.name,
+                    kakaoNickname: data?.kakao_nickname || session?.user?.name,
+                    email: data?.email || session?.user?.email,
+                });
+                setDisplayName(preferredName);
+            })
+            .catch(() => {
+                setDisplayName(fallbackName);
+            });
+
+        return () => controller.abort();
+    }, [session?.user?.id, session?.user?.name, session?.user?.email]);
 
     const chatContainerRef = useRef<HTMLDivElement>(null);
     const [isUserScrolledUp, setIsUserScrolledUp] = useState(false);

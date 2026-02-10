@@ -280,9 +280,9 @@ export default function ArchiveGlobeView({ collection = [], isKorean = true, onF
     const controlsRef = useRef<any>(null);
 
     // 컬렉션 데이터가 없을 경우 보여줄 더미 데이터 생성
-    const displayConfig = useMemo(() => {
+    const displayConfig = useMemo<MyPerfume[]>(() => {
         if (collection.length > 0) return collection;
-        return Array.from({ length: 30 }).map((_, i) => ({
+        return Array.from({ length: 30 }).map((_, i): MyPerfume => ({
             my_perfume_id: i,
             name: `Perfume No.${i + 1}`,
             name_en: `Perfume No.${i + 1}`,
@@ -290,6 +290,8 @@ export default function ArchiveGlobeView({ collection = [], isKorean = true, onF
             brand: "SCENTENCE",
             brand_kr: "센텐스",
             image_url: null,
+            register_status: "HAVE",
+            status: "HAVE",
         }));
     }, [collection]);
 
