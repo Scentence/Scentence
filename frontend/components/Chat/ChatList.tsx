@@ -1,48 +1,86 @@
 "use client";
 
-import { useEffect, RefObject } from "react";
+import { useEffect, useState, RefObject } from "react";
 import MessageItem, { Message } from "./MessageItem";
 
 interface ChatListProps {
     messages: Message[];
     loading: boolean;
-    messagesEndRef: RefObject<HTMLDivElement>;
-    scrollToBottom: () => void;
+    messagesEndRef: RefObject<HTMLDivElement | null>;
     statusLog?: string;
+    userName?: string; // 사용자 이름 추가
 }
 
-const ChatList = ({ messages, loading, messagesEndRef, scrollToBottom, statusLog }: ChatListProps) => {
-    // 메시지나 로딩 상태, 로그 문구가 변할 때마다 바닥으로 자동 스크롤합니다.
-    useEffect(() => {
-        scrollToBottom();
-    }, [messages, loading, statusLog, scrollToBottom]);
+const GREETINGS = [
+    "어서오세요.",
+    "만나서 반가워요!",
+    "좋은 하루에요!",
+    "무엇을 도와드릴까요?"
+];
 
-    // 대화 시작 전 초기 화면
+const ChatList = ({ messages, loading, messagesEndRef, statusLog, userName = "Guest" }: ChatListProps) => {
+    // 인사말 회전 로직
+    const [greetingIndex, setGreetingIndex] = useState(0);
+
+    useEffect(() => {
+        if (messages.length === 0) {
+            const interval = setInterval(() => {
+                setGreetingIndex((prev) => (prev + 1) % GREETINGS.length);
+            }, 5000); // 5초마다 변경 (요청사항 반영)
+            return () => clearInterval(interval);
+        }
+    }, [messages.length]);
+
+    // 대화 시작 전 초기 화면 (Hero Section Style Greeting)
     if (messages.length === 0) {
         return (
-            <section className="flex-1 h-full overflow-hidden relative flex flex-col items-center justify-center text-center">
-                <div className="flex flex-col items-center gap-4 opacity-100">
-                    <div className="w-24 h-24 mb-2">
+            <section className="flex-1 h-full overflow-hidden relative flex flex-col items-center justify-center text-center p-6 pb-15">
+                {/* Animation Styles */}
+                <style>
+                    {`
+                        @keyframes fadeInUp {
+                            from { opacity: 0; transform: translateY(20px); filter: blur(4px); }
+                            to { opacity: 1; transform: translateY(0); filter: blur(0); }
+                        }
+                        .animate-greeting {
+                            animation: fadeInUp 0.8s cubic-bezier(0.2, 0.8, 0.2, 1) forwards;
+                        }
+                    `}
+                </style>
+                <div className="flex flex-col items-center gap-4 md:gap-8 opacity-100 max-w-5xl mt-12 md:mt-0">
+                    <div className="w-[109px] h-[109px] md:w-40 md:h-40 mb-2 drop-shadow-xl transition-transform hover:scale-105 duration-500">
                         <img
                             src="/perfumes/chatlist_icon1.png"
                             alt="Chat Icon"
-                            className="w-full h-full object-contain drop-shadow-sm"
+                            className="w-full h-full object-contain"
                         />
                     </div>
-                    <p className="text-sm md:text-base font-medium text-[#393939]/80">
-                        질문을 입력하면 AI가 분석 및 조사를 시작합니다.
-                    </p>
+                    <div className="flex flex-col items-center gap-6 md:gap-12">
+                        <h1 className="text-[21px] md:text-5xl font-bold text-[#2A2A2A] tracking-tight -mt-4">
+                            {userName}님,
+                        </h1>
+                        {/* 텍스트 높이 확보를 위한 Wrapper */}
+                        <div className="h-[1.3em] relative flex items-center justify-center overflow-visible w-full min-w-[300px]">
+                            <span
+                                className="absolute animate-greeting text-[27px] md:text-6xl font-extrabold text-transparent bg-clip-text bg-gradient-to-r from-[#D97757] via-[#FF8F8F] to-[#D97757] bg-[length:200%_auto] bg-center"
+                                key={greetingIndex}
+                                style={{ whiteSpace: 'nowrap' }}
+                            >
+                                {GREETINGS[greetingIndex]}
+                            </span>
+                        </div>
+                    </div>
                 </div>
             </section>
         );
     }
 
     return (
-        <section className="flex-1 overflow-y-auto no-scrollbar">
-            <div className="space-y-6">
+        <section className="min-h-full flex flex-col">
+            <div className="mt-auto space-y-6">
                 {/* 기존 메시지 목록 렌더링 */}
                 {messages.map((msg, idx) => (
-                    <MessageItem key={idx} message={msg} onScroll={scrollToBottom} />
+                    <MessageItem key={idx} message={msg} />
                 ))}
 
                 {/* ✅ 실시간 진행 상태(statusLog) 표시 영역 */}
@@ -51,9 +89,9 @@ const ChatList = ({ messages, loading, messagesEndRef, scrollToBottom, statusLog
                         {/* 1. 백엔드에서 전달된 단계별 상태 로그 표시 */}
                         {statusLog ? (
                             <div className="flex justify-start animate-pulse px-1">
-                                <div className="flex items-center gap-2 rounded-2xl bg-white/50 border border-pink-500/20 px-4 py-2 text-xs text-pink-500 shadow-sm backdrop-blur-sm">
-                                    {/* 회전하는 모래시계 아이콘 */}
-                                    <span className="animate-spin text-base">⏳</span>
+                                <div className="flex items-center gap-2 rounded-2xl bg-white/50 border border-gray-300 px-4 py-2 text-xs text-gray-700 shadow-sm backdrop-blur-sm">
+                                    {/* 향수 GIF 아이콘 */}
+                                    <img src="/perfume.gif" alt="Loading" className="w-5 h-5 object-contain" />
                                     {statusLog}
                                 </div>
                             </div>
@@ -71,7 +109,7 @@ const ChatList = ({ messages, loading, messagesEndRef, scrollToBottom, statusLog
                 )}
 
                 {/* 하단 스크롤용 지점 */}
-                <div ref={messagesEndRef} />
+                <div ref={messagesEndRef} className="h-px" />
             </div>
         </section>
     );

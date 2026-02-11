@@ -3,7 +3,7 @@
 
 import { useState, useEffect, useRef } from 'react';
 
-const API_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000";
+const API_URL = "/api";
 
 interface SearchResult {
     perfume_id: number;
@@ -23,13 +23,24 @@ interface Props {
     memberId: string | null;
     onClose: () => void;
     onAdd: (perfume: SearchResult, status: string) => void;
+    isKorean: boolean;
+    onToggleLanguage: () => void;
+    existingIds?: number[]; // <--- 추가: 이미 등록된 ID 목록
 }
 
-export default function PerfumeSearchModal({ memberId, onClose, onAdd }: Props) {
+export default function PerfumeSearchModal({ memberId, onClose, onAdd, isKorean, onToggleLanguage, existingIds = [] }: Props) {
     const [query, setQuery] = useState("");
     const [results, setResults] = useState<SearchResult[]>([]);
     const [loading, setLoading] = useState(false);
+    // [수정] 초기값으로 existingIds를 사용하도록 변경
+    const [addedIds, setAddedIds] = useState<Set<number>>(new Set(existingIds));
 
+    // [추가] 부모로부터 받은 existingIds가 변경되면 동기화 (만약 모달 열린 채로 추가될 경우 대비)
+    useEffect(() => {
+        if (existingIds.length > 0) {
+            setAddedIds(new Set(existingIds));
+        }
+    }, [existingIds]);
     // Autocomplete States
     const [suggestions, setSuggestions] = useState<AutocompleteResult>({ brands: [], keywords: [] });
     const [showSuggestions, setShowSuggestions] = useState(false);
@@ -100,13 +111,29 @@ export default function PerfumeSearchModal({ memberId, onClose, onAdd }: Props) 
     };
 
     return (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4">
-            <div className="bg-white w-full max-w-lg rounded-3xl shadow-2xl flex flex-col max-h-[85vh] overflow-hidden">
+        <div
+            className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4"
+            onClick={onClose}
+        >
+            <div
+                className="bg-white w-full max-w-lg rounded-3xl shadow-2xl flex flex-col max-h-[85vh] overflow-hidden"
+                onClick={(e) => e.stopPropagation()}
+            >
 
                 {/* Header */}
-                <div className="flex items-center justify-between p-6 border-b border-gray-50 bg-[#FDFBF8]">
-                    <h2 className="text-[#333] font-bold text-lg">향수 검색</h2>
-                    <button onClick={onClose} className="text-gray-400 hover:text-gray-800 text-2xl transition">&times;</button>
+                <div className="p-4 border-b flex justify-between items-center sticky top-0 bg-white z-10">
+                    <div className="flex items-center gap-3">
+                        <h2 className="font-bold text-lg">향수 검색</h2>
+                        {/* [요청 3,4] 동기화된 토글 버튼 추가 */}
+                        <button
+                            onClick={onToggleLanguage}
+                            className="w-7 h-7 flex items-center justify-center rounded-full border border-gray-200 text-[10px] font-bold text-gray-500 hover:bg-black hover:text-white transition-all"
+                            title={isKorean ? "Switch to English" : "한글로 전환"}
+                        >
+                            {isKorean ? "KR" : "EN"}
+                        </button>
+                    </div>
+                    <button onClick={onClose} className="text-gray-400 hover:text-gray-600">✕</button>
                 </div>
 
                 {/* Search Input Area */}
@@ -116,6 +143,17 @@ export default function PerfumeSearchModal({ memberId, onClose, onAdd }: Props) 
                             type="text"
                             value={query}
                             onChange={handleInputChange}
+                            // [수정] 엔터키 누르면 타이머 취소하고 즉시 실행
+                            onKeyDown={(e) => {
+                                if (e.key === 'Enter') {
+                                    // 1. 기다리던 자동완성 요청 취소 (핵심!)
+                                    if (searchTimeout.current) clearTimeout(searchTimeout.current);
+
+                                    // 2. 팝업 닫고 검색 실행
+                                    setShowSuggestions(false);
+                                    executeSearch(query);
+                                }
+                            }}
                             placeholder="브랜드 혹은 향수 이름 입력..."
                             className="flex-1 bg-gray-50 text-[#333] px-4 py-4 rounded-xl border-none focus:ring-2 focus:ring-[#C5A55D]/50 focus:bg-white transition text-sm font-medium placeholder-gray-400"
                             autoFocus
@@ -177,27 +215,45 @@ export default function PerfumeSearchModal({ memberId, onClose, onAdd }: Props) 
                                 </div>
 
                                 <div className="flex-1 min-w-0">
-                                    <p className="text-[#333] font-bold text-sm truncate">{perfume.name_kr || perfume.name}</p>
+                                    <p className="text-[#333] font-bold text-sm truncate">
+                                        {isKorean ? (perfume.name_kr || perfume.name) : (perfume.name || perfume.name_kr)}
+                                    </p>
                                     <p className="text-[#999] text-xs font-medium uppercase tracking-wide truncate">
-                                        {perfume.brand_kr || perfume.brand}
+                                        {isKorean ? (perfume.brand_kr || perfume.brand) : perfume.brand}
                                     </p>
                                 </div>
 
                                 <div className="flex gap-2">
-                                    {/* 보유 (HAVE) */}
-                                    <button
-                                        onClick={() => onAdd(perfume, 'HAVE')}
-                                        className="px-3 py-1.5 rounded-lg bg-indigo-50 text-indigo-600 border border-indigo-100 hover:bg-indigo-600 hover:text-white transition text-[11px] font-bold whitespace-nowrap"
-                                    >
-                                        보유
-                                    </button>
-                                    {/* 위시 (RECOMMENDED) -> Rose */}
-                                    <button
-                                        onClick={() => onAdd(perfume, 'RECOMMENDED')}
-                                        className="px-3 py-1.5 rounded-lg bg-rose-50 text-rose-500 border border-rose-100 hover:bg-rose-500 hover:text-white transition text-[11px] font-bold whitespace-nowrap"
-                                    >
-                                        위시
-                                    </button>
+                                    {addedIds.has(perfume.perfume_id) ? (
+                                        // 등록 완료된 상태의 UI
+                                        <div className="px-3 py-1.5 rounded-lg bg-gray-100 text-gray-400 text-[11px] font-bold border border-gray-200 flex items-center gap-1">
+                                            <span>✓</span> 등록됨
+                                        </div>
+                                    ) : (
+                                        // 미등록 상태: 버튼 표시
+                                        <div className="flex gap-2">
+                                            {/* 보유 (HAVE) */}
+                                            <button
+                                                onClick={() => {
+                                                    onAdd(perfume, 'HAVE');
+                                                    setAddedIds(prev => new Set(prev).add(perfume.perfume_id));
+                                                }}
+                                                className="px-3 py-1.5 rounded-lg bg-indigo-50 text-indigo-600 border border-indigo-100 hover:bg-indigo-600 hover:text-white transition text-[11px] font-bold whitespace-nowrap"
+                                            >
+                                                보유
+                                            </button>
+                                            {/* 위시 (RECOMMENDED) */}
+                                            <button
+                                                onClick={() => {
+                                                    onAdd(perfume, 'RECOMMENDED');
+                                                    setAddedIds(prev => new Set(prev).add(perfume.perfume_id));
+                                                }}
+                                                className="px-3 py-1.5 rounded-lg bg-rose-50 text-rose-500 border border-rose-100 hover:bg-rose-500 hover:text-white transition text-[11px] font-bold whitespace-nowrap"
+                                            >
+                                                위시
+                                            </button>
+                                        </div>
+                                    )}
                                 </div>
                             </div>
                         ))

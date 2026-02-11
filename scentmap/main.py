@@ -1,78 +1,80 @@
-from fastapi import FastAPI
+from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.middleware.gzip import GZipMiddleware
 import logging
 from contextlib import asynccontextmanager
 import os
 
-from scentmap.db import init_db_schema, close_pool
-from scentmap.app.api.network import router as network_router
+from scentmap.db import init_db_schema, close_pool, close_nmap_pool  # [개선] NMap Pool 종료 추가
 from scentmap.app.api.label import router as labels_router
-
+from scentmap.app.api.session import router as session_router
+from scentmap.app.api.ncard import router as ncard_router
+from scentmap.app.api.nmap import router as nmap_router, limiter  # [개선] limiter import
 from scentmap.app.services.label_service import load_labels
+from slowapi import _rate_limit_exceeded_handler  # [개선] Rate Limit 핸들러
+from slowapi.errors import RateLimitExceeded  # [개선] Rate Limit 에러
 
+"""
+Scentmap Main: FastAPI 애플리케이션 설정 및 라우터 등록
+[개선] Rate Limiting 및 성능 최적화 추가
+[개선] EC2 배포 최적화: 로그 레벨 환경 변수 지원
+"""
+
+# [개선] 로그 레벨 환경 변수로 설정
+LOG_LEVEL = os.getenv("LOG_LEVEL", "INFO").upper()
+logging.basicConfig(
+    level=getattr(logging, LOG_LEVEL),
+    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s'
+)
 logger = logging.getLogger(__name__)
+logger.info(f"🚀 Scentmap 시작 - 로그 레벨: {LOG_LEVEL}")
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    # 서버 시작 시 초기화
     logger.info("🚀 Scentmap 서비스 시작 중...")
-    
-    # 1. 테이블 자동 생성 (없으면 만듦)
     init_db_schema()
-    
-    # 2. 라벨 데이터 사전 로드
     try:
         load_labels()
         logger.info("✅ 라벨 데이터 로드 완료")
     except Exception as e:
         logger.error(f"⚠️ 라벨 데이터 로드 실패: {e}")
-        logger.warning("서비스는 계속 실행되지만 라벨 데이터는 첫 요청 시 로드됩니다.")
-    
-    logger.info("⚡ 서버 준비 완료")
-    
     yield
-    
-    # 서버 종료 시 정리
     logger.info("🛑 Scentmap 서비스 종료 중...")
     close_pool()
-
+    close_nmap_pool()  # [개선] NMap 전용 Pool 종료
 
 app = FastAPI(title="Scentmap Service", lifespan=lifespan)
 
-origins_env = os.getenv("CORS_ORIGINS")
-if origins_env:
-    origins = [origin.strip() for origin in origins_env.split(",") if origin.strip()]
-else:
-    origins = [
-        "http://localhost:3000",
-        "http://127.0.0.1:3000",
-    ]
+# [개선] Rate Limiter 설정
+app.state.limiter = limiter
+app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)
 
+# CORS 설정
+origins = os.getenv("CORS_ORIGINS", "http://localhost:3000,http://127.0.0.1:3000").split(",")
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=origins,
+    allow_origins=[o.strip() for o in origins],
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
 )
 
-# 대용량 응답 압축 (네트워크 데이터 전송 시간 단축)
+# [개선] 응답 압축 (데이터 크기 감소)
 app.add_middleware(GZipMiddleware, minimum_size=1000)
 
-app.include_router(network_router)
+# 라우터 등록
+app.include_router(nmap_router)
 app.include_router(labels_router)
-
+app.include_router(session_router)
+app.include_router(ncard_router)
 
 @app.get("/")
 def root():
     return {"message": "Scentmap service is running!"}
 
-
 @app.get("/health")
 def health():
     return {"status": "ok", "service": "scentmap"}
-
 
 if __name__ == "__main__":
     import uvicorn

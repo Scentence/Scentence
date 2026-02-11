@@ -2,8 +2,10 @@
 
 import { useEffect, useState } from "react";
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import { useSession } from "next-auth/react";
-import Sidebar from "@/components/common/sidebar";
+import PageLayout from "@/components/common/PageLayout";
+import { Crown } from "lucide-react";
 
 interface MemberRow {
   member_id: string;
@@ -18,61 +20,73 @@ const statusOptions = ["NORMAL", "LOCK", "DORMANT", "WITHDRAW_REQ", "WITHDRAW"] 
 
 export default function AdminPage() {
   const { data: session } = useSession();
-  const [isSidebarOpen, setIsSidebarOpen] = useState(false);
+  const router = useRouter(); // Add useRouter
   const [memberId, setMemberId] = useState<string | null>(null);
-  const [roleType, setRoleType] = useState<string | null>(null);
+  const [verifiedRoleType, setVerifiedRoleType] = useState<string | null>(null);
+  const [isVerifying, setIsVerifying] = useState(true);
   const [members, setMembers] = useState<MemberRow[]>([]);
   const [message, setMessage] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(false);
-  const apiBaseUrl = process.env.NEXT_PUBLIC_API_URL || "";
+  const apiBaseUrl = "/api";
+
+  // localAuth 제거: 세션 id만 사용
   useEffect(() => {
     if (session?.user?.id) {
       setMemberId(String(session.user.id));
       return;
     }
-    if (typeof window === "undefined") return;
-    const stored = localStorage.getItem("localAuth");
-    if (!stored) return;
-    try {
-      const parsed = JSON.parse(stored);
-      if (parsed?.memberId) {
-        setMemberId(String(parsed.memberId));
-      }
-      if (parsed?.roleType) {
-        setRoleType(parsed.roleType);
-      } else if (parsed?.isAdmin) {
-        setRoleType("ADMIN");
-      }
-    } catch (error) {
-      return;
+    if (session === null) {
+      setIsVerifying(false);
     }
   }, [session]);
 
-  const isAdmin = (roleType || "").toUpperCase() === "ADMIN";
+  const isAdmin = (verifiedRoleType || "").toUpperCase() === "ADMIN";
 
+  // Redirect if not admin after verification
   useEffect(() => {
-    if (!memberId || roleType) return;
+    // Wait until verification is complete
+    if (isVerifying) return;
+
+    // If verification finished and NOT admin
+    if (!isAdmin) {
+      const timer = setTimeout(() => {
+        router.push("/");
+      }, 2000); // Redirect after 2s
+      return () => clearTimeout(timer);
+    }
+  }, [isVerifying, isAdmin, router]);
+
+  // Step 2: Verify Role from Server
+  useEffect(() => {
+    if (!memberId) return;
     const controller = new AbortController();
 
-    const loadRole = async () => {
+    const verifyRole = async () => {
+      setIsVerifying(true);
       try {
         const response = await fetch(`${apiBaseUrl}/users/profile/${memberId}`, {
           signal: controller.signal,
         });
-        if (!response.ok) return;
-        const data = await response.json().catch(() => null);
-        if (data?.role_type) {
-          setRoleType(data.role_type);
+        if (!response.ok) {
+          setVerifiedRoleType(null);
+          return;
         }
+        const data = await response.json().catch(() => null);
+        // Only trust the role returned from the fresh server call
+        setVerifiedRoleType(data?.role_type || "USER");
       } catch (error) {
-        return;
+        if ((error as Error).name !== 'AbortError') {
+          setVerifiedRoleType(null);
+        }
+      } finally {
+        setIsVerifying(false);
       }
     };
 
-    loadRole();
+    verifyRole();
 
     return () => controller.abort();
-  }, [apiBaseUrl, memberId, roleType]);
+  }, [apiBaseUrl, memberId]);
 
   useEffect(() => {
     if (!memberId || !isAdmin) return;
@@ -83,7 +97,7 @@ export default function AdminPage() {
       setMessage(null);
       try {
         const response = await fetch(
-          `${apiBaseUrl}/users/admin/members?admin_member_id=${memberId}`,
+          `${apiBaseUrl}/users/admin/members`,
           { signal: controller.signal }
         );
         if (!response.ok) {
@@ -109,7 +123,7 @@ export default function AdminPage() {
     if (!memberId) return;
     try {
       const response = await fetch(
-        `${apiBaseUrl}/users/admin/members/${targetId}/status?admin_member_id=${memberId}&status=${status}`,
+        `${apiBaseUrl}/users/admin/members/${targetId}/status?status=${status}`,
         { method: "PATCH" }
       );
       if (!response.ok) {
@@ -127,96 +141,97 @@ export default function AdminPage() {
     }
   };
 
+  // [HYPER-REALISTIC LIQUID GLASS BLOCK] (Sidebar와 동일 스타일)
+  const liquidGlassBlock = "bg-gradient-to-br from-white/[0.08] to-transparent backdrop-blur-[16px] border border-white/40 shadow-[inset_0_1px_1px_rgba(255,255,255,0.9),inset_0_15px_30px_rgba(255,255,255,0.15),inset_0_-2px_10px_rgba(0,0,0,0.05),0_20px_40px_-10px_rgba(0,0,0,0.2)] overflow-hidden rounded-[32px]";
+
   return (
-    <div className="min-h-screen bg-white text-black flex flex-col">
-      <Sidebar
-        isOpen={isSidebarOpen}
-        onClose={() => setIsSidebarOpen(false)}
-        context="home"
-      />
+    <>
+      <style jsx global>{`
+        @keyframes bounce-subtle {
+          0%, 100% { transform: translateY(0) rotate(-25deg); }
+          50% { transform: translateY(-3px) rotate(-20deg); }
+        }
+      `}</style>
 
-      {isSidebarOpen && (
-        <div
-          className="fixed inset-0 bg-black/50 z-40 md:hidden"
-          onClick={() => setIsSidebarOpen(false)}
-        />
-      )}
+      <PageLayout subTitle="ADMIN" className="min-h-screen bg-[#FDFBF8] text-black flex flex-col font-sans selection:bg-black selection:text-white">
 
-      <header className="fixed top-0 left-0 w-screen flex items-center justify-between px-5 py-4 bg-[#E5E5E5] z-50">
-        <Link href="/" className="text-xl font-bold text-black tracking-tight">
-          Scentence
-        </Link>
-        <button onClick={() => setIsSidebarOpen(true)} className="p-1">
-          <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" className="w-8 h-8 text-[#555]">
-            <path strokeLinecap="round" strokeLinejoin="round" d="M3.75 6.75h16.5M3.75 12h16.5m-16.5 5.25h16.5" />
-          </svg>
-        </button>
-      </header>
-
-      <main className="flex-1 px-5 py-8 w-full max-w-5xl mx-auto pt-[72px] space-y-6">
-        <div>
-          <h2 className="text-2xl font-bold">관리자 페이지</h2>
-          <p className="text-sm text-[#666]">회원 관리 전용 화면입니다.</p>
-        </div>
-
-        {!isAdmin && (
-          <div className="rounded-2xl border border-[#EEE] p-6 text-sm text-[#666]">
-            관리자 권한이 없습니다.
-          </div>
-        )}
-
-        {isAdmin && (
-          <section className="rounded-2xl border border-[#EEE] p-6 space-y-4">
-            <div className="flex items-center justify-between">
-              <h3 className="text-lg font-semibold">회원 목록</h3>
-              {isLoading && <span className="text-xs text-[#999]">불러오는 중...</span>}
+        <main className="flex-1 px-5 py-12 w-full max-w-6xl mx-auto pt-[100px] space-y-10">
+          {!isAdmin && !isVerifying && (
+            <div className={`${liquidGlassBlock} p-12 text-center text-gray-500 shadow-xl`}>
+              접근 권한이 없습니다. 메인으로 이동합니다...
             </div>
+          )}
 
-            {message && <p className="text-xs text-red-600">{message}</p>}
+          {isAdmin && (
+            <section className={`${liquidGlassBlock} p-8 md:p-12 space-y-8 shadow-2xl animate-on-scroll border border-white/60`}>
+              <div className="flex items-center justify-between border-b border-black/5 pb-6">
+                <div>
+                  <h3 className="text-2xl font-black tracking-tight">회원 관리 시스템</h3>
+                  <p className="text-xs text-gray-500 mt-1 uppercase tracking-widest font-bold">Member Management Studio</p>
+                </div>
+                {isLoading && (
+                  <div className="flex items-center gap-2">
+                    <div className="w-2 h-2 rounded-full bg-blue-500 animate-pulse" />
+                    <span className="text-[10px] font-bold text-gray-400 tracking-widest uppercase">Syncing...</span>
+                  </div>
+                )}
+              </div>
 
-            <div className="overflow-x-auto">
-              <table className="w-full text-sm table-fixed">
-                <thead className="text-left text-[#666]">
-                  <tr>
-                    <th className="py-2 w-20">MEMBER_ID</th>
-                    <th className="py-2 w-52">이메일</th>
-                    <th className="py-2 w-40">닉네임</th>
-                    <th className="py-2 w-28">가입일</th>
-                    <th className="py-2 w-28">상태</th>
-                    <th className="py-2 w-24">가입 방식</th>
-                    <th className="py-2 w-32">관리</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {members.map((member) => (
-                    <tr key={member.member_id} className="border-t">
-                      <td className="py-2 truncate">{member.member_id}</td>
-                      <td className="py-2 truncate">{member.email ?? "-"}</td>
-                      <td className="py-2 truncate">{member.nickname ?? "-"}</td>
-                      <td className="py-2">{member.join_dt ? new Date(member.join_dt).toLocaleDateString() : "-"}</td>
-                      <td className="py-2">{member.member_status ?? "-"}</td>
-                      <td className="py-2">{member.join_channel ?? "-"}</td>
-                      <td className="py-2">
-                        <select
-                          className="rounded border border-[#DDD] px-2 py-1 text-sm"
-                          value={member.member_status ?? "NORMAL"}
-                          onChange={(event) => updateStatus(member.member_id, event.target.value)}
-                        >
-                          {statusOptions.map((status) => (
-                            <option key={status} value={status}>
-                              {status}
-                            </option>
-                          ))}
-                        </select>
-                      </td>
+              {message && (
+                <div className="bg-red-50 border border-red-100 text-red-600 px-4 py-3 rounded-xl text-xs font-bold">
+                  {message}
+                </div>
+              )}
+
+              <div className="overflow-x-auto no-scrollbar">
+                <table className="w-full text-sm">
+                  <thead>
+                    <tr className="text-left text-gray-400 border-b border-black/5">
+                      <th className="pb-4 font-bold text-[10px] tracking-widest uppercase px-2 w-20">ID</th>
+                      <th className="pb-4 font-bold text-[10px] tracking-widest uppercase px-2 w-52">Email</th>
+                      <th className="pb-4 font-bold text-[10px] tracking-widest uppercase px-2 w-40">Nickname</th>
+                      <th className="pb-4 font-bold text-[10px] tracking-widest uppercase px-2 w-28">Date</th>
+                      <th className="pb-4 font-bold text-[10px] tracking-widest uppercase px-2 w-28">Status</th>
+                      <th className="pb-4 font-bold text-[10px] tracking-widest uppercase px-2 w-24">Channel</th>
+                      <th className="pb-4 font-bold text-[10px] tracking-widest uppercase px-2 w-32">Action</th>
                     </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-          </section>
-        )}
-      </main>
-    </div>
+                  </thead>
+                  <tbody className="divide-y divide-black/5">
+                    {members.map((member) => (
+                      <tr key={member.member_id} className="group hover:bg-black/[0.02] transition-colors">
+                        <td className="py-4 px-2 font-mono text-[11px] text-gray-400">{member.member_id}</td>
+                        <td className="py-4 px-2 font-medium truncate">{member.email ?? "-"}</td>
+                        <td className="py-4 px-2 font-bold">{member.nickname ?? "-"}</td>
+                        <td className="py-4 px-2 text-gray-500">{member.join_dt ? new Date(member.join_dt).toLocaleDateString() : "-"}</td>
+                        <td className="py-4 px-2">
+                          <span className={`px-2 py-0.5 rounded text-[10px] font-black tracking-widest ${member.member_status === "NORMAL" ? "bg-green-100 text-green-700" : "bg-red-100 text-red-700"
+                            }`}>
+                            {member.member_status ?? "-"}
+                          </span>
+                        </td>
+                        <td className="py-4 px-2 text-gray-500 uppercase text-[10px] font-bold">{member.join_channel ?? "-"}</td>
+                        <td className="py-4 px-2">
+                          <select
+                            className="w-full bg-white/50 backdrop-blur-sm rounded-lg border border-black/5 px-2 py-1.5 text-xs font-bold outline-none focus:border-black transition-all cursor-pointer shadow-sm hover:shadow-md"
+                            value={member.member_status ?? "NORMAL"}
+                            onChange={(event) => updateStatus(member.member_id, event.target.value)}
+                          >
+                            {statusOptions.map((status) => (
+                              <option key={status} value={status}>
+                                {status}
+                              </option>
+                            ))}
+                          </select>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            </section>
+          )}
+        </main>
+      </PageLayout>
+    </>
   );
 }

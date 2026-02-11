@@ -2,15 +2,17 @@
 
 import { FormEvent, useState } from "react";
 import Link from "next/link";
-import Sidebar from "@/components/common/sidebar";
+import PageLayout from "@/components/common/PageLayout";
+import { signIn } from "next-auth/react";
+import { useRouter } from "next/navigation";
+import { motion } from "framer-motion";
 
 export default function LoginPage() {
-  const [isSidebarOpen, setIsSidebarOpen] = useState(false);
   const [loginId, setLoginId] = useState("");
   const [password, setPassword] = useState("");
   const [submitMessage, setSubmitMessage] = useState<string | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
-  const apiBaseUrl = process.env.NEXT_PUBLIC_API_URL || "";
+  const router = useRouter();
 
   const handleKakaoPopup = () => {
     if (typeof window === "undefined") return;
@@ -37,161 +39,154 @@ export default function LoginPage() {
     setIsSubmitting(true);
 
     try {
-      const response = await fetch(`${apiBaseUrl}/users/login/local`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          email: loginId.trim(),
-          password,
-        }),
+      const result = await signIn("credentials", {
+        redirect: false,
+        email: loginId.trim(),
+        password,
       });
 
-      if (!response.ok) {
-        const data = await response.json().catch(() => null);
-        setSubmitMessage(data?.detail || "로그인에 실패했습니다.");
+      if (result?.error?.startsWith("WITHDRAW_PENDING:")) {
+        const memberId = result.error.split(":")[1];
+        router.push(`/recover?memberId=${memberId}`);
         return;
       }
-      const data = await response.json().catch(() => null);
-      if (data?.withdraw_pending && data?.member_id) {
-        window.location.href = `/recover?memberId=${data.member_id}`;
+
+      if (!result?.ok) {
+        setSubmitMessage("로그인에 실패했습니다. 아이디와 비밀번호를 확인해주세요.");
         return;
       }
-      let nickname = null;
-      let roleType = data?.role_type ?? null;
-      if (data?.member_id) {
-        const profileResponse = await fetch(`${apiBaseUrl}/users/profile/${data.member_id}`);
-        if (profileResponse.ok) {
-          const profileData = await profileResponse.json().catch(() => null);
-          nickname = profileData?.nickname ?? null;
-          roleType = profileData?.role_type ?? roleType;
-        }
-      }
-      if (typeof window !== "undefined") {
-        const userMode = data?.user_mode || "BEGINNER"; // [추가]
-        localStorage.setItem(
-          "localAuth",
-          JSON.stringify({
-            memberId: data?.member_id ?? null,
-            email: loginId.trim(),
-            nickname,
-            roleType: roleType,
-            user_mode: userMode, // [추가]
-            loggedInAt: new Date().toISOString(),
-          })
-        );
-      }
-      window.location.href = "/";
-    } catch (error) {
-      setSubmitMessage("로그인에 실패했습니다.");
+
+      router.push("/");
+    } catch {
+      setSubmitMessage("로그인 중 오류가 발생했습니다.");
     } finally {
       setIsSubmitting(false);
     }
   };
 
   return (
-    <div className="min-h-screen bg-white text-black flex flex-col">
-      <Sidebar
-        isOpen={isSidebarOpen}
-        onClose={() => setIsSidebarOpen(false)}
-        context="home"
-      />
-
-      {isSidebarOpen && (
-        <div
-          className="fixed inset-0 bg-black/50 z-40 md:hidden"
-          onClick={() => setIsSidebarOpen(false)}
-        />
-      )}
-
-      <header className="fixed top-0 left-0 right-0 flex items-center justify-between px-5 py-4 bg-[#E5E5E5] z-50">
-        <Link href="/" className="text-xl font-bold text-black tracking-tight">
-          Scentence
-        </Link>
-        <button onClick={() => setIsSidebarOpen(true)} className="p-1">
-          <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" className="w-8 h-8 text-[#555]">
-            <path strokeLinecap="round" strokeLinejoin="round" d="M3.75 6.75h16.5M3.75 12h16.5m-16.5 5.25h16.5" />
-          </svg>
-        </button>
-      </header>
-
-      <main className="flex-1 px-5 py-8 w-full max-w-md mx-auto pt-[72px]">
-        <div className="space-y-2 mb-8">
-          <h2 className="text-2xl font-bold">통합 로그인</h2>
-          <p className="text-sm text-[#666]">아이디와 비밀번호로 로그인하세요.</p>
+    <PageLayout disableContentPadding className="min-h-screen bg-[#FDFBF8] text-black font-sans flex flex-col">
+      <main className="flex-1 flex flex-col items-center pt-[56px] sm:pt-[64px] md:pt-[72px] pb-6 md:pb-20 animate-fade-in-up">
+        {/* Full-width Marquee Section - Top of Page */}
+        <div className="w-full overflow-hidden border-b border-gray-100 py-3 md:py-6 bg-white/50 select-none mb-6 md:mb-12">
+          <motion.div
+            className="flex whitespace-nowrap"
+            animate={{ x: [0, "-50%"] }}
+            transition={{
+              duration: 25,
+              repeat: Infinity,
+              ease: "linear"
+            }}
+          >
+            {[1, 2].map((i) => (
+              <div key={i} className="flex items-center gap-12 px-6">
+                <span className="text-2xl md:text-5xl font-black font-serif italic text-black tracking-tighter uppercase">Welcome Back •</span>
+                <span className="text-2xl md:text-5xl font-black font-serif italic text-transparent tracking-tighter uppercase" style={{ WebkitTextStroke: "1px black" }}>Scentence •</span>
+                <span className="text-2xl md:text-5xl font-black font-serif italic text-black tracking-tighter uppercase">Welcome Back •</span>
+                <span className="text-2xl md:text-5xl font-black font-serif italic text-transparent tracking-tighter uppercase" style={{ WebkitTextStroke: "1px black" }}>Scentence •</span>
+              </div>
+            ))}
+          </motion.div>
         </div>
 
-        <form className="space-y-5" onSubmit={handleSubmit}>
-          <div className="space-y-2">
-            <label htmlFor="loginId" className="text-sm font-medium text-[#333]">아이디</label>
-            <input
-              id="loginId"
-              name="loginId"
-              type="text"
-              placeholder="아이디를 입력하세요"
-              value={loginId}
-              onChange={(event) => setLoginId(event.target.value)}
-              className="w-full rounded-xl border border-[#DDD] px-4 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-black/20"
-            />
+        <div className="w-full max-w-xl px-4">
+          <div className="mb-6 md:mb-12 text-center animate-fade-in">
+            <p className="text-xs md:text-sm text-gray-600 font-medium tracking-[0.2em]">
+              당신의 취향, 그 이상의 발견
+            </p>
           </div>
 
-          <div className="space-y-2">
-            <label htmlFor="password" className="text-sm font-medium text-[#333]">비밀번호</label>
-            <input
-              id="password"
-              name="password"
-              type="password"
-              placeholder="비밀번호를 입력하세요"
-              value={password}
-              onChange={(event) => setPassword(event.target.value)}
-              className="w-full rounded-xl border border-[#DDD] px-4 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-black/20"
-            />
-          </div>
+          <form onSubmit={handleSubmit} className="space-y-4 md:space-y-12">
 
-          <button
-            type="button"
-            className="text-xs text-right text-[#666] underline hover:text-black"
-          >
-            비밀번호를 잊어버리셨나요?
-          </button>
+            {/* Inputs Section */}
+            <div className="space-y-3 md:space-y-8">
+              {/* ID Input */}
+              <div className="space-y-2 group">
+                <label htmlFor="loginId" className="block text-xs font-bold text-gray-600 uppercase tracking-wider group-focus-within:text-black transition-colors">
+                  ID (Email)
+                </label>
+                <input
+                  id="loginId"
+                  name="loginId"
+                  type="text"
+                  placeholder="아이디(이메일)를 입력하세요"
+                  value={loginId}
+                  onChange={(event) => setLoginId(event.target.value)}
+                  className="w-full border-b border-gray-200 py-2 md:py-3 text-base focus:border-black focus:outline-none transition-colors bg-transparent placeholder-gray-400"
+                />
+              </div>
 
-          {submitMessage && (
-            <p className="text-xs text-red-600">{submitMessage}</p>
-          )}
+              {/* Password Input */}
+              <div className="space-y-2 group">
+                <div className="flex justify-between items-center">
+                  <label htmlFor="password" className="block text-xs font-bold text-gray-600 uppercase tracking-wider group-focus-within:text-black transition-colors">
+                    Password
+                  </label>
+                </div>
+                <input
+                  id="password"
+                  name="password"
+                  type="password"
+                  placeholder="비밀번호를 입력하세요"
+                  value={password}
+                  onChange={(event) => setPassword(event.target.value)}
+                  className="w-full border-b border-gray-200 py-2 md:py-3 text-base focus:border-black focus:outline-none transition-colors bg-transparent placeholder-gray-400"
+                />
+              </div>
+            </div>
 
-          <button
-            type="submit"
-            disabled={isSubmitting}
-            className={`w-full py-3 rounded-xl font-bold transition ${isSubmitting
-              ? "bg-gray-300 text-gray-500 cursor-not-allowed"
-              : "bg-black text-white hover:opacity-90"
-              }`}
-          >
-            계속
-          </button>
+            {/* Error Message */}
+            {submitMessage && (
+              <div className="p-3 bg-red-50 text-red-600 text-xs rounded-lg text-center font-medium animate-pulse">
+                {submitMessage}
+              </div>
+            )}
 
-          <div className="text-sm text-center text-[#666]">
-            Scentence가 처음이신가요?{" "}
-            <Link href="/signup" className="font-semibold text-black hover:underline">
-              가입하기
-            </Link>
-          </div>
+            {/* Buttons Section */}
+            <div className="space-y-4 md:space-y-5 pt-2 md:pt-4">
+              <button
+                type="submit"
+                disabled={isSubmitting}
+                className={`w-full py-3 md:py-4 rounded-full font-bold text-lg transition-all shadow-md ${isSubmitting
+                  ? "bg-gray-200 text-gray-400 cursor-not-allowed"
+                  : "bg-black text-white hover:bg-gray-900 active:scale-[0.99]"
+                  }`}
+              >
+                {isSubmitting ? "로그인 중..." : "로그인"}
+              </button>
 
-          <div className="flex items-center gap-3 text-xs text-[#999]">
-            <div className="flex-1 h-px bg-[#E5E5E5]" />
-            <span>또는</span>
-            <div className="flex-1 h-px bg-[#E5E5E5]" />
-          </div>
+              <div className="relative flex py-2 items-center">
+                <div className="flex-grow border-t border-gray-100"></div>
+                <span className="flex-shrink-0 mx-4 text-[10px] text-gray-300 font-medium tracking-widest uppercase">OR</span>
+                <div className="flex-grow border-t border-gray-100"></div>
+              </div>
 
-          <button
-            type="button"
-            onClick={handleKakaoPopup}
-            className="w-full bg-[#FEE500] text-black py-3 rounded-xl font-bold flex items-center justify-center gap-2 hover:opacity-90 transition"
-          >
-            <span className="inline-flex items-center justify-center w-5 h-5 rounded-full bg-black text-[#FEE500] text-xs font-bold">K</span>
-            카카오 계정으로 계속
-          </button>
-        </form>
+              <button
+                type="button"
+                onClick={handleKakaoPopup}
+                className="w-full bg-[#FEE500] text-[#3c1e1e] py-3 md:py-4 rounded-full font-bold text-lg flex items-center justify-center gap-2.5 hover:bg-[#ffe812] transition-colors active:scale-[0.99] shadow-md"
+              >
+                <svg viewBox="0 0 24 24" fill="currentColor" className="w-5 h-5">
+                  <path d="M12 3C5.373 3 0 7.373 0 12.768c0 3.657 2.456 6.829 6.138 8.49L4.2 24l5.414-3.606c.767.098 1.556.15 2.386.15 6.627 0 12-4.373 12-9.768C24 7.373 18.627 3 12 3z" />
+                </svg>
+                <span>카카오 로그인</span>
+              </button>
+            </div>
+
+            {/* Footer Links - Signup CTA */}
+            <div className="mt-4 md:mt-12 pt-4 md:pt-8 border-t border-gray-100 flex flex-col items-center">
+              <p className="text-xs md:text-sm text-gray-500 mb-2 md:mb-4">아직 계정이 없으신가요?</p>
+              <Link
+                href="/signup"
+                className="w-full py-3 md:py-4 rounded-xl border border-gray-200 text-black font-bold text-center hover:bg-gray-50 hover:border-black transition-all"
+              >
+                회원가입
+              </Link>
+            </div>
+
+          </form>
+        </div>
       </main>
-    </div>
+    </PageLayout>
   );
 }

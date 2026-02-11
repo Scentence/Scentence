@@ -20,8 +20,7 @@ class FakeCursor:
         self.step = 0
 
     def __enter__(self):
-        return self
-
+        return se
     def __exit__(self, exc_type, exc, tb):
         return False
 

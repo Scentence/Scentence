@@ -26,6 +26,7 @@ class PerfumeBasic(BaseModel):
     perfume_name: str
     perfume_brand: str
     image_url: Optional[str] = None
+    concentration: Optional[str] = None
 
 
 class PerfumeRecord(BaseModel):
@@ -41,6 +42,7 @@ class PerfumeVector(BaseModel):
     perfume_name: str
     perfume_brand: str
     image_url: Optional[str] = None
+    concentration: Optional[str] = None
     vector: List[float]
     total_intensity: float
     persistence_score: float
@@ -104,6 +106,7 @@ class LayeringCandidate(BaseModel):
     perfume_name: str
     perfume_brand: str
     image_url: Optional[str] = None
+    concentration: Optional[str] = None
     total_score: float
     feasible: bool = True
     feasibility_reason: Optional[str]
@@ -125,7 +128,7 @@ class RecommendationFeedbackRequest(BaseModel):
     member_id: int = Field(..., description="Member identifier")
     perfume_id: str = Field(..., description="Recommended perfume identifier")
     perfume_name: str = Field(..., description="Recommended perfume name")
-    preference: Literal["GOOD", "BAD", "NEUTRAL"] = Field(
+    preference: Literal["GOOD", "BAD"] = Field(
         ..., description="Satisfaction value for the recommendation"
     )
 
@@ -172,6 +175,8 @@ class UserQueryAnalysis(BaseModel):
     brand_name: Optional[str] = None
     brand_best_perfume: Optional[PerfumeBasic] = None
     brand_best_score: Optional[float] = None
+    brand_best_reason: Optional[str] = None
+    similar_perfumes: List[PerfumeBasic] = Field(default_factory=list)
 
 
 class UserQueryResponse(BaseModel):
@@ -186,6 +191,8 @@ class UserQueryResponse(BaseModel):
     brand_name: Optional[str] = None
     brand_best_perfume: Optional[PerfumeBasic] = None
     brand_best_score: Optional[float] = None
+    brand_best_reason: Optional[str] = None
+    similar_perfumes: List[PerfumeBasic] = Field(default_factory=list)
     clarification_prompt: Optional[str] = None
     clarification_options: List[str] = Field(default_factory=list)
     note: Optional[str] = None
@@ -209,6 +216,7 @@ class PerfumeInfo(BaseModel):
     perfume_name: str
     perfume_brand: str
     image_url: Optional[str] = None
+    concentration: Optional[str] = None
     gender: Optional[str] = None
     accords: List[str] = Field(default_factory=list)
     seasons: List[str] = Field(default_factory=list)

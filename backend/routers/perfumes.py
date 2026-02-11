@@ -150,26 +150,26 @@ def search_perfumes(q: str = Query(..., min_length=1, description="검색어")):
     # SQL에서 REPLACE(col, ' ', '')로 비교하므로, 입력값도 공백을 제거해서 비교하는 것이 가장 정확함.
     # 하지만 '5' -> 'Five' 같은 변형은 별도로 OR 조건이 필요함.
     
-    search_variants = get_search_variants(q)
+    # 공백 제거 검색어 생성
+    # "캘빈 클라인" -> "캘빈클라인"으로 만들어서 DB에서도 공백을 제거한 값과 비교
+    search_term_clean = q.replace(" ", "").lower()
     
-    # SQL 파라미터 생성: 각 변형에 대해 %like% 적용
-    # 예: q="Chanel 5" -> variants=["chanel5", "chanelfive"...]
-    # SQL: ... WHERE REPLACE(name, ' ', '') ILIKE '%chanel5%' OR ...
+    # SQL 파라미터 생성: 공백 제거된 검색어에 % 앞뒤로 붙임
+    term = f"%{search_term_clean}%" 
     
     conditions = []
     params = []
+
+    # 검색 조건: DB 컬럼의 공백을 제거(REPLACE)하고, 검색어(term)와 비교(ILIKE)
+    # 이렇게 하면 "Calvin Klein" (DB) vs "calvinklein" (검색어) 매칭 성공
+    conditions.append("""
+        (REPLACE(b.perfume_name, ' ', '') ILIKE %s 
+            OR REPLACE(b.perfume_brand, ' ', '') ILIKE %s
+            OR REPLACE(COALESCE(k.name_kr, ''), ' ', '') ILIKE %s
+            OR REPLACE(COALESCE(k.brand_kr, ''), ' ', '') ILIKE %s)
+    """)
+    params.extend([term, term, term, term])
     
-    for var in search_variants:
-        # 공백 제거된 DB 컬럼과 비교하기 위해, 검색어(var)도 공백 제거 상태로 가정 (get_search_variants에서 처리됨)
-        # 단, 동의어("five")는 공백이 없을 수 있음.
-        term = f"%{var}%"
-        conditions.append("""
-            (REPLACE(b.perfume_name, ' ', '') ILIKE %s 
-             OR REPLACE(b.perfume_brand, ' ', '') ILIKE %s
-             OR REPLACE(COALESCE(k.name_kr, ''), ' ', '') ILIKE %s
-             OR REPLACE(COALESCE(k.brand_kr, ''), ' ', '') ILIKE %s)
-        """)
-        params.extend([term, term, term, term])
     query_where = " OR ".join(conditions)
 
     try:

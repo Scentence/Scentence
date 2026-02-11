@@ -14,3 +14,9 @@ openai
 Levenshtein
 passlib[bcrypt]
 python-multipart
+boto3
+Pillow
+pytest
+pytest-asyncio
+httpx
+python-jose[cryptography]

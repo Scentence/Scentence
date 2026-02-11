@@ -16,17 +16,17 @@ export default function EpisodeContentSection({
   }
 
   return (
-    <section className="space-y-16 max-w-4xl mx-auto">
+    <section className="space-y-8 sm:space-y-12 md:space-y-16 max-w-4xl mx-auto">
       {content.map((section, index) => (
-        <div key={index} className="space-y-6">
-          <h2 className="text-xl md:text-2xl font-bold text-[#1F1F1F] leading-tight">
+        <div key={index} className="space-y-4 sm:space-y-6">
+          <h2 className="text-lg sm:text-xl md:text-2xl font-bold text-[#1F1F1F] leading-tight break-keep">
             {section.subtitle}
           </h2>
-          <div className="space-y-5">
+          <div className="space-y-3.5 sm:space-y-5">
             {section.paragraphs.map((paragraph, pIndex) => (
               <p
                 key={pIndex}
-                className="text-sm md:text-base leading-relaxed text-[#444] whitespace-pre-line"
+                className="text-sm md:text-base leading-relaxed text-[#444] whitespace-pre-line break-keep"
               >
                 {paragraph}
               </p>

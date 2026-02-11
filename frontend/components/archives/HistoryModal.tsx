@@ -1,6 +1,7 @@
 /* HistoryModal.tsx (Popover Version) */
 "use client";
 import CabinetShelf from './CabinetShelf';
+import { motion } from "framer-motion";
 interface MyPerfume {
     my_perfume_id: number;
     perfume_id: number;
@@ -14,53 +15,65 @@ interface Props {
     historyItems: MyPerfume[];
     onClose: () => void;
     onSelect: (perfume: MyPerfume) => void;
+    isKorean: boolean;
 }
-export default function HistoryModal({ historyItems, onClose, onSelect }: Props) {
+export default function HistoryModal({ historyItems, onClose, onSelect, isKorean }: Props) {
     return (
         <>
-            {/* 배경 클릭 시 닫기 (투명 레이어) */}
-            <div className="fixed inset-0 z-40 cursor-default" onClick={onClose} />
-            {/* 팝오버 컨테이너 */}
-            <div
-                className="absolute top-full right-0 mt-3 w-[350px] md:w-[500px] max-h-[60vh] bg-white rounded-3xl shadow-xl border border-gray-100 z-50 flex flex-col overflow-hidden origin-top-right animate-[slideDown_0.3s_ease-out_forwards]"
-                style={{ animation: 'slideDown 0.3s cubic-bezier(0.16, 1, 0.3, 1)' }}
+            {/* [Backdrop] 배경 블러 & 어둡게 처리 */}
+            <motion.div
+                initial={{ opacity: 0 }}
+                animate={{ opacity: 1 }}
+                exit={{ opacity: 0 }}
+                className="fixed inset-0 z-[100] bg-black/40 backdrop-blur-md"
+                onClick={onClose}
+            />
+
+            {/* [Modal Container] 화면 중앙에 배치 */}
+            <motion.div
+                initial={{ opacity: 0, scale: 0.95, y: 20 }}
+                animate={{ opacity: 1, scale: 1, y: 0 }}
+                exit={{ opacity: 0, scale: 0.95, y: 20 }}
+                className="fixed top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[90%] md:w-[600px] max-h-[80vh] bg-white rounded-[40px] shadow-2xl z-[110] flex flex-col overflow-hidden"
             >
-                <style jsx>{`
-                    @keyframes slideDown {
-                        from { opacity: 0; transform: translateY(-10px) scale(0.98); }
-                        to { opacity: 1; transform: translateY(0) scale(1); }
-                    }
-                `}</style>
                 {/* 헤더 */}
-                <div className="flex items-center justify-between px-5 py-4 border-b border-gray-50 bg-[#FDFBF8]">
-                    <div className="flex items-center gap-2">
-                        <span className="text-lg">📜</span>
-                        <h2 className="text-base font-bold text-[#333]">History Archive</h2>
-                        <span className="bg-amber-100 text-amber-700 text-[10px] font-bold px-1.5 py-0.5 rounded-full">
-                            {historyItems.length}
-                        </span>
+                <div className="flex items-center justify-between px-8 py-6 border-b border-gray-50 bg-[#FDFBF8]">
+                    <div className="flex items-center gap-3">
+                        <span className="text-2xl">⏳</span>
+                        <div>
+                            <h2 className="text-xl font-black text-black uppercase tracking-tighter">History Archive</h2>
+                            <p className="text-[10px] font-bold text-gray-400 uppercase tracking-widest mt-0.5">Your Past Scent Journeys</p>
+                        </div>
                     </div>
+                    <button
+                        onClick={onClose}
+                        className="w-10 h-10 flex items-center justify-center rounded-full hover:bg-black/5 transition-colors"
+                    >
+                        <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M6 18L18 6M6 6l12 12"></path></svg>
+                    </button>
                 </div>
+
                 {/* 리스트 (스크롤 가능) */}
-                <div className="flex-1 overflow-y-auto p-4 custom-scrollbar bg-white">
+                <div className="flex-1 overflow-y-auto p-8 custom-scrollbar bg-white">
                     {historyItems.length === 0 ? (
-                        <div className="py-10 flex flex-col items-center justify-center text-gray-400">
-                            <p className="text-2xl mb-2">🍃</p>
-                            <p className="text-xs font-medium">기록된 향수가 없습니다.</p>
+                        <div className="py-20 flex flex-col items-center justify-center text-gray-300">
+                            <span className="text-5xl mb-4">🍃</span>
+                            <p className="text-sm font-bold uppercase tracking-widest">No memories yet</p>
                         </div>
                     ) : (
-                        <div className="grid grid-cols-2 gap-3">
+                        <div className="grid grid-cols-2 md:grid-cols-3 gap-6">
                             {historyItems.map((item) => (
-                                <div key={item.my_perfume_id} className="scale-90 origin-top text-xs relative group">
+                                <div key={item.my_perfume_id} className="relative group">
                                     <CabinetShelf
                                         perfume={item}
                                         onSelect={(p) => {
-                                            onClose(); // 선택 시 팝오버 닫기
+                                            onClose();
                                             onSelect(p);
                                         }}
+                                        isKorean={isKorean}
                                     />
                                     {item.preference && (
-                                        <div className="absolute top-0 right-0 bg-white/90 backdrop-blur px-2 py-0.5 rounded-bl-lg text-[10px] font-bold shadow-sm border-l border-b border-gray-100 text-gray-600">
+                                        <div className="absolute top-2 right-2 bg-white/90 backdrop-blur-md w-8 h-8 flex items-center justify-center rounded-full text-sm shadow-sm border border-gray-100 z-10 pointer-events-none">
                                             {item.preference === "GOOD" && "👍"}
                                             {item.preference === "BAD" && "👎"}
                                             {item.preference === "NEUTRAL" && "👌"}
@@ -71,7 +84,14 @@ export default function HistoryModal({ historyItems, onClose, onSelect }: Props)
                         </div>
                     )}
                 </div>
-            </div>
+
+                {/* 푸터 스탯 */}
+                <div className="px-8 py-4 bg-gray-50/50 border-t border-gray-50 flex justify-end items-center">
+                    <span className="text-[10px] font-black text-gray-400 uppercase tracking-widest">
+                        Total {historyItems.length} Memories
+                    </span>
+                </div>
+            </motion.div>
         </>
     );
 }

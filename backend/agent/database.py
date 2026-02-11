@@ -194,18 +194,21 @@ def search_perfumes(
     hard_filters: Dict[str, Any],
     strategy_filters: Dict[str, List[str]],
     exclude_ids: List[int] = None,
+    exclude_brands: List[str] = None,
     limit: int = 20,
 ) -> List[Dict[str, Any]]:
     conn = get_db_connection()
     cur = conn.cursor(cursor_factory=RealDictCursor)
     try:
         sql = """
-            SELECT DISTINCT m.perfume_id as id, m.perfume_brand as brand, m.perfume_name as name, m.img_link as image_url,
+            SELECT DISTINCT m.perfume_id as id, m.perfume_brand as brand, m.perfume_name as name, m.concentration, m.img_link as image_url,
             (SELECT STRING_AGG(DISTINCT accord, ', ') FROM TB_PERFUME_ACCORD_R WHERE perfume_id = m.perfume_id) as accords,
             (SELECT gender FROM TB_PERFUME_GENDER_R WHERE perfume_id = m.perfume_id LIMIT 1) as gender,
             (SELECT STRING_AGG(DISTINCT n.note, ', ') FROM TB_PERFUME_NOTES_M n WHERE n.perfume_id = m.perfume_id AND UPPER(n.type) = 'TOP') as top_notes,
             (SELECT STRING_AGG(DISTINCT n.note, ', ') FROM TB_PERFUME_NOTES_M n WHERE n.perfume_id = m.perfume_id AND UPPER(n.type) = 'MIDDLE') as middle_notes,
-            (SELECT STRING_AGG(DISTINCT n.note, ', ') FROM TB_PERFUME_NOTES_M n WHERE n.perfume_id = m.perfume_id AND UPPER(n.type) = 'BASE') as base_notes
+            (SELECT STRING_AGG(DISTINCT n.note, ', ') FROM TB_PERFUME_NOTES_M n WHERE n.perfume_id = m.perfume_id AND UPPER(n.type) = 'BASE') as base_notes,
+            (SELECT STRING_AGG(season, ', ') FROM TB_PERFUME_SEASON_R WHERE perfume_id = m.perfume_id) as seasons,
+            (SELECT STRING_AGG(occasion, ', ') FROM TB_PERFUME_OCA_R WHERE perfume_id = m.perfume_id) as occasions
             FROM TB_PERFUME_BASIC_M m
         """
         params, where_clauses = [], []
@@ -215,6 +218,12 @@ def search_perfumes(
                 f"m.perfume_id NOT IN ({','.join(['%s']*len(exclude_ids))})"
             )
             params.extend(exclude_ids)
+
+        if exclude_brands:
+            where_clauses.append(
+                f"m.perfume_brand NOT IN ({','.join(['%s']*len(exclude_brands))})"
+            )
+            params.extend(exclude_brands)
 
         if hard_filters.get("gender"):
             g = hard_filters["gender"].lower()
@@ -290,14 +299,50 @@ def search_perfumes(
 # 3. 비동기 리랭킹 엔진
 # ==========================================
 async def rerank_perfumes_async(
-    candidates: List[Dict[str, Any]], query_text: str, top_k: int = 5
+    candidates: List[Dict[str, Any]],
+    query_text: str,
+    top_k: int = 5,
+    rank_mode: str = "DEFAULT",
 ) -> List[Dict[str, Any]]:
     if not candidates or not query_text:
         return candidates[:top_k]
+
     conn = get_db_connection()
     cur = conn.cursor(cursor_factory=RealDictCursor)
     try:
-        # [최적화] 비동기 번역 및 스타일링
+        # [Task D2] Popularity Ranking
+        if rank_mode == "POPULAR":
+            candidate_ids = [p["id"] for p in candidates]
+            if not candidate_ids:
+                return []
+
+            # Query vote counts (SUM of votes from TB_PERFUME_ACCORD_M)
+            # Using placeholders for array of IDs
+            placeholders = ",".join(["%s"] * len(candidate_ids))
+            sql = f"""
+                SELECT perfume_id, SUM(vote) as total_vote
+                FROM TB_PERFUME_ACCORD_M
+                WHERE perfume_id IN ({placeholders})
+                GROUP BY perfume_id
+            """
+            cur.execute(sql, candidate_ids)
+            vote_map = {
+                row["perfume_id"]: row["total_vote"] for row in cur.fetchall()
+            }
+
+            # Assign votes and Sort
+            for p in candidates:
+                p["review_score"] = vote_map.get(
+                    p["id"], 0
+                )  # Use review_score field for compatibility
+                p["best_review"] = (
+                    f"인기도(Vote): {p['review_score']}"  # Optional info
+                )
+
+            candidates.sort(key=lambda x: x.get("review_score", 0), reverse=True)
+            return candidates[:top_k]
+
+        # [Default] Semantic Reranking (비동기 번역 및 스타일링)
         system_prompt = "You are a Perfume Data Analyst. Transform the Korean logic into a sensory description..."
         translation = await async_client.chat.completions.create(
             model="gpt-4o-mini",
@@ -473,6 +518,44 @@ def get_user_chat_list(member_id: int) -> List[Dict[str, Any]]:
         release_recom_db_connection(conn)
 
 
+# [26.02.09 변경 이력 - 채팅방 soft-delete 함수 추가]
+# [이전 코드]
+# - 아래와 같은 "조회 전용" 흐름만 존재했고, 삭제 함수는 없었음.
+#   "SELECT THREAD_ID as thread_id, TITLE as title, LAST_CHAT_DT as last_chat_dt
+#    FROM TB_CHAT_THREAD_T
+#    WHERE MEMBER_ID = %s AND IS_DELETED = 'N'
+#    ORDER BY LAST_CHAT_DT DESC LIMIT 30"
+# [변경 이유]
+# - 프론트(Chat Sidebar)에서 우클릭 삭제를 지원하려면 thread의 삭제 처리 함수가 필요함.
+# - 물리 삭제 대신 IS_DELETED='Y' soft-delete를 사용해 데이터 복구/감사 여지를 보존함.
+def soft_delete_chat_room(member_id: int, thread_id: str) -> bool:
+    """채팅방을 soft-delete 처리합니다."""
+    if not member_id or not thread_id:
+        return False
+
+    conn = get_recom_db_connection()
+    cur = conn.cursor()
+    try:
+        cur.execute(
+            """
+            UPDATE TB_CHAT_THREAD_T
+            SET IS_DELETED = 'Y'
+            WHERE MEMBER_ID = %s
+              AND THREAD_ID = %s
+              AND IS_DELETED = 'N'
+            """,
+            (member_id, thread_id),
+        )
+        conn.commit()
+        return cur.rowcount > 0
+    except Exception:
+        conn.rollback()
+        raise
+    finally:
+        cur.close()
+        release_recom_db_connection(conn)
+
+
 def lookup_note_by_string(keyword: str) -> List[str]:
     """사용자 입력 텍스트와 일치하거나 유사한 노트를 DB에서 찾습니다."""
     conn = get_db_connection()
@@ -526,6 +609,148 @@ def lookup_note_by_vector(keyword: str) -> List[str]:
         return [r[0] for r in cur.fetchall()]
     except Exception as e:
         print(f"⚠️ Lookup Vector Note Error: {e}")
+        return []
+    finally:
+        cur.close()
+        release_db_connection(conn)
+
+
+# ==========================================
+# 6. Recommended History 관리
+# ==========================================
+def update_recommended_history(thread_id: str, perfume_ids: List[int], max_size: int = 100):
+    """
+    스레드의 recommended_history 업데이트 (중복 제거 + 크기 제한)
+
+    Args:
+        thread_id: 채팅 스레드 ID
+        perfume_ids: 추가할 향수 ID 리스트
+        max_size: 최대 히스토리 크기 (기본값: 100)
+    """
+    if not thread_id or not perfume_ids:
+        return
+
+    conn = get_recom_db_connection()
+    try:
+        cur = conn.cursor()
+        # 기존 히스토리와 새 ID 병합 후 중복 제거, 최근 max_size개만 유지
+        cur.execute("""
+            UPDATE TB_CHAT_THREAD_T
+            SET RECOMMENDED_HISTORY = (
+                SELECT ARRAY(
+                    SELECT DISTINCT id FROM (
+                        SELECT unnest(COALESCE(RECOMMENDED_HISTORY, '{}') || %s::INTEGER[]) AS id
+                    ) sub
+                    ORDER BY id DESC
+                    LIMIT %s
+                )
+            )
+            WHERE THREAD_ID = %s
+        """, (perfume_ids, max_size, thread_id))
+        conn.commit()
+        print(f"   💾 [DB] Updated recommended_history for thread {thread_id[:8]}... (+{len(perfume_ids)} IDs)", flush=True)
+    except Exception as e:
+        print(f"   ⚠️ [DB] Failed to update recommended_history: {e}", flush=True)
+        conn.rollback()
+    finally:
+        cur.close()
+        release_recom_db_connection(conn)
+
+
+def get_recommended_history(thread_id: str) -> List[int]:
+    """
+    스레드의 recommended_history 조회
+
+    Args:
+        thread_id: 채팅 스레드 ID
+
+    Returns:
+        향수 ID 리스트
+    """
+    if not thread_id:
+        return []
+
+    conn = get_recom_db_connection()
+    try:
+        cur = conn.cursor()
+        cur.execute(
+            "SELECT RECOMMENDED_HISTORY FROM TB_CHAT_THREAD_T WHERE THREAD_ID = %s",
+            (thread_id,)
+        )
+        row = cur.fetchone()
+        history = list(row[0]) if row and row[0] else []
+        if history:
+            print(f"   📖 [DB] Loaded recommended_history for thread {thread_id[:8]}... ({len(history)} IDs)", flush=True)
+        return history
+    except Exception as e:
+        print(f"   ⚠️ [DB] Failed to load recommended_history: {e}", flush=True)
+        return []
+    finally:
+        cur.close()
+        release_recom_db_connection(conn)
+
+
+def clear_recommended_history(thread_id: str):
+    """
+    스레드의 recommended_history 초기화 (NEW_RECO/RESET 시)
+
+    Args:
+        thread_id: 채팅 스레드 ID
+    """
+    if not thread_id:
+        return
+
+    conn = get_recom_db_connection()
+    try:
+        cur = conn.cursor()
+        cur.execute(
+            "UPDATE TB_CHAT_THREAD_T SET RECOMMENDED_HISTORY = '{}' WHERE THREAD_ID = %s",
+            (thread_id,)
+        )
+        conn.commit()
+        print(f"   🗑️  [DB] Cleared recommended_history for thread {thread_id[:8]}...", flush=True)
+    except Exception as e:
+        print(f"   ⚠️ [DB] Failed to clear recommended_history: {e}", flush=True)
+        conn.rollback()
+    finally:
+        cur.close()
+        release_recom_db_connection(conn)
+
+
+def get_perfumes_by_note(note_name: str, limit: int = 5) -> List[Dict]:
+    """
+    특정 노트가 포함된 향수 목록을 반환합니다.
+    
+    Args:
+        note_name: 노트 이름 (예: "Bergamot", "장미")
+        limit: 최대 반환 개수
+    
+    Returns:
+        향수 목록 [{perfume_id, name, brand}, ...]
+    """
+    conn = get_db_connection()
+    cur = conn.cursor(cursor_factory=RealDictCursor)
+    
+    try:
+        sql = """
+            SELECT DISTINCT 
+                p.perfume_id,
+                p.perfume_name as name,
+                p.perfume_brand as brand
+            FROM TB_PERFUME_BASIC_M p
+            JOIN TB_PERFUME_NOTES_M n ON p.perfume_id = n.perfume_id
+            WHERE n.note ILIKE %s
+            ORDER BY p.perfume_id
+            LIMIT %s
+        """
+        
+        cur.execute(sql, (f"%{note_name}%", limit))
+        results = cur.fetchall()
+        
+        return [dict(row) for row in results]
+        
+    except Exception as e:
+        print(f"   ⚠️ [DB] get_perfumes_by_note error: {e}", flush=True)
         return []
     finally:
         cur.close()

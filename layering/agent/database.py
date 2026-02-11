@@ -136,7 +136,7 @@ def _load_perfume_basics(conn) -> Dict[str, schemas.PerfumeBasic]:
     with conn.cursor(cursor_factory=RealDictCursor) as cur:
         cur.execute(
             """
-            SELECT perfume_id, perfume_name, perfume_brand, img_link
+            SELECT perfume_id, perfume_name, perfume_brand, img_link, concentration
             FROM TB_PERFUME_BASIC_M
             """
         )
@@ -147,11 +147,13 @@ def _load_perfume_basics(conn) -> Dict[str, schemas.PerfumeBasic]:
             perfume_name = str(row.get("perfume_name") or perfume_id).strip() or perfume_id
             perfume_brand = str(row.get("perfume_brand") or "Unknown").strip() or "Unknown"
             image_url = str(row.get("img_link") or "").strip() or None
+            concentration = str(row.get("concentration") or "").strip() or None
             basics[perfume_id] = schemas.PerfumeBasic(
                 perfume_id=perfume_id,
                 perfume_name=perfume_name,
                 perfume_brand=perfume_brand,
                 image_url=image_url,
+                concentration=concentration,
             )
     return basics
 
@@ -249,6 +251,7 @@ def _vectorize(record: schemas.PerfumeRecord) -> schemas.PerfumeVector:
         perfume_name=record.perfume.perfume_name,
         perfume_brand=record.perfume.perfume_brand,
         image_url=record.perfume.image_url,
+        concentration=record.perfume.concentration,
         vector=vector,
         total_intensity=total_intensity,
         persistence_score=persistence_score,
@@ -493,6 +496,7 @@ def get_perfume_info(perfume_id: str) -> schemas.PerfumeInfo:
                     p.perfume_brand,
                     p.perfume_name,
                     p.img_link,
+                    p.concentration,
                     (SELECT gender FROM TB_PERFUME_GENDER_R WHERE perfume_id = p.perfume_id LIMIT 1) as gender,
                     (SELECT STRING_AGG(DISTINCT note, ', ') FROM TB_PERFUME_NOTES_M WHERE perfume_id = p.perfume_id AND type='TOP') as top_notes,
                     (SELECT STRING_AGG(DISTINCT note, ', ') FROM TB_PERFUME_NOTES_M WHERE perfume_id = p.perfume_id AND type='MIDDLE') as middle_notes,
@@ -529,6 +533,7 @@ def get_perfume_info(perfume_id: str) -> schemas.PerfumeInfo:
         perfume_name=str(row.get("perfume_name") or perfume_id),
         perfume_brand=str(row.get("perfume_brand") or "Unknown"),
         image_url=str(row.get("img_link") or "").strip() or None,
+        concentration=str(row.get("concentration") or "").strip() or None,
         gender=str(row.get("gender") or "").strip() or None,
         accords=_split_list(row.get("accords")),
         seasons=_split_list(row.get("seasons")),
@@ -695,6 +700,18 @@ def save_recommendation_feedback(
             saved=False,
             saved_count=0,
             message="member_id is missing",
+        )
+
+    if preference != "GOOD":
+        logger.info(
+            "Skip recommendation feedback save (preference=%s)",
+            preference,
+        )
+        return schemas.SaveResult(
+            target="my_perfume",
+            saved=False,
+            saved_count=0,
+            message="only GOOD feedback is saved",
         )
 
     try:

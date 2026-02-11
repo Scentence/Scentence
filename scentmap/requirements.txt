@@ -3,6 +3,7 @@ fastapi==0.109.0
 uvicorn[standard]==0.27.0
 pydantic==2.5.3
 pydantic-settings==2.1.0
+slowapi>=0.1.9  # [개선] Rate Limiting
 
 # 환경 변수 관리
 python-dotenv==1.0.0
@@ -22,3 +23,6 @@ python-multipart==0.0.6
 
 # 고속 JSON 직렬화 (성능 개선)
 orjson==3.9.15
+
+# OpenAI API (LLM 카드 생성)
+openai>=1.0.0

@@ -1,182 +1,154 @@
-'use client';
+"use client";
 
 import { useEffect, useState } from "react";
-import { useSession, signOut } from "next-auth/react";
 import Link from "next/link";
+import { motion, AnimatePresence } from "framer-motion";
+import { Home, Sparkles, Layers, Map as MapIcon, BookOpen, Phone, Info, FlaskConical, Network, Globe } from "lucide-react";
 
 interface SidebarProps {
     isOpen: boolean;
     onClose: () => void;
-    context: "home" | "chat"; // 페이지 성격 (홈 vs 채팅)
+    context: "home" | "chat";
+}
+
+// [MENU ITEM] Icon + Text + Glass Interaction
+function MenuItem({ href, icon: Icon, title, desc, onClick, className = "" }: any) {
+    return (
+        <Link
+            href={href}
+            onClick={onClick}
+            className={`flex items-center gap-3 md:gap-4 py-2.5 md:py-3.5 px-4 md:px-6 hover:bg-white/10 transition-all duration-300 group rounded-xl ${className}`}
+        >
+            {/* Icon with Glassy Glow */}
+            <div className="relative group-hover:scale-110 transition-transform duration-300">
+                <Icon strokeWidth={1.5} className="w-5 h-5 md:w-6 md:h-6 text-[#1a1a1a] group-hover:text-black transition-colors" />
+                <div className="absolute inset-0 bg-white/20 blur-md opacity-0 group-hover:opacity-100 transition-opacity" />
+            </div>
+
+            <div className="flex flex-col">
+                <span className="text-base md:text-lg font-bold text-[#1a1a1a] tracking-tight group-hover:tracking-widest transition-all duration-500 whitespace-nowrap">
+                    {title}
+                </span>
+                {desc && <span className="text-[10px] text-gray-500 mt-0.5">{desc}</span>}
+            </div>
+
+            {/* Hidden Dot Indicator */}
+            <div className="ml-auto w-1.5 h-1.5 rounded-full bg-black opacity-0 group-hover:opacity-100 transition-all transform scale-0 group-hover:scale-100 shadow-[0_0_8px_rgba(0,0,0,0.1)]" />
+        </Link>
+    );
 }
 
 export default function Sidebar({ isOpen, onClose, context }: SidebarProps) {
-    const { data: session } = useSession(); // 로그인 상태 확인
-    const [localUser, setLocalUser] = useState<{ memberId?: string | null; email?: string | null; nickname?: string | null; roleType?: string | null; isAdmin?: boolean } | null>(null);
-    const [profileImageUrl, setProfileImageUrl] = useState<string | null>(null);
-    const [profileRoleType, setProfileRoleType] = useState<string | null>(null);
+    // localAuth 제거: 사이드바는 로그인 정보에 의존하지 않음
 
+    const [ref, setRef] = useState<HTMLDivElement | null>(null);
     useEffect(() => {
-        if (!isOpen) return;
-        if (typeof window === "undefined") return;
-        const stored = localStorage.getItem("localAuth");
-        if (!stored) {
-            setLocalUser(null);
-            return;
+        function handleClickOutside(event: MouseEvent) {
+            const target = event.target as Element;
+            if (target.closest("#global-menu-toggle")) return;
+            if (ref && !ref.contains(target as Node)) { onClose(); }
         }
-        try {
-            const parsed = JSON.parse(stored);
-            setLocalUser(parsed);
-        } catch (error) {
-            setLocalUser(null);
+        if (isOpen) { document.addEventListener("mousedown", handleClickOutside); }
+        return () => { document.removeEventListener("mousedown", handleClickOutside); };
+    }, [isOpen, ref, onClose]);
+
+    // [ANIMATION VARIANTS] EC2 빌드 에러 방지를 위해 'as const' 추가 - ksu.
+    // [ANIMATION VARIANTS] EC2 빌드 에러 방지를 위해 'as const' 추가 - ksu.
+    // 1. Container: Orchestrates the staging of children. (No visual styles itself)
+    const containerVariants = {
+        hidden: { opacity: 1, transition: { staggerChildren: 0.1 } },
+        show: { opacity: 1, transition: { staggerChildren: 0.1 } },
+        exit: { opacity: 0, transition: { duration: 0.2 } }
+    } as const;
+
+    // 2. Card: Individual "Round Blur Plates" that animate in.
+    const cardVariants = {
+        hidden: {
+            opacity: 0, x: 20, y: 0, scale: 0.95,
+            backdropFilter: "blur(20px)", WebkitBackdropFilter: "blur(20px)"
+        },
+        show: {
+            opacity: 1, x: 0, y: 0, scale: 1,
+            backdropFilter: "blur(20px)", WebkitBackdropFilter: "blur(20px)",
+            transition: { type: "spring", stiffness: 300, damping: 30 }
+        },
+        exit: {
+            opacity: 0, x: 20, y: 0, scale: 0.95,
+            backdropFilter: "blur(20px)", WebkitBackdropFilter: "blur(20px)",
+            transition: { duration: 0.2 }
         }
-    }, [isOpen]);
+    } as const;
 
-    useEffect(() => {
-        if (!isOpen) return;
-        if (typeof window === "undefined") return;
-        const apiBaseUrl = process.env.NEXT_PUBLIC_API_URL || "";
-        const memberId = session?.user?.id || localUser?.memberId;
-        if (!memberId) {
-            setProfileImageUrl(null);
-            return;
-        }
-        fetch(`${apiBaseUrl}/users/profile/${memberId}`)
-            .then((res) => (res.ok ? res.json() : null))
-            .then((data) => {
-                if (data?.profile_image_url) {
-                    const url = data.profile_image_url.startsWith("http")
-                        ? data.profile_image_url
-                        : `${apiBaseUrl}${data.profile_image_url}`;
-                    setProfileImageUrl(url);
-                } else {
-                    setProfileImageUrl(null);
-                }
-                if (data?.role_type) {
-                    setProfileRoleType(data.role_type);
-                }
-            })
-            .catch(() => setProfileImageUrl(null));
-    }, [isOpen, localUser, session]);
+    // [HYPER-REALISTIC LIQUID GLASS BLOCK]
+    // 1. Specular Highlights: Multiple inset shadows for the sharp rim and surface sheen.
+    // 2. Volumetric Depth: Bottom inset shadow to simulate the glass meniscus.
+    // 3. Clarity: Opacity increased to 0.8 at start for better legibility on dark backgrounds. Blur handled via class + parent.
+    const liquidGlassBlock = "transform-gpu bg-gradient-to-br from-white/80 to-white/40 border border-white/40 shadow-[inset_0_1px_1px_rgba(255,255,255,0.9),inset_0_15px_30px_rgba(255,255,255,0.15),inset_0_-2px_10px_rgba(0,0,0,0.05),0_20px_40px_-10px_rgba(0,0,0,0.2)] overflow-hidden rounded-[36px] will-change-transform backdrop-blur-md";
 
-    const isLoggedIn = Boolean(session || localUser);
-    const displayName = session?.user?.name || localUser?.nickname || localUser?.email || "회원";
-    const resolvedRoleType = (
-        localUser?.roleType ||
-        (localUser?.isAdmin ? "ADMIN" : "") ||
-        profileRoleType ||
-        ""
-    ).toUpperCase();
-    const isAdmin = resolvedRoleType === "ADMIN";
-
-    if (!isOpen) return null;
+    // [OBSIDIAN LIQUID GLASS BLOCK]
+    const obsidianGlassBlock = "transform-gpu bg-gradient-to-br from-black/80 to-black/40 border border-white/10 shadow-[inset_0_1px_1px_rgba(255,255,255,0.3),inset_0_10px_20px_rgba(255,255,255,0.05),inset_0_-2px_10px_rgba(0,0,0,0.5),0_20px_40px_-5px_rgba(0,0,0,0.4)] overflow-hidden rounded-[32px] will-change-transform backdrop-blur-md";
 
     return (
-        <div className="fixed inset-0 z-[9999] flex justify-end">
-            {/* 반투명 배경 (클릭 시 닫힘) */}
-            <div className="fixed inset-0 bg-black/50" onClick={onClose} />
+        <AnimatePresence>
+            {isOpen && (
+                <>
+                    {/* Mobile: Blur Overlay, Desktop: Transparent */}
+                    <motion.div
+                        initial={{ opacity: 0 }}
+                        animate={{ opacity: 1 }}
+                        exit={{ opacity: 0 }}
+                        className="fixed inset-0 z-40 bg-black/5 backdrop-blur-[4px] md:hidden"
+                        onClick={onClose}
+                    />
+                    <div className="fixed inset-0 z-40 bg-transparent hidden md:block" />
 
-            {/* 사이드바 본체 */}
-            <div className="relative w-64 h-full bg-white shadow-xl flex flex-col p-6 z-10">
-                <button onClick={onClose} className="self-end mb-8 text-2xl">&times;</button>
+                    <motion.div
+                        ref={setRef}
+                        className="fixed top-[84px] md:top-24 right-4 md:right-8 z-50 w-[calc(100%-32px)] sm:w-[350px] md:w-[300px] flex flex-col gap-3 md:gap-5"
+                        variants={containerVariants}
+                        initial="hidden"
+                        animate="show"
+                        exit="exit"
+                    >
+                        {/* --- CHUNK 1: HOME --- */}
+                        <motion.div variants={cardVariants} className={`${liquidGlassBlock} p-1`}>
+                            <MenuItem href="/" icon={Home} title="첫 화면" onClick={onClose} />
+                        </motion.div>
 
-                <nav className="flex-1 space-y-4">
+                        {/* --- CHUNK 2: CORE FEATURES (The Big Glass Square) --- */}
+                        <motion.div variants={cardVariants} className={`${liquidGlassBlock} p-1`}>
+                            <div className="flex flex-col divide-y divide-black/5">
+                                <MenuItem href="/chat" icon={Sparkles} title="향수 추천" onClick={onClose} />
+                                <MenuItem href="/layering" icon={FlaskConical} title="레이어링 랩" onClick={onClose} />
+                                <MenuItem href="/perfume-network/nmap" icon={Globe} title="향수 지도" onClick={onClose} />
+                                <MenuItem href="/perfume-wiki" icon={BookOpen} title="향수 백과" onClick={onClose} />
+                            </div>
+                        </motion.div>
 
-                    {/* 1. 홈(Main) 컨텍스트일 때 */}
-                    {context === "home" && (
-                        <>
-                            {!isLoggedIn ? (
-                                // 로그인 전
-                                <div className="space-y-4">
-                                    <Link
-                                        href="/login"
-                                        onClick={onClose}
-                                        className="w-full bg-black text-white py-3 rounded-xl font-bold flex items-center justify-center gap-2 hover:opacity-90 transition"
-                                    >
-                                        로그인
-                                    </Link>
-                                    <Link href="/about" className="block text-gray-700 hover:text-black">ℹ️ 서비스 소개</Link>
-                                    <Link href="/contact" className="block text-gray-700 hover:text-black">📞 문의하기</Link>
-                                </div>
-                            ) : (
-                                // 로그인 후
-                                <div className="space-y-4">
-                                    <div className="mb-6 pb-4 border-b flex items-center gap-3">
-                                        <div className="w-10 h-10 rounded-full overflow-hidden bg-[#F2F2F2]">
-                                            <img
-                                                src={profileImageUrl || "/default_profile.png"}
-                                                alt="프로필"
-                                                className="w-full h-full object-cover"
-                                                onError={(event) => {
-                                                    event.currentTarget.src = "/default_profile.png";
-                                                }}
-                                            />
-                                        </div>
-                                        <div>
-                                            <p className="font-bold text-lg">{displayName}님</p>
-                                            <p className="text-sm text-gray-500">환영합니다!</p>
-                                        </div>
-                                    </div>
-                                    {!isAdmin && (
-                                        <Link href="/mypage" className="flex items-center gap-2 text-lg font-medium hover:text-blue-600">
-                                            <img src="/profile.svg" alt="마이페이지" className="w-5 h-5" />
-                                            마이페이지
-                                        </Link>
-                                    )}
-                                    {isAdmin && (
-                                        <Link href="/admin" className="block text-lg font-medium hover:text-blue-600">🛠️ 관리자 페이지</Link>
-                                    )}
-                                    <Link href="/archives" className="block text-lg font-medium hover:text-blue-600">📂 나만의 아카이브</Link>
-                                    <Link href="/layering" className="block text-lg font-medium hover:text-blue-600">🧪 향수 레이어링</Link>
-                                    <Link href="/perfume-network" className="block text-lg font-medium hover:text-blue-600">🗺️ 향수 관계맵</Link>
-                                    <Link href="/contact" className="block text-gray-600">📞 문의하기</Link>
-                                    <button
-                                        onClick={() => {
-                                            if (session) {
-                                                signOut({ callbackUrl: "/login" });
-                                                return;
-                                            }
-                                            if (typeof window !== "undefined") {
-                                                localStorage.removeItem("localAuth");
-                                                window.location.href = "/login";
-                                            }
-                                            setLocalUser(null);
-                                            onClose();
-                                        }}
-                                        className="text-gray-500 hover:text-red-500 text-sm mt-4"
-                                    >
-                                        로그아웃
-                                    </button>
-                                </div>
-                            )}
-                        </>
-                    )}
-
-                    {/* 2. 채팅(Chat) 컨텍스트일 때 */}
-                    {context === "chat" && (
-                        <div className="space-y-4">
-                            <Link href="/chat" onClick={onClose} className="block w-full text-center bg-black text-white py-3 rounded-xl font-bold">
-                                ✨ 새 채팅 시작하기
+                        {/* --- CHUNK 3: FOOTER (Obsidian Glass) --- */}
+                        <motion.div variants={cardVariants} className={`${obsidianGlassBlock} p-4 md:p-6 flex flex-col gap-3 md:gap-4`}>
+                            <Link href="/contact" onClick={onClose} className="flex items-center justify-between group">
+                                <span className="text-xs font-bold tracking-[0.2em] text-gray-400 group-hover:text-white transition-colors">CONTACT</span>
+                                {/* 살아있는 레드 도트 (Pulse 애니메이션) */}
+                                <span className="relative flex h-2 w-2">
+                                    <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-red-400 opacity-75"></span>
+                                    <span className="relative inline-flex rounded-full h-2 w-2 bg-red-500 shadow-[0_0_8px_rgba(239,68,68,0.8)] group-hover:bg-green-500 transition-all"></span>
+                                </span>
                             </Link>
 
-                            <div className="mt-6">
-                                <p className="text-xs text-gray-400 mb-2 font-bold uppercase">History</p>
-                                <ul className="space-y-2 text-sm text-gray-600">
-                                    <li className="p-2 hover:bg-gray-100 rounded cursor-pointer">24.01.19 데이트 향수</li>
-                                    <li className="p-2 hover:bg-gray-100 rounded cursor-pointer">24.01.15 우디 계열 문의</li>
-                                </ul>
-                            </div>
+                            <div className="h-px bg-white/5" />
 
-                            <div className="mt-auto pt-8 border-t">
-                                <Link href="/" className="flex items-center gap-2 text-gray-600 hover:text-black">
-                                    🏠 홈으로 나가기
-                                </Link>
-                            </div>
-                        </div>
-                    )}
-
-                </nav>
-            </div>
-        </div>
+                            <Link href="/about" onClick={onClose} className="cursor-pointer group flex flex-col items-start mt-1 gap-0.5">
+                                <p className="text-[10px] text-white/40 font-medium leading-none">About.</p>
+                                <div className="flex items-center justify-between w-full">
+                                    <span className="text-sm font-black tracking-[0.05em] text-gray-300 group-hover:tracking-[0.2em] group-hover:text-white transition-all duration-500">SCENTENCE</span>
+                                    <span className="text-xl font-black text-gray-500 group-hover:text-white transition-all duration-500 transform rotate-90 group-hover:rotate-0 opacity-50 group-hover:opacity-100 mr-1">!</span>
+                                </div>
+                            </Link>
+                        </motion.div>
+                    </motion.div>
+                </>
+            )}
+        </AnimatePresence>
     );
 }
