@@ -32,6 +32,28 @@ interface MyPerfume {
 
 type TabType = 'ALL' | 'HAVE' | 'HAD' | 'WISH';
 
+const CHOSEONG = [
+    "ㄱ", "ㄲ", "ㄴ", "ㄷ", "ㄸ", "ㄹ", "ㅁ", "ㅂ", "ㅃ",
+    "ㅅ", "ㅆ", "ㅇ", "ㅈ", "ㅉ", "ㅊ", "ㅋ", "ㅌ", "ㅍ", "ㅎ",
+];
+const HANGUL_START = 0xac00;
+const HANGUL_END = 0xd7a3;
+const HANGUL_UNIT = 588; // 21(중성) * 28(종성)
+
+const normalizeText = (value?: string | null) => (value ?? "").toLowerCase().trim();
+
+const extractChoseong = (value?: string | null) => {
+    const input = value ?? "";
+    return Array.from(input).map((char) => {
+        const code = char.charCodeAt(0);
+        if (code >= HANGUL_START && code <= HANGUL_END) {
+            const index = Math.floor((code - HANGUL_START) / HANGUL_UNIT);
+            return CHOSEONG[index] ?? char;
+        }
+        return char;
+    }).join("");
+};
+
 const createSeededRandom = (seed: number) => {
     let state = seed >>> 0;
     return () => {
@@ -297,15 +319,34 @@ export default function ArchivesPage() {
         if (!matchesTab) return false;
 
         if (searchQuery.trim()) {
-            const query = searchQuery.toLowerCase();
-            const nameMatch =
-                item.name_kr?.toLowerCase().includes(query) ||
-                item.name_en?.toLowerCase().includes(query) ||
-                item.name?.toLowerCase().includes(query);
-            const brandMatch =
-                item.brand_kr?.toLowerCase().includes(query) ||
-                item.brand?.toLowerCase().includes(query);
-            return nameMatch || brandMatch;
+            const query = normalizeText(searchQuery);
+            const queryCompact = query.replace(/\s+/g, "");
+            const isChoseongQuery = /[ㄱ-ㅎ]/.test(queryCompact);
+
+            const fields = [
+                item.name_kr,
+                item.name_en,
+                item.name,
+                item.brand_kr,
+                item.brand,
+            ];
+
+            const directMatch = fields.some((field) => {
+                const normalized = normalizeText(field);
+                const compact = normalized.replace(/\s+/g, "");
+                return normalized.includes(query) || compact.includes(queryCompact);
+            });
+
+            if (directMatch) return true;
+
+            if (isChoseongQuery) {
+                return fields.some((field) => {
+                    const choseong = extractChoseong(field).replace(/\s+/g, "");
+                    return choseong.includes(queryCompact);
+                });
+            }
+
+            return false;
         }
 
         return true;
@@ -727,7 +768,19 @@ export default function ArchivesPage() {
                                 exit={{ opacity: 0, scale: 1.02 }}
                                 className="animate-fade-in"
                             >
-                                <ArchiveGlobeView collection={filteredCollection} isKorean={isKorean} />
+                                {filteredCollection.length === 0 ? (
+                                    <div className={`w-full aspect-square flex flex-col items-center justify-center rounded-[2rem] border ${isGalaxy ? 'bg-black/50 border-white/20' : 'bg-white border-gray-200'}`}>
+                                        <p className={`font-bold uppercase tracking-widest mb-5 ${isGalaxy ? 'text-white/70' : 'text-gray-500'}`}>{t.noScents}</p>
+                                        <button
+                                            onClick={() => setSearchQuery("")}
+                                            className={`text-xs font-black uppercase tracking-widest ${isGalaxy ? 'text-white hover:text-white/80' : 'text-black hover:text-black/70'}`}
+                                        >
+                                            {isKorean ? "검색 초기화" : "Clear Search"}
+                                        </button>
+                                    </div>
+                                ) : (
+                                    <ArchiveGlobeView collection={filteredCollection} isKorean={isKorean} />
+                                )}
                             </motion.div>
                         ) : (
                             <motion.div

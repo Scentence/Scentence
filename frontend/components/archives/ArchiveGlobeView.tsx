@@ -35,14 +35,6 @@ const HOVER_SCALE = 1.15;
 const FOCUS_SCALE = 1.12;
 const IMAGE_HOVER_SCALE = 1.1; // 이미지 호버 스케일
 
-const MOCK_IMAGES = [
-    "https://images.unsplash.com/photo-1615634260167-c8cdede054de?auto=format&fit=crop&w=400&q=80",
-    "https://images.unsplash.com/photo-1541643600914-78b084683601?auto=format&fit=crop&w=400&q=80",
-    "https://images.unsplash.com/photo-1462331940025-496dfbfc7564?auto=format&fit=crop&w=400&q=80",
-    "https://images.unsplash.com/photo-1594035910387-fea477942698?auto=format&fit=crop&w=400&q=80",
-    "https://images.unsplash.com/photo-1523293182086-7651a899d60f?auto=format&fit=crop&w=400&q=80",
-];
-
 // [수학 로직] 피보나치 구체(Fibonacci Sphere) 알고리즘
 // N개의 아이템을 구체 표면에 거의 균등한 간격으로 배치하기 위해 사용합니다.
 // i: 인덱스, N: 전체 개수, radius: 구의 반지름
@@ -141,14 +133,12 @@ function FocusManager({ focusedPosition, controlsRef }: { focusedPosition: THREE
 function PerfumeCard({
     info,
     position,
-    mockImage,
     isKorean,
     focusedId,
     setFocusedId
 }: {
     info: MyPerfume;
     position: THREE.Vector3;
-    mockImage?: string;
     isKorean: boolean;
     focusedId: number | null;
     setFocusedId: (id: number | null) => void;
@@ -177,7 +167,7 @@ function PerfumeCard({
 
     const displayBrand = isKorean ? (info.brand_kr || info.brand) : info.brand;
     const displayName = isKorean ? (info.name_kr || info.name) : (info.name_en || info.name);
-    const displayImage = info.image_url || mockImage;
+    const displayImage = info.image_url;
 
     return (
         <Float
@@ -221,7 +211,7 @@ function PerfumeCard({
                             >
                                 <div className="w-full h-full flex flex-col p-2 font-sans antialiased text-left select-none">
                                     <div className="w-full h-[130px] rounded-sm overflow-hidden mb-3 shadow-inner relative bg-transparent">
-                                        {displayImage && (
+                                        {displayImage ? (
                                             <img
                                                 src={displayImage}
                                                 alt={displayName}
@@ -231,6 +221,10 @@ function PerfumeCard({
                                                     backgroundColor: 'transparent'
                                                 }}
                                             />
+                                        ) : (
+                                            <div className="w-full h-full flex items-center justify-center rounded-sm border border-white/10 bg-white/[0.03]">
+                                                <span className="text-[9px] text-white/35 font-bold tracking-widest">NO IMG</span>
+                                            </div>
                                         )}
                                     </div>
                                     <div className="flex-1 w-full flex flex-col justify-start px-1">
@@ -279,20 +273,9 @@ export default function ArchiveGlobeView({ collection = [], isKorean = true, onF
     const [focusedId, setFocusedId] = useState<number | null>(null);
     const controlsRef = useRef<any>(null);
 
-    // 컬렉션 데이터가 없을 경우 보여줄 더미 데이터 생성
+    // 전달된 컬렉션만 렌더링 (검색 결과 0건일 때는 상위에서 별도 UI 노출)
     const displayConfig = useMemo<MyPerfume[]>(() => {
-        if (collection.length > 0) return collection;
-        return Array.from({ length: 30 }).map((_, i): MyPerfume => ({
-            my_perfume_id: i,
-            name: `Perfume No.${i + 1}`,
-            name_en: `Perfume No.${i + 1}`,
-            name_kr: `센텐스 컬렉션 ${i + 1}`,
-            brand: "SCENTENCE",
-            brand_kr: "센텐스",
-            image_url: null,
-            register_status: "HAVE",
-            status: "HAVE",
-        }));
+        return collection;
     }, [collection]);
 
     // Focus Position Logic
@@ -310,11 +293,8 @@ export default function ArchiveGlobeView({ collection = [], isKorean = true, onF
 
     const focusedImage = useMemo(() => {
         if (!focusedPerfume) return null;
-        if (focusedPerfume.image_url) return focusedPerfume.image_url;
-        const idx = displayConfig.findIndex(item => item.my_perfume_id === focusedPerfume.my_perfume_id);
-        if (idx === -1) return null;
-        return MOCK_IMAGES[idx % MOCK_IMAGES.length];
-    }, [focusedPerfume, displayConfig]);
+        return focusedPerfume.image_url || null;
+    }, [focusedPerfume]);
 
     useEffect(() => {
         onFocusPerfumeChange?.(focusedPerfume);
@@ -368,14 +348,12 @@ export default function ArchiveGlobeView({ collection = [], isKorean = true, onF
                 <group>
                     {displayConfig.map((item, idx) => {
                         const position = getPositionOnSphere(idx, displayConfig.length, GLOBE_RADIUS);
-                        const mockImg = MOCK_IMAGES[idx % MOCK_IMAGES.length];
 
                         return (
                             <PerfumeCard
                                 key={item.my_perfume_id}
                                 info={item}
                                 position={position}
-                                mockImage={mockImg}
                                 isKorean={isKorean}
                                 focusedId={focusedId}
                                 setFocusedId={setFocusedId}
