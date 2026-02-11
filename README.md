@@ -1,7 +1,4 @@
-<<<<<<< Updated upstream
-### Scentence
-=======
-# 🌸 SCENTENCE (센텐스)
+# SCENTENCE
 
  **향수 선택의 어려움을 해결하는 LLM 기반 대화형 향수 추천 플랫폼**
 
