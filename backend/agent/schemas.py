@@ -127,7 +127,7 @@ class ValidationResult(BaseModel):
     )
     unsupported_category: Optional[str] = Field(
         None,
-        description="불가능한 경우 카테고리: '제형', '성능', '가격', '레이어링', '구매정보' 등"
+        description="불가능한 경우 카테고리: '제형', '성능', '가격', '레이어링', '구매정보', '인사' 등"
     )
     reason: str = Field(
         description="판단 이유 설명"

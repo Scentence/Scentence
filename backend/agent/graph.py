@@ -1344,15 +1344,21 @@ async def unsupported_request_handler(_state: AgentState):
             "reason": "두 향수를 비교하는 기능은 현재 지원하지 않습니다.",
             "alternative": "각 향수의 특성을 개별적으로 설명해드릴까요?"
         },
+        "인사":{
+            "reason": "안녕하세요",
+            "alternative": "저는 맞춤형 향수추천 AI 입니다. 향수에 관해 질문해주시면 정확한 정보로 답변드리겠습니다!"
+        }
     }
 
     msg_data = category_messages.get(category, {
         "reason": "해당 요청은 현재 지원하지 않습니다.",
         "alternative": "다른 방식으로 질문해주시면 도움드리겠습니다."
     })
-    
-    specific_msg = f"죄송합니다. {msg_data['reason']}\n\n💡 {msg_data['alternative']}"
 
+    specific_msg = f"죄송합니다. {msg_data['reason']}\n\n💡 {msg_data['alternative']}"
+    if msg_data['reason'] == '안녕하세요':
+        specific_msg = f"{msg_data['reason']}!\n\n{msg_data['alternative']}"
+        
     return {
         "messages": [AIMessage(content=specific_msg)],
         "chat_outcome_status": "UNSUPPORTED_REQUEST"
